@@ -1,0 +1,41 @@
+{{ template "head" . }}
+
+<div class="page-header">
+  <h2>QSL Contacts</h2>
+  <div class="page-header-actions">
+    <form method="POST" action="/qsl/import" enctype="multipart/form-data" id="adif-import-form" class="inline-form">
+      <input type="file" name="adif_file" id="adif_file" accept=".adi,.adif" class="hidden-file-input" onchange="this.form.submit()">
+      <button type="button" class="btn" onclick="document.getElementById('adif_file').click()">Import ADIF</button>
+    </form>
+  </div>
+</div>
+
+{{ if .Error }}
+<div class="alert alert-red">
+  {{ .Error }}
+</div>
+{{ end }}
+
+{{ if .QSOs }}
+<p class="muted-text qso-count">Total QSOs: {{ len .QSOs }}</p>
+
+<div class="entry-list">
+  {{ range .QSOs }}
+  <div class="entry">
+    <a href="/qsl/{{ .ID }}">
+      <div><span class="qso-callsign">{{ .Call }}</span> • {{ .QSODate.Format "2006-01-02" }} {{ .TimeOn.Format "15:04" }}Z</div>
+      <div class="muted-text">
+        {{ .Mode }}{{ if .Band }} • {{ .Band }}{{ end }}{{ if .Country }} • {{ .Country }}{{ end }}
+      </div>
+    </a>
+  </div>
+  {{ end }}
+</div>
+{{ else }}
+<div class="alert alert-grey">
+  <h5 class="alert-title">No QSOs Yet</h5>
+  <p>You haven't imported any QSOs yet. Use the "Import ADIF" button above to upload your logbook.</p>
+</div>
+{{ end }}
+
+{{ template "foot" . }}

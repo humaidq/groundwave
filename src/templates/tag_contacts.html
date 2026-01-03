@@ -1,0 +1,32 @@
+{{ template "head" . }}
+
+<div class="page-header">
+  <h2>Tag: {{ .Tag.Name }}</h2>
+  <div class="page-header-actions">
+    <a href="/tags/{{ .Tag.ID }}/edit" class="btn">Edit Tag</a>
+    <a href="/tags" class="btn btn-secondary">← All Tags</a>
+  </div>
+</div>
+
+{{ with .Tag.Description }}
+<p class="tag-description">{{ . }}</p>
+{{ end }}
+
+{{ if .Contacts }}
+<div class="entry-list">
+  {{ range .Contacts }}
+  <div class="entry">
+    <a href="/contact/{{ .ID }}">
+      <div>{{ .NameDisplay }}</div>
+      {{ if .Organization }}
+      <div class="muted-text">{{ .Organization }}</div>
+      {{ end }}
+    </a>
+  </div>
+  {{ end }}
+</div>
+{{ else }}
+<p class="muted-text">No contacts have this tag.</p>
+{{ end }}
+
+{{ template "foot" . }}

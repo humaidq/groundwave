@@ -1,0 +1,44 @@
+{{ template "head" . }}
+
+<div class="page-header">
+  <h2>Overdue Contacts</h2>
+  <a href="/contacts" class="btn">← All Contacts</a>
+</div>
+
+{{ if .Error }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Error</h5>
+  <p>{{.Error}}</p>
+</div>
+{{end}}
+
+{{ if .OverdueContacts }}
+<p class="muted-text overdue-help">Contacts sorted by most overdue first. Tier F contacts (no regular contact needed) are not included.</p>
+
+<div class="entry-list">
+  {{ range .OverdueContacts }}
+  <div class="entry">
+    <a href="/contact/{{ .ID }}">
+      <div>
+        {{ .NameDisplay }}
+        {{ if .LastContactDate }}
+        <span class="overdue-badge">{{ .DaysOverdue }} days overdue</span>
+        {{ else }}
+        <span class="overdue-badge overdue-badge-no-log">No log</span>
+        {{ end }}
+      </div>
+      <div class="muted-text">
+        {{ if .Organization }}{{ .Organization }} • {{ end }}Tier {{ .Tier }} (every {{ .ContactInterval }} days){{ if .LastContactDate }} • Last contact: {{ .LastContactDate }}{{ end }}
+      </div>
+    </a>
+  </div>
+  {{ end }}
+</div>
+{{ else }}
+<div class="alert alert-green">
+  <h5 class="alert-title">All caught up!</h5>
+  <p>You have no overdue contacts. Great job staying in touch!</p>
+</div>
+{{ end }}
+
+{{ template "foot" . }}

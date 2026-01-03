@@ -1,0 +1,104 @@
+{{ template "head" . }}
+
+<div class="page-header">
+  <h2>Contacts</h2>
+  <a href="/contact/new" class="btn">+ Add Contact</a>
+</div>
+
+{{ if .Error }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Error</h5>
+  <p>{{.Error}}</p>
+</div>
+{{end}}
+
+{{ if .AllTags }}
+<div class="tag-filter-section">
+  <form method="GET" action="/contacts" class="tag-filter-form">
+    <div class="tag-dropdown-container">
+      <button type="button" class="tag-dropdown-toggle" id="tagDropdownToggle">
+        <span class="dropdown-label">Filter by Tags</span>
+        {{ if .SelectedTags }}
+        <span class="tag-count-badge">{{ len .SelectedTags }}</span>
+        {{ end }}
+        <span class="dropdown-arrow">▼</span>
+      </button>
+
+      <div class="tag-dropdown-menu" id="tagDropdownMenu">
+        <div class="tag-dropdown-header">
+          <span class="dropdown-title">Filter by tags</span>
+        </div>
+        <div class="tag-dropdown-list">
+          {{ range .AllTags }}
+          <label class="tag-checkbox-item">
+            <input type="checkbox" name="tag" value="{{ .ID }}"
+              {{- range $.SelectedTags }}{{- if eq . $.ID }} checked{{- end }}{{- end }}>
+            <span class="tag-checkbox-label">{{ .Name }}</span>
+            <span class="tag-checkbox-count">{{ .UsageCount }}</span>
+          </label>
+          {{ end }}
+        </div>
+        <div class="tag-dropdown-footer">
+          <button type="submit" class="btn btn-compact">Apply</button>
+          <a href="/contacts" class="btn btn-compact btn-secondary">Clear</a>
+        </div>
+      </div>
+    </div>
+    <a href="/tags" class="btn btn-secondary" style="margin-left: 0.5rem;">Manage Tags</a>
+  </form>
+</div>
+
+<script>
+(function() {
+  const toggle = document.getElementById('tagDropdownToggle');
+  const menu = document.getElementById('tagDropdownMenu');
+
+  if (toggle && menu) {
+    toggle.addEventListener('click', function(e) {
+      e.preventDefault();
+      menu.classList.toggle('show');
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+      if (!toggle.contains(e.target) && !menu.contains(e.target)) {
+        menu.classList.remove('show');
+      }
+    });
+  }
+})();
+</script>
+{{ end }}
+
+{{ if .Contacts }}
+<div class="entry-list">
+  {{ range .Contacts }}
+  <div class="entry">
+    <a href="/contact/{{ .ID }}" class="entry-main-link">
+      <div class="entry-title">{{ .NameDisplay }}</div>
+      {{ if or .Organization .Tags }}
+      <div class="entry-meta">
+        {{ if .Organization }}
+        <span class="entry-org muted-text">{{ .Organization }}</span>
+        {{ end }}
+        {{ if .Tags }}
+        <div class="tag-badges">
+          {{ range .Tags }}
+          <a href="/contacts?tag={{ .ID }}" class="tag-badge"
+             onclick="event.stopPropagation(); event.preventDefault(); window.location.href='/contacts?tag={{ .ID }}';">
+            {{ .Name }}
+          </a>
+          {{ end }}
+        </div>
+        {{ end }}
+      </div>
+      {{ end }}
+    </a>
+  </div>
+  {{ end }}
+</div>
+{{ else }}
+<p class="muted-text">No contacts found. <a href="/contact/new">Add your first contact</a>.</p>
+{{ end }}
+
+{{ template "foot" . }}

@@ -1,0 +1,156 @@
+{{ template "head" . }}
+{{ with .QSO }}
+<h2>{{ .Call }}{{ if .HasContact }} - <a href="/contact/{{ .GetContactID }}">View Contact</a>{{ end }}</h2>
+
+{{ if .MyRig }}
+<p>{{ .MyRig }}{{ if .TxPwr }} ({{ .TxPwr }}W){{ end }}</p>
+{{ end }}
+{{ if .MyAntenna }}
+<p>{{ .MyAntenna }}</p>
+{{ end }}
+
+<p>Confirming our QSO</p>
+{{ end }}
+
+{{ with .QSO }}
+<div class="qso-result">
+
+  <table class="qso-summary">
+    <tr>
+      <th>To Radio</th>
+      <th>Date<br><small>Year Month Day</small></th>
+      <th>Time<br><small>UTC</small></th>
+      <th>Freq.<br><small>MHz</small></th>
+      <th>Report<br><small>{{ if or (eq .Mode "FT8") (eq .Mode "FT4") (eq .Mode "JS8") (eq .Mode "MSK144") (eq .Mode "JT65") (eq .Mode "JT9") }}dB &middot; <del>RST</del>{{ else }}<del>dB</del> &middot; RST{{ end }}</small></th>
+      <th>Mode<br><small>2-Way</small></th>
+    </tr>
+    <tr>
+      <td>{{ .Call }}</td>
+      <td>{{ .FormatDate }}</td>
+      <td>{{ .FormatTime }}</td>
+      <td>{{ if .Freq }}{{ .Freq }}{{ else }}-{{ end }}</td>
+      <td>{{ if .RSTRcvd }}{{ .RSTRcvd }}{{ else }}-{{ end }}</td>
+      <td>{{ .Mode }}</td>
+    </tr>
+  </table>
+
+  <div class="qso-details-container">
+    <div class="qsl-section">
+      <h4>QSL</h4>
+
+      <!-- Thank you alert for received QSL -->
+      {{ if .IsPaperQSLReceived }}
+      <div class="alert alert-green">
+        <h5 class="alert-title">Tnx QSL!</h5>
+        <p>Thank you for sending your QSL card! Much appreciated.</p>
+      </div>
+      {{ end }}
+
+      <!-- Paper QSL Status -->
+      <div class="confirmation-item">
+        <div class="confirmation-info">
+          <div class="confirmation-icon paper">📮</div>
+          <div>
+            <div class="confirmation-name">Paper QSL</div>
+            <div class="confirmation-subtitle">Physical Card</div>
+          </div>
+        </div>
+        <div class="confirmation-status">
+          <div class="status-indicator">
+            {{ if .IsPaperQSLSent }}
+            <div class="status-dot active paper"></div>
+            <span class="status-text active">Sent</span>
+            {{ else }}
+            <a href="mailto:qsl@huma.id?subject={{ .Call }}: QSL Card Request&body=Hello,%0A%0AI would like to request a QSL card for our contact:%0A%0ACall Sign: {{ .Call }}%0ADate/Time: {{ .FormatQSOTime }}%0A{{ if .Freq }}Frequency: {{ .Freq }} MHz%0A{{ end }}%0AMy mailing address:%0A[Please write your full mailing address here]%0A%0AThank you!" class="status-request-link">
+              <div class="status-dot inactive"></div>
+              <span class="status-text inactive">Request</span>
+            </a>
+            {{ end }}
+          </div>
+          <div class="status-indicator">
+            <div class="status-dot {{ if .IsPaperQSLReceived }}active paper{{ else }}inactive{{ end }}"></div>
+            <span class="status-text {{ if .IsPaperQSLReceived }}active{{ else }}inactive{{ end }}">Received</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Digital Confirmations -->
+      <div class="confirmation-item">
+        <div class="confirmation-info">
+          <div class="confirmation-icon lotw">🌍</div>
+          <div>
+            <div class="confirmation-name">Logbook of the World</div>
+            <div class="confirmation-subtitle">ARRL LoTW</div>
+          </div>
+        </div>
+        <div class="confirmation-status">
+          <div class="status-indicator">
+            <div class="status-dot {{ if .IsLoTWQSLSent }}active{{ else }}inactive{{ end }}"></div>
+            <span class="status-text {{ if .IsLoTWQSLSent }}active{{ else }}inactive{{ end }}">Sent</span>
+          </div>
+          <div class="status-indicator">
+            <div class="status-dot {{ if .IsLoTWQSLReceived }}active{{ else }}inactive{{ end }}"></div>
+            <span class="status-text {{ if .IsLoTWQSLReceived }}active{{ else }}inactive{{ end }}">Received</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="confirmation-item">
+        <div class="confirmation-info">
+          <div class="confirmation-icon eqsl">💻</div>
+          <div>
+            <div class="confirmation-name">Electronic QSL</div>
+            <div class="confirmation-subtitle">eQSL.cc</div>
+          </div>
+        </div>
+        <div class="confirmation-status">
+          <div class="status-indicator">
+            <div class="status-dot {{ if .IsEQSLQSLSent }}active{{ else }}inactive{{ end }}"></div>
+            <span class="status-text {{ if .IsEQSLQSLSent }}active{{ else }}inactive{{ end }}">Sent</span>
+          </div>
+          <div class="status-indicator">
+            <div class="status-dot {{ if .IsEQSLQSLReceived }}active{{ else }}inactive{{ end }}"></div>
+            <span class="status-text {{ if .IsEQSLQSLReceived }}active{{ else }}inactive{{ end }}">Received</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {{ if $.MapURL }}
+    <div class="qso-map">
+      <h4>Grid Square Map</h4>
+      <div class="map-container">
+        <img src="{{ $.MapURL }}" alt="Grid square map showing {{ .MyGridSquare }} to {{ .GridSquare }}" class="map-image" />
+        <p class="map-legend">
+          <span class="marker-red">●</span> {{ .MyGridSquare }} (A66H)
+          <span class="map-arrow">↔</span>
+          <span class="marker-blue">●</span> {{ .GridSquare }} ({{ .Call }})
+        </p>
+      </div>
+    </div>
+    {{ end }}
+  </div>
+
+</div>
+{{ end }}
+
+{{ if .AllQSOs }}
+<h3>All QSOs with {{ .QSO.Call }} ({{ len .AllQSOs }} total)</h3>
+{{ range .AllQSOs }}
+  <div class="entry">
+    {{ if eq .ID $.QSO.ID.String }}
+    <span style="color: #666; text-decoration: none;">
+      {{ .FormatDate }} at {{ .FormatTime }} UTC (current)
+    </span>
+    {{ else }}
+    <a href="/qsl/{{ .ID }}">
+      {{ .FormatDate }} at {{ .FormatTime }} UTC
+    </a>
+    {{ end }}
+    <div class="meta">
+      <p>{{ if .Band }}{{ .Band }} band{{ end }}{{ if .Mode }} &middot; {{ .Mode }}{{ end }}{{ if .RSTRcvd }} &middot; Signal: {{ .RSTRcvd }}{{ end }}</p>
+    </div>
+  </div>
+{{ end }}
+{{ end }}
+{{ template "foot" . }}

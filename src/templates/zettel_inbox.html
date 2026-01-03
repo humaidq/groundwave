@@ -1,0 +1,70 @@
+{{ template "head" . }}
+
+<main>
+  <div class="page-header">
+    <h2>Zettelkasten Comments Inbox</h2>
+    <p class="page-subtitle">Temporary annotations waiting to be filed into org-roam</p>
+  </div>
+
+  {{ if .Error }}
+  <div class="alert alert-red">
+    {{ .Error }}
+  </div>
+  {{ end }}
+
+  {{ if eq .CommentCount 0 }}
+  <div class="empty-state">
+    <p>No comments yet. Add comments to your zettelkasten notes to use this as a processing inbox.</p>
+    <a href="/zk" class="btn">Browse Zettelkasten</a>
+  </div>
+  {{ else }}
+  <div class="inbox-stats">
+    <p><strong>{{ .CommentCount }}</strong> comment{{ if ne .CommentCount 1 }}s{{ end }} across <strong>{{ len .Groups }}</strong> note{{ if ne (len .Groups) 1 }}s{{ end }}</p>
+  </div>
+
+  {{ range .Groups }}
+  {{ $zettelID := .ZettelID }}
+  {{ $zettelTitle := .ZettelTitle }}
+  {{ $zettelFilename := .ZettelFilename }}
+  {{ $orphanedNote := .OrphanedNote }}
+  <div class="inbox-group">
+    <div class="inbox-group-header">
+      {{ if $orphanedNote }}
+      <h3 class="orphaned-note-title">
+        <span class="orphaned-badge">⚠ Orphaned</span>
+        {{ $zettelTitle }}
+      </h3>
+      <p class="orphaned-note-message">
+        Note file not found (ID: <code>{{ $zettelID }}</code>).
+        The file may have been moved or deleted from WebDAV.
+      </p>
+      {{ else }}
+      <h3>
+        <a href="/zk/{{ $zettelID }}" class="zk-link">{{ $zettelTitle }}</a>
+      </h3>
+      <p class="inbox-group-meta">
+        <code>{{ $zettelFilename }}</code>
+      </p>
+      {{ end }}
+    </div>
+
+    <div class="log-list">
+      {{ range .Comments }}
+      <div class="log-entry">
+        <div class="log-header">
+          <span class="log-type log-type-note">comment</span>
+          <span class="log-date">{{ .CreatedAt.Format "Jan 2, 2006 3:04 PM" }}</span>
+          <form method="POST" action="/zk/{{ $zettelID }}/comment/{{ .ID }}/delete" class="log-delete-form" onsubmit="return confirm('Delete this comment?');">
+            <button type="submit" class="btn-delete" title="Delete">×</button>
+          </form>
+        </div>
+        <div class="log-content">{{ .Content }}</div>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+  {{ end }}
+  {{ end }}
+</main>
+
+{{ template "foot" . }}

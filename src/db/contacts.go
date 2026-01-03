@@ -1,0 +1,963 @@
+/*
+ * Copyright 2025 Humaid Alqasimi
+ * SPDX-License-Identifier: Apache-2.0
+ */
+package db
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"strings"
+)
+
+// ContactListItem represents a contact in the list view
+type ContactListItem struct {
+	ID           string  `db:"id"`
+	NameDisplay  string  `db:"name_display"`
+	Organization *string `db:"organization"`
+	Title        *string `db:"title"`
+	Tier         Tier    `db:"tier"`
+	TierLower    string  // Lowercase tier for CSS classes
+	PrimaryEmail *string `db:"primary_email"`
+	PrimaryPhone *string `db:"primary_phone"`
+	CallSign     *string `db:"call_sign"`
+	Tags         []Tag   // Tags associated with this contact
+}
+
+// ListContacts returns all contacts with their primary email and phone
+func ListContacts(ctx context.Context) ([]ContactListItem, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		SELECT
+			c.id,
+			c.name_display,
+			c.organization,
+			c.title,
+			c.tier,
+			c.call_sign,
+			(SELECT email FROM contact_emails WHERE contact_id = c.id
+			 ORDER BY is_primary DESC, created_at LIMIT 1) AS primary_email,
+			(SELECT phone FROM contact_phones WHERE contact_id = c.id
+			 ORDER BY is_primary DESC, created_at LIMIT 1) AS primary_phone,
+			COALESCE(
+				(SELECT json_agg(json_build_object(
+					'id', t.id::text,
+					'name', t.name,
+					'description', t.description,
+					'created_at', t.created_at
+				) ORDER BY t.name)
+				 FROM tags t
+				 INNER JOIN contact_tags ct ON t.id = ct.tag_id
+				 WHERE ct.contact_id = c.id),
+				'[]'::json
+			) AS tags
+		FROM contacts c
+		ORDER BY c.tier ASC, c.name_display ASC
+	`
+
+	rows, err := pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query contacts: %w", err)
+	}
+	defer rows.Close()
+
+	var contacts []ContactListItem
+	for rows.Next() {
+		var contact ContactListItem
+		var tagsJSON []byte
+		err := rows.Scan(
+			&contact.ID,
+			&contact.NameDisplay,
+			&contact.Organization,
+			&contact.Title,
+			&contact.Tier,
+			&contact.CallSign,
+			&contact.PrimaryEmail,
+			&contact.PrimaryPhone,
+			&tagsJSON,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan contact: %w", err)
+		}
+
+		// Unmarshal tags JSON
+		if len(tagsJSON) > 0 && string(tagsJSON) != "[]" {
+			if err := json.Unmarshal(tagsJSON, &contact.Tags); err != nil {
+				log.Printf("Warning: failed to unmarshal tags for contact %s: %v", contact.ID, err)
+				contact.Tags = []Tag{}
+			}
+		} else {
+			contact.Tags = []Tag{}
+		}
+
+		// Set lowercase tier for CSS classes
+		contact.TierLower = strings.ToLower(string(contact.Tier))
+		contacts = append(contacts, contact)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating contacts: %w", err)
+	}
+
+	return contacts, nil
+}
+
+// CreateContactInput represents the input for creating a new contact
+type CreateContactInput struct {
+	NameGiven    string
+	NameFamily   *string
+	Organization *string
+	Title        *string
+	Email        *string
+	Phone        *string
+	CallSign     *string
+	CardDAVUUID  *string
+	Tier         Tier
+}
+
+// CreateContact creates a new contact and optionally adds email and phone
+func CreateContact(ctx context.Context, input CreateContactInput) (string, error) {
+	if pool == nil {
+		return "", fmt.Errorf("database connection not initialized")
+	}
+
+	// Start a transaction
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Build display name from first and last name
+	nameDisplay := input.NameGiven
+	if input.NameFamily != nil && *input.NameFamily != "" {
+		nameDisplay = input.NameGiven + " " + *input.NameFamily
+	}
+
+	// Insert contact
+	var contactID string
+	query := `
+		INSERT INTO contacts (
+			name_display, name_given, name_family,
+			organization, title, call_sign, carddav_uuid, tier
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING id
+	`
+	err = tx.QueryRow(ctx, query,
+		nameDisplay,
+		input.NameGiven,
+		input.NameFamily,
+		input.Organization,
+		input.Title,
+		input.CallSign,
+		input.CardDAVUUID,
+		input.Tier,
+	).Scan(&contactID)
+	if err != nil {
+		return "", fmt.Errorf("failed to insert contact: %w", err)
+	}
+
+	// Add email if provided
+	if input.Email != nil && *input.Email != "" {
+		emailQuery := `
+			INSERT INTO contact_emails (contact_id, email, email_type, is_primary)
+			VALUES ($1, $2, 'personal', true)
+		`
+		_, err = tx.Exec(ctx, emailQuery, contactID, *input.Email)
+		if err != nil {
+			return "", fmt.Errorf("failed to insert email: %w", err)
+		}
+	}
+
+	// Add phone if provided
+	if input.Phone != nil && *input.Phone != "" {
+		phoneQuery := `
+			INSERT INTO contact_phones (contact_id, phone, phone_type, is_primary)
+			VALUES ($1, $2, 'cell', true)
+		`
+		_, err = tx.Exec(ctx, phoneQuery, contactID, *input.Phone)
+		if err != nil {
+			return "", fmt.Errorf("failed to insert phone: %w", err)
+		}
+	}
+
+	// Commit transaction
+	if err = tx.Commit(ctx); err != nil {
+		return "", fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// If contact has a call sign, try to link existing QSOs to this contact
+	if input.CallSign != nil && *input.CallSign != "" {
+		linkedQuery := `
+			UPDATE qsos SET contact_id = $1
+			WHERE UPPER(call) = UPPER($2) AND contact_id IS NULL
+		`
+		result, err := pool.Exec(ctx, linkedQuery, contactID, *input.CallSign)
+		if err != nil {
+			// Log error but don't fail the creation
+			fmt.Printf("Warning: failed to auto-link QSOs to new contact: %v\n", err)
+		} else {
+			rowsAffected := result.RowsAffected()
+			if rowsAffected > 0 {
+				fmt.Printf("Auto-linked %d existing QSOs to new contact %s\n", rowsAffected, contactID)
+			}
+		}
+	}
+
+	return contactID, nil
+}
+
+// ContactDetail represents a full contact with all related data
+type ContactDetail struct {
+	Contact
+	Emails         []ContactEmail
+	Phones         []ContactPhone
+	Addresses      []ContactAddress
+	URLs           []ContactURL
+	Logs           []ContactLog
+	Notes          []ContactNote
+	Tags           []Tag
+	CardDAVContact *CardDAVContact // CardDAV contact data if linked
+}
+
+// GetContact retrieves a contact by ID with all related data
+func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	// Get main contact record
+	var contact Contact
+	query := `
+		SELECT
+			id, name_given, name_additional, name_family,
+			name_display, nickname, organization, title, role, birthday, anniversary,
+			gender, timezone, geo_lat, geo_lon, language, photo_url,
+			tier, call_sign, carddav_uuid, created_at, updated_at
+		FROM contacts
+		WHERE id = $1
+	`
+	err := pool.QueryRow(ctx, query, id).Scan(
+		&contact.ID,
+		&contact.NameGiven,
+		&contact.NameAdditional,
+		&contact.NameFamily,
+		&contact.NameDisplay,
+		&contact.Nickname,
+		&contact.Organization,
+		&contact.Title,
+		&contact.Role,
+		&contact.Birthday,
+		&contact.Anniversary,
+		&contact.Gender,
+		&contact.Timezone,
+		&contact.GeoLat,
+		&contact.GeoLon,
+		&contact.Language,
+		&contact.PhotoURL,
+		&contact.Tier,
+		&contact.CallSign,
+		&contact.CardDAVUUID,
+		&contact.CreatedAt,
+		&contact.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query contact: %w", err)
+	}
+
+	detail := &ContactDetail{
+		Contact: contact,
+	}
+
+	// Get emails
+	emailQuery := `SELECT id, contact_id, email, email_type, is_primary, created_at
+		FROM contact_emails WHERE contact_id = $1 ORDER BY is_primary DESC, created_at`
+	emailRows, err := pool.Query(ctx, emailQuery, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query emails: %w", err)
+	}
+	defer emailRows.Close()
+
+	for emailRows.Next() {
+		var email ContactEmail
+		err := emailRows.Scan(&email.ID, &email.ContactID, &email.Email, &email.EmailType, &email.IsPrimary, &email.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan email: %w", err)
+		}
+		detail.Emails = append(detail.Emails, email)
+	}
+
+	// Get phones
+	phoneQuery := `SELECT id, contact_id, phone, phone_type, is_primary, created_at
+		FROM contact_phones WHERE contact_id = $1 ORDER BY is_primary DESC, created_at`
+	phoneRows, err := pool.Query(ctx, phoneQuery, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query phones: %w", err)
+	}
+	defer phoneRows.Close()
+
+	for phoneRows.Next() {
+		var phone ContactPhone
+		err := phoneRows.Scan(&phone.ID, &phone.ContactID, &phone.Phone, &phone.PhoneType, &phone.IsPrimary, &phone.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan phone: %w", err)
+		}
+		detail.Phones = append(detail.Phones, phone)
+	}
+
+	// Get addresses
+	addrQuery := `SELECT id, contact_id, street, locality, region, postal_code, country,
+		address_type, is_primary, po_box, extended, created_at
+		FROM contact_addresses WHERE contact_id = $1 ORDER BY is_primary DESC, created_at`
+	addrRows, err := pool.Query(ctx, addrQuery, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query addresses: %w", err)
+	}
+	defer addrRows.Close()
+
+	for addrRows.Next() {
+		var addr ContactAddress
+		err := addrRows.Scan(&addr.ID, &addr.ContactID, &addr.Street, &addr.Locality, &addr.Region,
+			&addr.PostalCode, &addr.Country, &addr.AddressType, &addr.IsPrimary, &addr.POBox,
+			&addr.Extended, &addr.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan address: %w", err)
+		}
+		detail.Addresses = append(detail.Addresses, addr)
+	}
+
+	// Get URLs
+	urlQuery := `SELECT id, contact_id, url, url_type, label, username, created_at
+		FROM contact_urls WHERE contact_id = $1 ORDER BY created_at`
+	urlRows, err := pool.Query(ctx, urlQuery, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query urls: %w", err)
+	}
+	defer urlRows.Close()
+
+	for urlRows.Next() {
+		var url ContactURL
+		err := urlRows.Scan(&url.ID, &url.ContactID, &url.URL, &url.URLType, &url.Label, &url.Username, &url.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan url: %w", err)
+		}
+		detail.URLs = append(detail.URLs, url)
+	}
+
+	// Get contact logs
+	logQuery := `SELECT id, contact_id, log_type, logged_at, subject, content, created_at
+		FROM contact_logs WHERE contact_id = $1 ORDER BY logged_at DESC, created_at DESC`
+	logRows, err := pool.Query(ctx, logQuery, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query logs: %w", err)
+	}
+	defer logRows.Close()
+
+	for logRows.Next() {
+		var log ContactLog
+		err := logRows.Scan(&log.ID, &log.ContactID, &log.LogType, &log.LoggedAt, &log.Subject, &log.Content, &log.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan log: %w", err)
+		}
+		detail.Logs = append(detail.Logs, log)
+	}
+
+	// Get contact notes
+	noteQuery := `SELECT id, contact_id, content, noted_at, created_at, updated_at
+		FROM contact_notes WHERE contact_id = $1 ORDER BY noted_at DESC, created_at DESC`
+	noteRows, err := pool.Query(ctx, noteQuery, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query notes: %w", err)
+	}
+	defer noteRows.Close()
+
+	for noteRows.Next() {
+		var note ContactNote
+		err := noteRows.Scan(&note.ID, &note.ContactID, &note.Content, &note.NotedAt, &note.CreatedAt, &note.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan note: %w", err)
+		}
+		detail.Notes = append(detail.Notes, note)
+	}
+
+	// Get tags
+	detail.Tags, err = GetContactTags(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query tags: %w", err)
+	}
+
+	// Fetch CardDAV contact data if linked
+	if contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
+		cardDAVContact, err := GetCardDAVContact(ctx, *contact.CardDAVUUID)
+		if err != nil {
+			// Log error but don't fail the request if CardDAV is unavailable
+			// Just leave CardDAVContact as nil
+			fmt.Printf("Warning: failed to fetch CardDAV contact: %v\n", err)
+		} else {
+			detail.CardDAVContact = cardDAVContact
+		}
+	}
+
+	return detail, nil
+}
+
+// UpdateContactInput represents the input for updating a contact
+type UpdateContactInput struct {
+	ID           string
+	NameGiven    string
+	NameFamily   *string
+	Organization *string
+	Title        *string
+	CallSign     *string
+	Tier         Tier
+}
+
+// UpdateContact updates an existing contact
+func UpdateContact(ctx context.Context, input UpdateContactInput) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	// Build display name from first and last name
+	nameDisplay := input.NameGiven
+	if input.NameFamily != nil && *input.NameFamily != "" {
+		nameDisplay = input.NameGiven + " " + *input.NameFamily
+	}
+
+	query := `
+		UPDATE contacts SET
+			name_display = $1,
+			name_given = $2,
+			name_family = $3,
+			organization = $4,
+			title = $5,
+			call_sign = $6,
+			tier = $7
+		WHERE id = $8
+	`
+	_, err := pool.Exec(ctx, query,
+		nameDisplay,
+		input.NameGiven,
+		input.NameFamily,
+		input.Organization,
+		input.Title,
+		input.CallSign,
+		input.Tier,
+		input.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update contact: %w", err)
+	}
+
+	// If contact has a call sign, try to link existing QSOs to this contact
+	if input.CallSign != nil && *input.CallSign != "" {
+		linkedQuery := `
+			UPDATE qsos SET contact_id = $1
+			WHERE UPPER(call) = UPPER($2) AND contact_id IS NULL
+		`
+		result, err := pool.Exec(ctx, linkedQuery, input.ID, *input.CallSign)
+		if err != nil {
+			// Log error but don't fail the update
+			fmt.Printf("Warning: failed to auto-link QSOs to updated contact: %v\n", err)
+		} else {
+			rowsAffected := result.RowsAffected()
+			if rowsAffected > 0 {
+				fmt.Printf("Auto-linked %d existing QSOs to contact %s\n", rowsAffected, input.ID)
+			}
+		}
+	}
+
+	return nil
+}
+
+// AddEmailInput represents input for adding an email
+type AddEmailInput struct {
+	ContactID string
+	Email     string
+	EmailType EmailType
+	IsPrimary bool
+}
+
+// AddEmail adds a new email to a contact
+func AddEmail(ctx context.Context, input AddEmailInput) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		INSERT INTO contact_emails (contact_id, email, email_type, is_primary)
+		VALUES ($1, $2, $3, $4)
+	`
+	_, err := pool.Exec(ctx, query, input.ContactID, input.Email, input.EmailType, input.IsPrimary)
+	if err != nil {
+		return fmt.Errorf("failed to add email: %w", err)
+	}
+
+	return nil
+}
+
+// AddPhoneInput represents input for adding a phone
+type AddPhoneInput struct {
+	ContactID string
+	Phone     string
+	PhoneType PhoneType
+	IsPrimary bool
+}
+
+// AddPhone adds a new phone to a contact
+func AddPhone(ctx context.Context, input AddPhoneInput) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		INSERT INTO contact_phones (contact_id, phone, phone_type, is_primary)
+		VALUES ($1, $2, $3, $4)
+	`
+	_, err := pool.Exec(ctx, query, input.ContactID, input.Phone, input.PhoneType, input.IsPrimary)
+	if err != nil {
+		return fmt.Errorf("failed to add phone: %w", err)
+	}
+
+	return nil
+}
+
+// AddURLInput represents input for adding a URL
+type AddURLInput struct {
+	ContactID string
+	URL       string
+	URLType   URLType
+	Label     *string
+	Username  *string
+}
+
+// AddURL adds a new URL to a contact
+func AddURL(ctx context.Context, input AddURLInput) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		INSERT INTO contact_urls (contact_id, url, url_type, label, username)
+		VALUES ($1, $2, $3, $4, $5)
+	`
+	_, err := pool.Exec(ctx, query, input.ContactID, input.URL, input.URLType, input.Label, input.Username)
+	if err != nil {
+		return fmt.Errorf("failed to add URL: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteEmail removes an email from a contact
+func DeleteEmail(ctx context.Context, emailID string) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	query := `DELETE FROM contact_emails WHERE id = $1`
+	_, err := pool.Exec(ctx, query, emailID)
+	if err != nil {
+		return fmt.Errorf("failed to delete email: %w", err)
+	}
+
+	return nil
+}
+
+// DeletePhone removes a phone from a contact
+func DeletePhone(ctx context.Context, phoneID string) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	query := `DELETE FROM contact_phones WHERE id = $1`
+	_, err := pool.Exec(ctx, query, phoneID)
+	if err != nil {
+		return fmt.Errorf("failed to delete phone: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteURL removes a URL from a contact
+func DeleteURL(ctx context.Context, urlID string) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	query := `DELETE FROM contact_urls WHERE id = $1`
+	_, err := pool.Exec(ctx, query, urlID)
+	if err != nil {
+		return fmt.Errorf("failed to delete URL: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteContact removes a contact and all associated data
+func DeleteContact(ctx context.Context, contactID string) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	// The foreign key constraints with ON DELETE CASCADE will handle
+	// deleting related emails, phones, addresses, URLs, etc.
+	query := `DELETE FROM contacts WHERE id = $1`
+	_, err := pool.Exec(ctx, query, contactID)
+	if err != nil {
+		return fmt.Errorf("failed to delete contact: %w", err)
+	}
+
+	return nil
+}
+
+// AddLogInput represents input for adding a contact log
+type AddLogInput struct {
+	ContactID string
+	LogType   LogType
+	LoggedAt  *string // Optional, defaults to now
+	Subject   *string
+	Content   *string
+}
+
+// AddLog adds a new interaction log to a contact
+func AddLog(ctx context.Context, input AddLogInput) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		INSERT INTO contact_logs (contact_id, log_type, logged_at, subject, content)
+		VALUES ($1, $2, COALESCE($3::timestamptz, now()), $4, $5)
+	`
+	_, err := pool.Exec(ctx, query, input.ContactID, input.LogType, input.LoggedAt, input.Subject, input.Content)
+	if err != nil {
+		return fmt.Errorf("failed to add log: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteLog removes a contact log
+func DeleteLog(ctx context.Context, logID string) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	query := `DELETE FROM contact_logs WHERE id = $1`
+	_, err := pool.Exec(ctx, query, logID)
+	if err != nil {
+		return fmt.Errorf("failed to delete log: %w", err)
+	}
+
+	return nil
+}
+
+// LinkCardDAV links a contact with a CardDAV contact UUID
+func LinkCardDAV(ctx context.Context, contactID string, cardDAVUUID string) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	query := `UPDATE contacts SET carddav_uuid = $1 WHERE id = $2`
+	_, err := pool.Exec(ctx, query, cardDAVUUID, contactID)
+	if err != nil {
+		return fmt.Errorf("failed to link CardDAV contact: %w", err)
+	}
+
+	return nil
+}
+
+// UnlinkCardDAV removes the CardDAV link from a contact
+func UnlinkCardDAV(ctx context.Context, contactID string) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	query := `UPDATE contacts SET carddav_uuid = NULL WHERE id = $1`
+	_, err := pool.Exec(ctx, query, contactID)
+	if err != nil {
+		return fmt.Errorf("failed to unlink CardDAV contact: %w", err)
+	}
+
+	return nil
+}
+
+// GetLinkedCardDAVUUIDs returns all CardDAV UUIDs that are currently linked to contacts
+func GetLinkedCardDAVUUIDs(ctx context.Context) ([]string, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	query := `SELECT carddav_uuid FROM contacts WHERE carddav_uuid IS NOT NULL`
+	rows, err := pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query linked CardDAV UUIDs: %w", err)
+	}
+	defer rows.Close()
+
+	var uuids []string
+	for rows.Next() {
+		var uuid string
+		if err := rows.Scan(&uuid); err != nil {
+			return nil, fmt.Errorf("failed to scan UUID: %w", err)
+		}
+		uuids = append(uuids, uuid)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating UUIDs: %w", err)
+	}
+
+	return uuids, nil
+}
+
+// IsCardDAVUUIDLinked checks if a CardDAV UUID is already linked to a contact
+func IsCardDAVUUIDLinked(ctx context.Context, uuid string) (bool, error) {
+	if pool == nil {
+		return false, fmt.Errorf("database connection not initialized")
+	}
+
+	query := `SELECT EXISTS(SELECT 1 FROM contacts WHERE carddav_uuid = $1)`
+	var exists bool
+	err := pool.QueryRow(ctx, query, uuid).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if CardDAV UUID is linked: %w", err)
+	}
+
+	return exists, nil
+}
+
+// OverdueContactItem represents a contact that is overdue for contact
+type OverdueContactItem struct {
+	ID              string  `db:"id"`
+	NameDisplay     string  `db:"name_display"`
+	Organization    *string `db:"organization"`
+	Title           *string `db:"title"`
+	Tier            Tier    `db:"tier"`
+	TierLower       string  // Lowercase tier for CSS classes
+	CallSign        *string `db:"call_sign"`
+	LastContactDate *string `db:"last_contact_date"`
+	DaysOverdue     int     `db:"days_overdue"`
+	ContactInterval int     `db:"contact_interval"`
+}
+
+// GetOverdueContacts returns contacts that are overdue for contact, sorted by most overdue first
+func GetOverdueContacts(ctx context.Context) ([]OverdueContactItem, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		WITH contact_intervals AS (
+			SELECT
+				id,
+				tier,
+				CASE tier
+					WHEN 'A' THEN 21   -- 3 weeks
+					WHEN 'B' THEN 60   -- 2 months
+					WHEN 'C' THEN 180  -- 6 months
+					WHEN 'D' THEN 365  -- 1 year
+					WHEN 'E' THEN 730  -- 2 years
+					ELSE NULL
+				END as interval_days
+			FROM contacts
+			WHERE tier != 'F'  -- Exclude F tier (no regular contact)
+		),
+		last_contacts AS (
+			SELECT
+				contact_id,
+				MAX(logged_at) as last_contact_date
+			FROM contact_logs
+			GROUP BY contact_id
+		)
+		SELECT
+			c.id,
+			c.name_display,
+			c.organization,
+			c.title,
+			c.tier,
+			c.call_sign,
+			TO_CHAR(COALESCE(lc.last_contact_date, c.created_at), 'YYYY-MM-DD') as last_contact_date,
+			CASE
+				WHEN lc.last_contact_date IS NULL THEN
+					CAST(EXTRACT(EPOCH FROM (NOW() - c.created_at)) / 86400 AS INTEGER)
+				ELSE
+					CAST(EXTRACT(EPOCH FROM (NOW() - lc.last_contact_date)) / 86400 AS INTEGER)
+			END as days_since_contact,
+			ci.interval_days,
+			CASE
+				WHEN lc.last_contact_date IS NULL THEN
+					CAST(EXTRACT(EPOCH FROM (NOW() - c.created_at)) / 86400 AS INTEGER) - ci.interval_days
+				ELSE
+					CAST(EXTRACT(EPOCH FROM (NOW() - lc.last_contact_date)) / 86400 AS INTEGER) - ci.interval_days
+			END as days_overdue
+		FROM contacts c
+		INNER JOIN contact_intervals ci ON c.id = ci.id
+		LEFT JOIN last_contacts lc ON c.id = lc.contact_id
+		WHERE
+			ci.interval_days IS NOT NULL
+			AND (
+				CASE
+					WHEN lc.last_contact_date IS NULL THEN
+						CAST(EXTRACT(EPOCH FROM (NOW() - c.created_at)) / 86400 AS INTEGER) > ci.interval_days
+					ELSE
+						CAST(EXTRACT(EPOCH FROM (NOW() - lc.last_contact_date)) / 86400 AS INTEGER) > ci.interval_days
+				END
+			)
+		ORDER BY days_overdue DESC, c.name_display ASC
+	`
+
+	rows, err := pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query overdue contacts: %w", err)
+	}
+	defer rows.Close()
+
+	var contacts []OverdueContactItem
+	for rows.Next() {
+		var contact OverdueContactItem
+		var daysSinceContact int
+		err := rows.Scan(
+			&contact.ID,
+			&contact.NameDisplay,
+			&contact.Organization,
+			&contact.Title,
+			&contact.Tier,
+			&contact.CallSign,
+			&contact.LastContactDate,
+			&daysSinceContact,
+			&contact.ContactInterval,
+			&contact.DaysOverdue,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan overdue contact: %w", err)
+		}
+		// Set lowercase tier for CSS classes
+		contact.TierLower = strings.ToLower(string(contact.Tier))
+		contacts = append(contacts, contact)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating overdue contacts: %w", err)
+	}
+
+	return contacts, nil
+}
+
+// AddNoteInput represents input for adding a contact note
+type AddNoteInput struct {
+	ContactID string
+	Content   string
+	NotedAt   *string // Optional, defaults to now
+}
+
+// AddNote adds a new note to a contact
+func AddNote(ctx context.Context, input AddNoteInput) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		INSERT INTO contact_notes (contact_id, content, noted_at)
+		VALUES ($1, $2, COALESCE($3::timestamptz, now()))
+	`
+	_, err := pool.Exec(ctx, query, input.ContactID, input.Content, input.NotedAt)
+	if err != nil {
+		return fmt.Errorf("failed to add note: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteNote removes a contact note
+func DeleteNote(ctx context.Context, noteID string) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	query := `DELETE FROM contact_notes WHERE id = $1`
+	_, err := pool.Exec(ctx, query, noteID)
+	if err != nil {
+		return fmt.Errorf("failed to delete note: %w", err)
+	}
+
+	return nil
+}
+
+// GetContactsCount returns the total number of contacts
+func GetContactsCount(ctx context.Context) (int, error) {
+	if pool == nil {
+		return 0, fmt.Errorf("database connection not initialized")
+	}
+
+	var count int
+	query := `SELECT COUNT(*) FROM contacts`
+	err := pool.QueryRow(ctx, query).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count contacts: %w", err)
+	}
+
+	return count, nil
+}
+
+// GetRecentContacts returns the N most recently updated contacts
+func GetRecentContacts(ctx context.Context, limit int) ([]ContactListItem, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		SELECT
+			c.id,
+			c.name_display,
+			c.organization,
+			c.title,
+			c.tier,
+			c.call_sign,
+			(SELECT email FROM contact_emails WHERE contact_id = c.id
+			 ORDER BY is_primary DESC, created_at LIMIT 1) AS primary_email,
+			(SELECT phone FROM contact_phones WHERE contact_id = c.id
+			 ORDER BY is_primary DESC, created_at LIMIT 1) AS primary_phone
+		FROM contacts c
+		ORDER BY c.updated_at DESC
+		LIMIT $1
+	`
+
+	rows, err := pool.Query(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query recent contacts: %w", err)
+	}
+	defer rows.Close()
+
+	var contacts []ContactListItem
+	for rows.Next() {
+		var contact ContactListItem
+		err := rows.Scan(
+			&contact.ID,
+			&contact.NameDisplay,
+			&contact.Organization,
+			&contact.Title,
+			&contact.Tier,
+			&contact.CallSign,
+			&contact.PrimaryEmail,
+			&contact.PrimaryPhone,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan contact: %w", err)
+		}
+		contact.TierLower = strings.ToLower(string(contact.Tier))
+		contacts = append(contacts, contact)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating contacts: %w", err)
+	}
+
+	return contacts, nil
+}

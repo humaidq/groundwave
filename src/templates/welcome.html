@@ -1,0 +1,61 @@
+{{ template "head" . }}
+
+<div class="welcome-container">
+  <h2>Welcome to Groundwave</h2>
+  <p class="welcome-subtitle">Not an Operating System</p>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-number">{{ .TotalContacts }}</div>
+      <div class="stat-label">Total Contacts</div>
+      <a href="/contacts" class="stat-link">View All →</a>
+    </div>
+
+    <div class="stat-card stat-warning">
+      <div class="stat-number">{{ .OverdueCount }}</div>
+      <div class="stat-label">Overdue Follow-ups</div>
+      <a href="/overdue" class="stat-link">View Overdue →</a>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-number">{{ .QSOCount }}</div>
+      <div class="stat-label">QSO Contacts</div>
+      <a href="/qsl" class="stat-link">View Log →</a>
+    </div>
+  </div>
+
+  <div class="quick-actions">
+    <h3>Quick Actions</h3>
+    <div class="action-grid">
+      <a href="/contact/new" class="action-btn">
+        <span class="action-text">Add Contact</span>
+      </a>
+      <a href="/qsl" class="action-btn">
+        <span class="action-text">Import ADIF</span>
+      </a>
+      <a href="/tags" class="action-btn">
+        <span class="action-text">Manage Tags</span>
+      </a>
+    </div>
+  </div>
+
+  {{ if .RecentContacts }}
+  <div class="recent-section">
+    <h3>Recently Updated</h3>
+    <div class="entry-list">
+      {{ range .RecentContacts }}
+      <div class="entry">
+        <a href="/contact/{{ .ID }}">
+          <div class="entry-title">{{ .NameDisplay }}</div>
+          {{ if .Organization }}
+          <div class="muted-text">{{ .Organization }}</div>
+          {{ end }}
+        </a>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+  {{ end }}
+</div>
+
+{{ template "foot" . }}

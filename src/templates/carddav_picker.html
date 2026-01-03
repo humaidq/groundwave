@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select CardDAV Contact</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        #loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        #error {
+            background: #fee;
+            border: 1px solid #fcc;
+            color: #c33;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        #search {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+
+        #search:focus {
+            outline: none;
+            border-color: #4a90e2;
+        }
+
+        #contacts-list {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .contact-item {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .contact-item:last-child {
+            border-bottom: none;
+        }
+
+        .contact-item:hover {
+            background: #f0f8ff;
+        }
+
+        .contact-item.linked {
+            background: #f9f9f9;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .contact-item.linked:hover {
+            background: #f9f9f9;
+        }
+
+        .linked-badge {
+            display: inline-block;
+            background: #e0e0e0;
+            color: #666;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            margin-left: 8px;
+            font-weight: 500;
+        }
+
+        .contact-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .contact-uuid {
+            font-size: 12px;
+            color: #888;
+            font-family: monospace;
+        }
+
+        .contact-email {
+            font-size: 13px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .no-results {
+            padding: 40px;
+            text-align: center;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <h2>Select CardDAV Contact</h2>
+
+    <div id="error"></div>
+
+    <input type="text" id="search" placeholder="Search contacts by name..." autofocus>
+
+    <div id="loading">Loading CardDAV contacts...</div>
+
+    <div id="contacts-list" style="display: none;"></div>
+
+    <script>
+        let allContacts = [];
+
+        // Fetch contacts from server
+        fetch('/carddav/contacts')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch contacts');
+                }
+                return response.json();
+            })
+            .then(contacts => {
+                allContacts = contacts;
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('contacts-list').style.display = 'block';
+                renderContacts(contacts);
+            })
+            .catch(error => {
+                document.getElementById('loading').style.display = 'none';
+                const errorEl = document.getElementById('error');
+                errorEl.textContent = 'Error: ' + error.message + '. Make sure CardDAV environment variables are configured.';
+                errorEl.style.display = 'block';
+            });
+
+        // Render contacts list
+        function renderContacts(contacts) {
+            const listEl = document.getElementById('contacts-list');
+
+            if (!contacts || contacts.length === 0) {
+                listEl.innerHTML = '<div class="no-results">No CardDAV contacts found</div>';
+                return;
+            }
+
+            listEl.innerHTML = contacts.map(contact => {
+                const displayName = contact.DisplayName || `${contact.GivenName || ''} ${contact.FamilyName || ''}`.trim() || 'Unnamed Contact';
+                const primaryEmail = contact.Emails && contact.Emails.length > 0 ? contact.Emails[0].Email : '';
+                const isLinked = contact.IsLinked || false;
+                const linkedClass = isLinked ? ' linked' : '';
+                const linkedBadge = isLinked ? '<span class="linked-badge">Already Linked</span>' : '';
+                const onclick = isLinked ? '' : `onclick="selectContact('${escapeHtml(contact.UUID)}')"`;
+
+                return `
+                    <div class="contact-item${linkedClass}" ${onclick}>
+                        <div class="contact-name">${escapeHtml(displayName)}${linkedBadge}</div>
+                        ${primaryEmail ? `<div class="contact-email">${escapeHtml(primaryEmail)}</div>` : ''}
+                        <div class="contact-uuid">${escapeHtml(contact.UUID)}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Filter contacts based on search
+        document.getElementById('search').addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+
+            if (!searchTerm) {
+                renderContacts(allContacts);
+                return;
+            }
+
+            const filtered = allContacts.filter(contact => {
+                const displayName = (contact.DisplayName || `${contact.GivenName || ''} ${contact.FamilyName || ''}`.trim() || '').toLowerCase();
+                const email = contact.Emails && contact.Emails.length > 0 ? contact.Emails[0].Email.toLowerCase() : '';
+
+                return displayName.includes(searchTerm) || email.includes(searchTerm);
+            });
+
+            renderContacts(filtered);
+        });
+
+        // Select contact and send to parent window
+        function selectContact(uuid) {
+            if (window.opener && !window.opener.closed) {
+                window.opener.postMessage({
+                    type: 'carddav-contact-selected',
+                    uuid: uuid
+                }, window.location.origin);
+                window.close();
+            } else {
+                alert('Parent window not found. UUID: ' + uuid);
+            }
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

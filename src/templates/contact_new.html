@@ -1,0 +1,144 @@
+{{ template "head" . }}
+
+<h2>Add New Contact</h2>
+
+{{ if .Error }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Error</h5>
+  <p>{{.Error}}</p>
+</div>
+{{end}}
+
+<div class="contact-create-options">
+  <div class="create-option">
+    <h3>Import from CardDAV</h3>
+    <p class="muted-text">Import an existing contact from your CardDAV server. The contact's name, organization, and job title will be automatically synced.</p>
+    <button type="button" class="btn" onclick="openCardDAVPicker()">Browse CardDAV Contacts</button>
+  </div>
+
+  <div class="create-option-divider">or</div>
+
+  <div class="create-option">
+    <h3>Create Standalone Contact</h3>
+    <p class="muted-text">Create a new contact that is not linked to CardDAV.</p>
+    <button type="button" class="btn" onclick="document.getElementById('standalone-form').style.display='block'; this.parentElement.style.display='none'; document.querySelector('.create-option-divider').style.display='none'; document.querySelectorAll('.create-option')[0].style.display='none';">Create New</button>
+  </div>
+</div>
+
+<form method="POST" action="/contact/new" id="standalone-form" style="display: none;">
+  <div class="form-group">
+    <label for="name_given" class="item-title">First Name <span class="required">*</span></label>
+    <input type="text" id="name_given" name="name_given" class="form-item" required
+           value="{{ if .FormData }}{{ index .FormData "name_given" }}{{ end }}"
+           placeholder="e.g., John">
+    <small class="muted-text">Required</small>
+  </div>
+
+  <div class="form-group">
+    <label for="name_family" class="item-title">Last Name</label>
+    <input type="text" id="name_family" name="name_family" class="form-item"
+           value="{{ if .FormData }}{{ index .FormData "name_family" }}{{ end }}"
+           placeholder="e.g., Doe">
+  </div>
+
+  <div class="form-group">
+    <label for="email" class="item-title">Email</label>
+    <input type="email" id="email" name="email" class="form-item"
+           value="{{ if .FormData }}{{ index .FormData "email" }}{{ end }}"
+           placeholder="e.g., john@example.com">
+  </div>
+
+  <div class="form-group">
+    <label for="phone" class="item-title">Phone</label>
+    <input type="tel" id="phone" name="phone" class="form-item"
+           value="{{ if .FormData }}{{ index .FormData "phone" }}{{ end }}"
+           placeholder="e.g., +1-555-123-4567">
+  </div>
+
+  <div class="form-group">
+    <label for="organization" class="item-title">Organization</label>
+    <input type="text" id="organization" name="organization" class="form-item"
+           value="{{ if .FormData }}{{ index .FormData "organization" }}{{ end }}"
+           placeholder="e.g., Acme Corp">
+  </div>
+
+  <div class="form-group">
+    <label for="title" class="item-title">Job Title</label>
+    <input type="text" id="title" name="title" class="form-item"
+           value="{{ if .FormData }}{{ index .FormData "title" }}{{ end }}"
+           placeholder="e.g., Software Engineer">
+  </div>
+
+  <div class="form-group">
+    <label for="call_sign" class="item-title">Amateur Radio Call Sign</label>
+    <input type="text" id="call_sign" name="call_sign" class="form-item callsign-input"
+           value="{{ if .FormData }}{{ index .FormData "call_sign" }}{{ end }}"
+           placeholder="e.g., W1AW"
+           pattern="[A-Za-z0-9]{3,8}">
+    <small class="muted-text">3-8 characters, letters and numbers only</small>
+  </div>
+
+  <div class="form-group">
+    <label for="tier" class="item-title">Tier</label>
+    <select id="tier" name="tier" class="form-item">
+      <option value="A" {{ if .FormData }}{{ if eq (index .FormData "tier") "A" }}selected{{ end }}{{ end }}>A - Closest relationships (contact every 3 weeks)</option>
+      <option value="B" {{ if .FormData }}{{ if eq (index .FormData "tier") "B" }}selected{{ end }}{{ end }}>B - Close friends (contact every 2 months)</option>
+      <option value="C" {{ if .FormData }}{{ if eq (index .FormData "tier") "C" }}selected{{ end }}{{ else }}selected{{ end }}>C - Regular contacts (contact every 6 months)</option>
+      <option value="D" {{ if .FormData }}{{ if eq (index .FormData "tier") "D" }}selected{{ end }}{{ end }}>D - Occasional contacts (contact every year)</option>
+      <option value="E" {{ if .FormData }}{{ if eq (index .FormData "tier") "E" }}selected{{ end }}{{ end }}>E - Distant contacts (contact every 2 years)</option>
+      <option value="F" {{ if .FormData }}{{ if eq (index .FormData "tier") "F" }}selected{{ end }}{{ end }}>F - No regular contact needed</option>
+    </select>
+    <small class="muted-text">How often you should stay in touch with this person</small>
+  </div>
+
+  <div class="form-group">
+    <button type="submit" class="btn">Add Contact</button>
+    <a href="/" class="btn">Cancel</a>
+  </div>
+</form>
+
+<script>
+// Show form if there was an error
+{{ if .Error }}
+document.getElementById('standalone-form').style.display = 'block';
+document.querySelector('.contact-create-options').style.display = 'none';
+{{ end }}
+
+function openCardDAVPicker() {
+  const width = 600;
+  const height = 700;
+  const left = (screen.width - width) / 2;
+  const top = (screen.height - height) / 2;
+
+  window.open(
+    '/carddav/picker?mode=create',
+    'CardDAV Contact Picker',
+    `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+  );
+}
+
+// Listen for messages from the popup
+window.addEventListener('message', function(event) {
+  if (event.origin !== window.location.origin) {
+    return;
+  }
+
+  if (event.data.type === 'carddav-contact-selected') {
+    // Create a form to submit the CardDAV UUID for contact creation
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/contact/new';
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'carddav_uuid';
+    input.value = event.data.uuid;
+
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+  }
+});
+</script>
+
+{{ template "foot" . }}

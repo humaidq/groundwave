@@ -1,0 +1,25 @@
+version = 1
+
+[[annotations]]
+path = [
+  "src/static/battery_a61bn.jpg",
+  "src/go.mod",
+  "src/go.sum",
+  "flake.lock",
+  ".envrc",
+  ".gitignore",
+  "src/templates/foot.html",
+  "src/templates/head.html",
+  "src/templates/home.html",
+  "src/templates/latest-qsos.html",
+  "src/templates/qrz.html",
+  "src/templates/result.html",
+  "README.md"
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2025 Humaid Alqasimi"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["src/vendor/**", "src/vendor/*"]
+precedence = "override"

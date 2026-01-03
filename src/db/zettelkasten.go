@@ -1,0 +1,298 @@
+/*
+ * Copyright 2025 Humaid Alqasimi
+ * SPDX-License-Identifier: Apache-2.0
+ */
+package db
+
+import (
+	"context"
+	"fmt"
+	"html/template"
+	"io"
+	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/emersion/go-webdav"
+	"github.com/humaidq/groundwave/utils"
+)
+
+// ZettelkastenConfig holds the zettelkasten configuration
+type ZettelkastenConfig struct {
+	BaseURL   string // WebDAV directory URL (e.g., https://webdav.example.com/org/)
+	Username  string
+	Password  string
+	IndexFile string // Filename of the starting note
+}
+
+// ZKNote represents a zettelkasten note
+type ZKNote struct {
+	ID       string
+	Title    string
+	Filename string
+	HTMLBody template.HTML
+}
+
+// In-memory cache for ID to filename mappings
+var (
+	idToFilenameCache = make(map[string]string)
+	cacheMutex        sync.RWMutex
+)
+
+// GetZKConfig loads zettelkasten configuration from environment variables
+func GetZKConfig() (*ZettelkastenConfig, error) {
+	zkPath := os.Getenv("ZK_PATH")
+	username := os.Getenv("ZK_USERNAME")
+	password := os.Getenv("ZK_PASSWORD")
+
+	if zkPath == "" {
+		return nil, fmt.Errorf("ZK_PATH not configured")
+	}
+
+	// Parse ZK_PATH to extract base URL and index filename
+	// Example: https://webdav.example.com/org/abc-index.org
+	//   -> baseURL: https://webdav.example.com/org/
+	//   -> indexFile: abc-index.org
+
+	parsedURL, err := url.Parse(zkPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid ZK_PATH URL: %w", err)
+	}
+
+	// Extract the directory path and filename
+	pathParts := strings.Split(strings.TrimPrefix(parsedURL.Path, "/"), "/")
+	if len(pathParts) == 0 {
+		return nil, fmt.Errorf("ZK_PATH must include a filename")
+	}
+
+	indexFile := pathParts[len(pathParts)-1]
+	if !strings.HasSuffix(indexFile, ".org") {
+		return nil, fmt.Errorf("ZK_PATH must point to a .org file")
+	}
+
+	// Reconstruct base URL (everything except the filename)
+	basePathParts := pathParts[:len(pathParts)-1]
+	basePath := "/" + strings.Join(basePathParts, "/")
+	if basePath != "/" {
+		basePath += "/"
+	}
+
+	baseURL := fmt.Sprintf("%s://%s%s", parsedURL.Scheme, parsedURL.Host, basePath)
+
+	return &ZettelkastenConfig{
+		BaseURL:   baseURL,
+		Username:  username,
+		Password:  password,
+		IndexFile: indexFile,
+	}, nil
+}
+
+// newZKHTTPClient creates an HTTP client for WebDAV operations
+func newZKHTTPClient(config *ZettelkastenConfig) *http.Client {
+	transport := http.DefaultTransport
+
+	// Add basic auth if credentials are provided
+	if config.Username != "" && config.Password != "" {
+		transport = &basicAuthTransport{
+			Username: config.Username,
+			Password: config.Password,
+			Base:     http.DefaultTransport,
+		}
+	}
+
+	return &http.Client{
+		Timeout:   30 * time.Second,
+		Transport: transport,
+	}
+}
+
+// FetchOrgFile fetches a single .org file from WebDAV
+func FetchOrgFile(ctx context.Context, filename string) (string, error) {
+	config, err := GetZKConfig()
+	if err != nil {
+		return "", err
+	}
+
+	httpClient := newZKHTTPClient(config)
+
+	// Construct full URL
+	fileURL := config.BaseURL + filename
+
+	req, err := http.NewRequestWithContext(ctx, "GET", fileURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch file %s: %w", filename, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to fetch file %s: HTTP %d", filename, resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file content: %w", err)
+	}
+
+	return string(body), nil
+}
+
+// ListOrgFiles lists all .org files in the WebDAV directory
+func ListOrgFiles(ctx context.Context) ([]string, error) {
+	config, err := GetZKConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	httpClient := newZKHTTPClient(config)
+
+	// Create WebDAV client
+	client, err := webdav.NewClient(httpClient, config.BaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create WebDAV client: %w", err)
+	}
+
+	// List files in directory (use "." for current directory relative to BaseURL)
+	fileInfos, err := client.ReadDir(ctx, ".", false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list directory: %w", err)
+	}
+
+	log.Printf("Found %d items in WebDAV directory %s", len(fileInfos), config.BaseURL)
+
+	var orgFiles []string
+	for _, info := range fileInfos {
+		if !info.IsDir && strings.HasSuffix(info.Path, ".org") {
+			// Extract just the filename from the path
+			parts := strings.Split(strings.TrimPrefix(info.Path, "/"), "/")
+			filename := parts[len(parts)-1]
+			orgFiles = append(orgFiles, filename)
+		}
+	}
+
+	return orgFiles, nil
+}
+
+// FindFileByID resolves a note ID to its filename using caching
+func FindFileByID(ctx context.Context, id string) (string, error) {
+	// Validate UUID format for security
+	if err := utils.ValidateUUID(id); err != nil {
+		return "", err
+	}
+
+	// Check cache first
+	cacheMutex.RLock()
+	filename, exists := idToFilenameCache[id]
+	cacheMutex.RUnlock()
+
+	if exists {
+		return filename, nil
+	}
+
+	// Cache miss - scan all .org files
+	log.Printf("Cache miss for ID %s, scanning WebDAV directory...", id)
+
+	files, err := ListOrgFiles(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to list org files: %w", err)
+	}
+
+	// Scan each file to extract ID and build cache
+	for _, file := range files {
+		content, err := FetchOrgFile(ctx, file)
+		if err != nil {
+			log.Printf("Skipping unreadable file %s: %v", file, err)
+			continue
+		}
+
+		fileID, err := utils.ExtractIDProperty(content)
+		if err != nil {
+			// File doesn't have an ID property, skip it
+			continue
+		}
+
+		// Cache the mapping
+		cacheMutex.Lock()
+		idToFilenameCache[fileID] = file
+		cacheMutex.Unlock()
+
+		// Check if this is the file we're looking for
+		if fileID == id {
+			return file, nil
+		}
+	}
+
+	return "", fmt.Errorf("note with ID %s not found (scanned %d files)", id, len(files))
+}
+
+// GetNoteByID fetches and parses a note by its ID
+func GetNoteByID(ctx context.Context, id string) (*ZKNote, error) {
+	// Find the file
+	filename, err := FindFileByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch the content
+	content, err := FetchOrgFile(ctx, filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch note: %w", err)
+	}
+
+	// Parse to HTML
+	html, err := utils.ParseOrgToHTML(content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse org-mode content: %w", err)
+	}
+
+	// Extract title
+	title := utils.ExtractTitle(content)
+
+	return &ZKNote{
+		ID:       id,
+		Title:    title,
+		Filename: filename,
+		HTMLBody: template.HTML(html),
+	}, nil
+}
+
+// GetIndexNote fetches and parses the index/starting note
+func GetIndexNote(ctx context.Context) (*ZKNote, error) {
+	config, err := GetZKConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch the index file
+	content, err := FetchOrgFile(ctx, config.IndexFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch index note: %w", err)
+	}
+
+	// Parse to HTML
+	html, err := utils.ParseOrgToHTML(content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse org-mode content: %w", err)
+	}
+
+	// Extract title
+	title := utils.ExtractTitle(content)
+
+	// Try to extract ID (optional for index file)
+	id, _ := utils.ExtractIDProperty(content)
+
+	return &ZKNote{
+		ID:       id,
+		Title:    title,
+		Filename: config.IndexFile,
+		HTMLBody: template.HTML(html),
+	}, nil
+}

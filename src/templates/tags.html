@@ -1,0 +1,50 @@
+{{ template "head" . }}
+
+<div class="page-header">
+  <h2>Tag Management</h2>
+  <a href="/contacts" class="btn">← Back to Contacts</a>
+</div>
+
+{{ if .Error }}
+<div class="alert alert-red">{{ .Error }}</div>
+{{ end }}
+
+<form method="GET" action="/tags" class="search-form">
+  <input type="text" name="q" placeholder="Search tags..." value="{{ .SearchQuery }}" class="form-item">
+  <button type="submit" class="btn">Search</button>
+  {{ if .SearchQuery }}
+  <a href="/tags" class="btn btn-secondary">Clear</a>
+  {{ end }}
+</form>
+
+{{ if .Tags }}
+<div class="tag-list">
+  {{ range .Tags }}
+  <div class="tag-item">
+    <div class="tag-item-content">
+      <div class="tag-item-name">
+        <strong>{{ .Name }}</strong>
+        <span class="tag-usage-count">({{ .UsageCount }} contact{{ if ne .UsageCount 1 }}s{{ end }})</span>
+      </div>
+      {{ with .Description }}
+      <div class="tag-item-description muted-text">{{ . }}</div>
+      {{ end }}
+    </div>
+    <div class="tag-item-actions">
+      <a href="/tags/{{ .ID }}" class="btn btn-compact">View Contacts</a>
+      <a href="/tags/{{ .ID }}/edit" class="btn btn-compact">Rename</a>
+    </div>
+  </div>
+  {{ end }}
+</div>
+{{ else }}
+<p class="muted-text">
+  {{ if .SearchQuery }}
+  No tags found matching "{{ .SearchQuery }}".
+  {{ else }}
+  No tags created yet. Tags are automatically created when you add them to contacts.
+  {{ end }}
+</p>
+{{ end }}
+
+{{ template "foot" . }}

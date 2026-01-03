@@ -1,0 +1,94 @@
+{{ template "head" . }}
+
+<h2>Edit Contact</h2>
+
+{{ if .Error }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Error</h5>
+  <p>{{.Error}}</p>
+</div>
+{{end}}
+
+{{ if .Contact.CardDAVUUID }}
+<div class="alert alert-grey">
+  <h5 class="alert-title">CardDAV Synced Contact</h5>
+  <p>This contact is synced with CardDAV. Name, organization, and job title are automatically updated from CardDAV and cannot be edited here.</p>
+</div>
+{{ end }}
+
+<form method="POST" action="/contact/{{ .Contact.ID }}/edit">
+  <div class="form-group">
+    <label for="name_given" class="item-title">First Name <span class="required">*</span></label>
+    <input type="text" id="name_given" name="name_given" class="form-item" required
+           value="{{ with .Contact.NameGiven }}{{ . }}{{ end }}"
+           placeholder="e.g., John"
+           {{ if .Contact.CardDAVUUID }}readonly{{ end }}>
+    {{ if .Contact.CardDAVUUID }}
+    <small class="muted-text">Synced from CardDAV (read-only)</small>
+    {{ else }}
+    <small class="muted-text">Required</small>
+    {{ end }}
+  </div>
+
+  <div class="form-group">
+    <label for="name_family" class="item-title">Last Name</label>
+    <input type="text" id="name_family" name="name_family" class="form-item"
+           value="{{ with .Contact.NameFamily }}{{ . }}{{ end }}"
+           placeholder="e.g., Doe"
+           {{ if .Contact.CardDAVUUID }}readonly{{ end }}>
+    {{ if .Contact.CardDAVUUID }}
+    <small class="muted-text">Synced from CardDAV (read-only)</small>
+    {{ end }}
+  </div>
+
+  <div class="form-group">
+    <label for="organization" class="item-title">Organization</label>
+    <input type="text" id="organization" name="organization" class="form-item"
+           value="{{ with .Contact.Organization }}{{ . }}{{ end }}"
+           placeholder="e.g., Acme Corp"
+           {{ if .Contact.CardDAVUUID }}readonly{{ end }}>
+    {{ if .Contact.CardDAVUUID }}
+    <small class="muted-text">Synced from CardDAV (read-only)</small>
+    {{ end }}
+  </div>
+
+  <div class="form-group">
+    <label for="title" class="item-title">Job Title</label>
+    <input type="text" id="title" name="title" class="form-item"
+           value="{{ with .Contact.Title }}{{ . }}{{ end }}"
+           placeholder="e.g., Software Engineer"
+           {{ if .Contact.CardDAVUUID }}readonly{{ end }}>
+    {{ if .Contact.CardDAVUUID }}
+    <small class="muted-text">Synced from CardDAV (read-only)</small>
+    {{ end }}
+  </div>
+
+  <div class="form-group">
+    <label for="call_sign" class="item-title">Amateur Radio Call Sign</label>
+    <input type="text" id="call_sign" name="call_sign" class="form-item callsign-input"
+           value="{{ with .Contact.CallSign }}{{ . }}{{ end }}"
+           placeholder="e.g., W1AW"
+           pattern="[A-Za-z0-9]{3,8}">
+    <small class="muted-text">3-8 characters, letters and numbers only</small>
+  </div>
+
+  <div class="form-group">
+    <label for="tier" class="item-title">Tier</label>
+    <select id="tier" name="tier" class="form-item">
+      <option value="A" {{ if eq .Contact.Tier "A" }}selected{{ end }}>A - Closest relationships (contact every 3 weeks)</option>
+      <option value="B" {{ if eq .Contact.Tier "B" }}selected{{ end }}>B - Close friends (contact every 2 months)</option>
+      <option value="C" {{ if eq .Contact.Tier "C" }}selected{{ end }}>C - Regular contacts (contact every 6 months)</option>
+      <option value="D" {{ if eq .Contact.Tier "D" }}selected{{ end }}>D - Occasional contacts (contact every year)</option>
+      <option value="E" {{ if eq .Contact.Tier "E" }}selected{{ end }}>E - Distant contacts (contact every 2 years)</option>
+      <option value="F" {{ if eq .Contact.Tier "F" }}selected{{ end }}>F - No regular contact needed</option>
+    </select>
+    <small class="muted-text">How often you should stay in touch with this person</small>
+  </div>
+
+  <div class="form-group">
+    <button type="submit" class="btn">Save Changes</button>
+    <a href="/contact/{{ .Contact.ID }}" class="btn">Cancel</a>
+  </div>
+</form>
+
+{{ template "foot" . }}
