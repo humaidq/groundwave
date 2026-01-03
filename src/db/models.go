@@ -59,12 +59,12 @@ const (
 
 // ContactEmail represents an email address for a contact
 type ContactEmail struct {
-	ID         uuid.UUID `db:"id"`
-	ContactID  uuid.UUID `db:"contact_id"`
-	Email      string    `db:"email"`
-	EmailType  EmailType `db:"email_type"`
-	IsPrimary  bool      `db:"is_primary"`
-	CreatedAt  time.Time `db:"created_at"`
+	ID        uuid.UUID `db:"id"`
+	ContactID uuid.UUID `db:"contact_id"`
+	Email     string    `db:"email"`
+	EmailType EmailType `db:"email_type"`
+	IsPrimary bool      `db:"is_primary"`
+	CreatedAt time.Time `db:"created_at"`
 }
 
 // PhoneType represents the type of phone number
@@ -81,12 +81,12 @@ const (
 
 // ContactPhone represents a phone number for a contact
 type ContactPhone struct {
-	ID         uuid.UUID `db:"id"`
-	ContactID  uuid.UUID `db:"contact_id"`
-	Phone      string    `db:"phone"`
-	PhoneType  PhoneType `db:"phone_type"`
-	IsPrimary  bool      `db:"is_primary"`
-	CreatedAt  time.Time `db:"created_at"`
+	ID        uuid.UUID `db:"id"`
+	ContactID uuid.UUID `db:"contact_id"`
+	Phone     string    `db:"phone"`
+	PhoneType PhoneType `db:"phone_type"`
+	IsPrimary bool      `db:"is_primary"`
+	CreatedAt time.Time `db:"created_at"`
 }
 
 // AddressType represents the type of address
@@ -118,27 +118,27 @@ type ContactAddress struct {
 type URLType string
 
 const (
-	URLWebsite  URLType = "website"
-	URLBlog     URLType = "blog"
-	URLTwitter  URLType = "twitter"
-	URLMastodon URLType = "mastodon"
-	URLBluesky  URLType = "bluesky"
-	URLThreads  URLType = "threads"
-	URLFacebook URLType = "facebook"
+	URLWebsite   URLType = "website"
+	URLBlog      URLType = "blog"
+	URLTwitter   URLType = "twitter"
+	URLMastodon  URLType = "mastodon"
+	URLBluesky   URLType = "bluesky"
+	URLThreads   URLType = "threads"
+	URLFacebook  URLType = "facebook"
 	URLInstagram URLType = "instagram"
-	URLLinkedIn URLType = "linkedin"
-	URLGitHub   URLType = "github"
-	URLGitLab   URLType = "gitlab"
-	URLCodeberg URLType = "codeberg"
-	URLYouTube  URLType = "youtube"
-	URLTwitch   URLType = "twitch"
-	URLTikTok   URLType = "tiktok"
-	URLSignal   URLType = "signal"
-	URLTelegram URLType = "telegram"
-	URLWhatsApp URLType = "whatsapp"
-	URLMatrix   URLType = "matrix"
-	URLQRZ      URLType = "qrz"
-	URLOther    URLType = "other"
+	URLLinkedIn  URLType = "linkedin"
+	URLGitHub    URLType = "github"
+	URLGitLab    URLType = "gitlab"
+	URLCodeberg  URLType = "codeberg"
+	URLYouTube   URLType = "youtube"
+	URLTwitch    URLType = "twitch"
+	URLTikTok    URLType = "tiktok"
+	URLSignal    URLType = "signal"
+	URLTelegram  URLType = "telegram"
+	URLWhatsApp  URLType = "whatsapp"
+	URLMatrix    URLType = "matrix"
+	URLQRZ       URLType = "qrz"
+	URLOther     URLType = "other"
 )
 
 // ContactURL represents a URL or social media handle for a contact
@@ -208,56 +208,56 @@ type ContactNote struct {
 type QSLStatus string
 
 const (
-	QSLYes      QSLStatus = "Y"
-	QSLNo       QSLStatus = "N"
+	QSLYes       QSLStatus = "Y"
+	QSLNo        QSLStatus = "N"
 	QSLRequested QSLStatus = "R"
-	QSLIgnore   QSLStatus = "I"
-	QSLVerified QSLStatus = "V"
+	QSLIgnore    QSLStatus = "I"
+	QSLVerified  QSLStatus = "V"
 )
 
 type QSLSentStatus string
 
 const (
-	QSLSentYes      QSLSentStatus = "Y"
-	QSLSentNo       QSLSentStatus = "N"
+	QSLSentYes       QSLSentStatus = "Y"
+	QSLSentNo        QSLSentStatus = "N"
 	QSLSentRequested QSLSentStatus = "R"
-	QSLSentQueued   QSLSentStatus = "Q"
-	QSLSentIgnore   QSLSentStatus = "I"
+	QSLSentQueued    QSLSentStatus = "Q"
+	QSLSentIgnore    QSLSentStatus = "I"
 )
 
 type QSLVia string
 
 const (
-	QSLViaBureau    QSLVia = "B"
-	QSLViaDirect    QSLVia = "D"
+	QSLViaBureau     QSLVia = "B"
+	QSLViaDirect     QSLVia = "D"
 	QSLViaElectronic QSLVia = "E"
-	QSLViaManager   QSLVia = "M"
+	QSLViaManager    QSLVia = "M"
 )
 
 type QSOUploadStatus string
 
 const (
-	QSOUploaded QSOUploadStatus = "Y"
+	QSOUploaded    QSOUploadStatus = "Y"
 	QSONotUploaded QSOUploadStatus = "N"
-	QSOModified QSOUploadStatus = "M"
+	QSOModified    QSOUploadStatus = "M"
 )
 
 type QSOComplete string
 
 const (
-	QSOCompleteYes QSOComplete = "Y"
-	QSOCompleteNo  QSOComplete = "N"
-	QSOCompleteNIL QSOComplete = "NIL"
+	QSOCompleteYes     QSOComplete = "Y"
+	QSOCompleteNo      QSOComplete = "N"
+	QSOCompleteNIL     QSOComplete = "NIL"
 	QSOCompleteUnknown QSOComplete = "?"
 )
 
 type AntPath string
 
 const (
-	AntPathGrayline   AntPath = "G"
-	AntPathOther      AntPath = "O"
-	AntPathShortPath  AntPath = "S"
-	AntPathLongPath   AntPath = "L"
+	AntPathGrayline  AntPath = "G"
+	AntPathOther     AntPath = "O"
+	AntPathShortPath AntPath = "S"
+	AntPathLongPath  AntPath = "L"
 )
 
 // QSO represents an amateur radio contact (ADIF 3.1.6 compatible)
@@ -494,11 +494,11 @@ func (q *QSO) GetContactID() string {
 // ContactView represents the aggregated contact view with primary email/phone
 type ContactView struct {
 	Contact
-	PrimaryEmail  *string    `db:"primary_email"`
-	PrimaryPhone  *string    `db:"primary_phone"`
-	Tags          []string   `db:"tags"`
+	PrimaryEmail   *string    `db:"primary_email"`
+	PrimaryPhone   *string    `db:"primary_phone"`
+	Tags           []string   `db:"tags"`
 	LastCRMContact *time.Time `db:"last_crm_contact"`
-	LastQSO       *time.Time `db:"last_qso"`
+	LastQSO        *time.Time `db:"last_qso"`
 }
 
 // ContactDue represents a contact that is due for follow-up
@@ -512,7 +512,7 @@ type ContactDue struct {
 // ZettelComment represents a temporary comment on a zettelkasten note
 type ZettelComment struct {
 	ID        uuid.UUID `db:"id"`
-	ZettelID  string    `db:"zettel_id"`  // org-mode ID (not UUID foreign key)
+	ZettelID  string    `db:"zettel_id"` // org-mode ID (not UUID foreign key)
 	Content   string    `db:"content"`
 	CreatedAt time.Time `db:"created_at"`
 	UpdatedAt time.Time `db:"updated_at"`
@@ -522,7 +522,7 @@ type ZettelComment struct {
 // Used for the inbox view
 type ZettelCommentWithNote struct {
 	ZettelComment
-	ZettelTitle    string `db:"zettel_title"`     // Fetched from WebDAV
-	ZettelFilename string `db:"zettel_filename"`  // For debugging
-	OrphanedNote   bool   `db:"orphaned_note"`    // True if zettel file not found
+	ZettelTitle    string `db:"zettel_title"`    // Fetched from WebDAV
+	ZettelFilename string `db:"zettel_filename"` // For debugging
+	OrphanedNote   bool   `db:"orphaned_note"`   // True if zettel file not found
 }

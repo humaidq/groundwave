@@ -87,5 +87,12 @@
       imports = [
         ./nix/flake-module.nix
       ];
+
+      flake = {
+        nixosModules = {
+          default = import ./nix/modules/groundwave.nix;
+          groundwave = import ./nix/modules/groundwave.nix;
+        };
+      };
     };
 }

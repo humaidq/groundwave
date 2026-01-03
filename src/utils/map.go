@@ -55,7 +55,7 @@ func CreateGridMap(myGrid, theirGrid string, config MapConfig) error {
 	// Add padding (10% of the range)
 	latRange := maxLat - minLat
 	lonRange := maxLon - minLon
-	
+
 	// Ensure minimum range to avoid extreme zoom for very close locations
 	if latRange < 1.0 {
 		latRange = 1.0
@@ -63,7 +63,7 @@ func CreateGridMap(myGrid, theirGrid string, config MapConfig) error {
 	if lonRange < 1.0 {
 		lonRange = 1.0
 	}
-	
+
 	padding := 0.1
 	paddedMinLat := minLat - (latRange * padding)
 	paddedMaxLat := maxLat + (latRange * padding)
@@ -72,12 +72,12 @@ func CreateGridMap(myGrid, theirGrid string, config MapConfig) error {
 
 	// Calculate zoom level based on the bounding box
 	zoom := calculateZoomLevel(paddedMinLat, paddedMaxLat, paddedMinLon, paddedMaxLon, config.Width, config.Height)
-	
+
 	// Override zoom if specified in config (for manual control)
 	if config.Zoom > 0 {
 		zoom = config.Zoom
 	}
-	
+
 	ctx.SetZoom(zoom)
 
 	// Set center point
@@ -110,19 +110,19 @@ func calculateZoomLevel(minLat, maxLat, minLon, maxLon float64, width, height in
 	// Web Mercator projection bounds
 	latRange := maxLat - minLat
 	lonRange := maxLon - minLon
-	
+
 	// Calculate zoom level needed for latitude
 	latZoom := math.Log2(180.0 / latRange)
-	
-	// Calculate zoom level needed for longitude  
+
+	// Calculate zoom level needed for longitude
 	lonZoom := math.Log2(360.0 / lonRange)
-	
+
 	// Use the more restrictive (lower) zoom level
 	zoom := math.Min(latZoom, lonZoom)
-	
+
 	// Account for map dimensions (approximate adjustment)
 	zoom = zoom + math.Log2(math.Min(float64(width)/256.0, float64(height)/256.0))
-	
+
 	// Clamp between 1 and 18
 	if zoom < 1 {
 		zoom = 1
@@ -130,7 +130,7 @@ func calculateZoomLevel(minLat, maxLat, minLon, maxLon float64, width, height in
 	if zoom > 18 {
 		zoom = 18
 	}
-	
+
 	return int(math.Floor(zoom))
 }
 

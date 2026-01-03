@@ -30,6 +30,7 @@
           ".github/*"
           ".direnv/*"
           ".envrc"
+          "src/vendor/*"
         ];
       };
 

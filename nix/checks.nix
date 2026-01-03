@@ -18,7 +18,8 @@
           reuse lint
           touch $out
         '';
-      } // (lib.mapAttrs' (n: lib.nameValuePair "package-${n}") self'.packages);
+      }
+      // (lib.mapAttrs' (n: lib.nameValuePair "package-${n}") self'.packages);
 
       pre-commit = {
         settings = {

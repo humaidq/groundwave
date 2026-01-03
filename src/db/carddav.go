@@ -26,23 +26,23 @@ type CardDAVConfig struct {
 
 // CardDAVContact represents a contact fetched from CardDAV
 type CardDAVContact struct {
-	UUID         string
-	DisplayName  string
-	GivenName    string
-	FamilyName   string
+	UUID           string
+	DisplayName    string
+	GivenName      string
+	FamilyName     string
 	AdditionalName string
-	Nickname     string
-	Organization string
-	Title        string
-	Birthday     *time.Time
-	Anniversary  *time.Time
-	Gender       string
-	Emails       []CardDAVEmail
-	Phones       []CardDAVPhone
-	Addresses    []CardDAVAddress
-	URLs         []string
-	Notes        string
-	PhotoURL     string
+	Nickname       string
+	Organization   string
+	Title          string
+	Birthday       *time.Time
+	Anniversary    *time.Time
+	Gender         string
+	Emails         []CardDAVEmail
+	Phones         []CardDAVPhone
+	Addresses      []CardDAVAddress
+	URLs           []string
+	Notes          string
+	PhotoURL       string
 }
 
 // CardDAVEmail represents an email from CardDAV
@@ -314,9 +314,9 @@ func parseVCard(card vcard.Card) CardDAVContact {
 func parseDateString(s string) (time.Time, error) {
 	// Try common formats
 	formats := []string{
-		"20060102",           // YYYYMMDD
-		"2006-01-02",         // YYYY-MM-DD
-		time.RFC3339,         // Full date-time
+		"20060102",   // YYYYMMDD
+		"2006-01-02", // YYYY-MM-DD
+		time.RFC3339, // Full date-time
 		"2006-01-02T15:04:05",
 	}
 

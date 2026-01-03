@@ -14,15 +14,15 @@ import (
 
 // QSOListItem represents a QSO in the list view
 type QSOListItem struct {
-	ID       string    `db:"id"`
-	Call     string    `db:"call"`
-	QSODate  time.Time `db:"qso_date"`
-	TimeOn   time.Time `db:"time_on"`
-	Band     *string   `db:"band"`
-	Mode     string    `db:"mode"`
-	RSTSent  *string   `db:"rst_sent"`
-	RSTRcvd  *string   `db:"rst_rcvd"`
-	Country  *string   `db:"country"`
+	ID      string    `db:"id"`
+	Call    string    `db:"call"`
+	QSODate time.Time `db:"qso_date"`
+	TimeOn  time.Time `db:"time_on"`
+	Band    *string   `db:"band"`
+	Mode    string    `db:"mode"`
+	RSTSent *string   `db:"rst_sent"`
+	RSTRcvd *string   `db:"rst_rcvd"`
+	Country *string   `db:"country"`
 }
 
 // FormatDate formats QSO date as YYYY-MM-DD
@@ -42,7 +42,7 @@ func (q *QSOListItem) FormatQSOTime() string {
 
 // QSODetail represents a full QSO with all details
 type QSODetail struct {
-	*QSO  // Embed pointer instead of value for proper method access
+	*QSO                    // Embed pointer instead of value for proper method access
 	ContactName     *string `db:"contact_name"`
 	ContactCallSign *string `db:"contact_call_sign"`
 }
@@ -324,7 +324,7 @@ func GetQSO(ctx context.Context, id string) (*QSODetail, error) {
 	`
 
 	var detail QSODetail
-	detail.QSO = &QSO{}  // Initialize the embedded pointer
+	detail.QSO = &QSO{} // Initialize the embedded pointer
 	err := pool.QueryRow(ctx, query, id).Scan(
 		&detail.ID,
 		&detail.ContactID,

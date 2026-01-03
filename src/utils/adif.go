@@ -362,7 +362,7 @@ func (p *ADIFParser) GetLatestQSO() *QSO {
 // GetPaperQSLHallOfFame returns deduplicated QSOs where paper QSL was received
 func (p *ADIFParser) GetPaperQSLHallOfFame() []QSO {
 	seen := make(map[string]QSO)
-	
+
 	for _, qso := range p.QSOs {
 		// Only include QSOs where paper QSL was received
 		if qso.QslRcvd == QslYes {
@@ -377,13 +377,13 @@ func (p *ADIFParser) GetPaperQSLHallOfFame() []QSO {
 			}
 		}
 	}
-	
+
 	// Convert map to slice and sort by callsign
 	var result []QSO
 	for _, qso := range seen {
 		result = append(result, qso)
 	}
-	
+
 	// Simple bubble sort by callsign
 	for i := 0; i < len(result)-1; i++ {
 		for j := 0; j < len(result)-i-1; j++ {
@@ -392,7 +392,7 @@ func (p *ADIFParser) GetPaperQSLHallOfFame() []QSO {
 			}
 		}
 	}
-	
+
 	return result
 }
 
