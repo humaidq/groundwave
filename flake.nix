@@ -89,6 +89,11 @@
       ];
 
       flake = {
+        overlays = {
+          default = import ./nix/overlay.nix;
+          groundwave = import ./nix/overlay.nix;
+        };
+
         nixosModules = {
           default = import ./nix/modules/groundwave.nix;
           groundwave = import ./nix/modules/groundwave.nix;
