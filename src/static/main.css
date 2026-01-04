@@ -29,48 +29,6 @@ main {
   padding: 1.1em 2em;
 }
 
-.nav {
-  background-color: #134dae;
-  margin: 0;
-  padding: 0.5em 0;
-}
-
-.nav a {
-  margin: 0;
-  padding: 0.5em 0;
-  text-decoration: none;
-}
-
-.nav a:hover {
-  text-decoration: underline;
-}
-
-.nav a:focus {
-  color: #000;
-  background-color: #ffbf47;
-}
-
-.nav,
-.nav a {
-  color: #fefefe;
-}
-
-.nav-active {
-  background-color: #fefefe !important;
-  color: #000 !important;
-  padding: 0.5em 0.4em !important;
-  display: inline-block !important;
-  margin: -0.5em 0 !important;
-  vertical-align: top !important;
-  max-width: 300px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.nav-active[title] {
-  cursor: help;
-}
 
 footer {
   padding: 1rem;
@@ -470,17 +428,9 @@ label {
   textarea {
     max-width: 100%;
   }
-
-  .nav-active {
-    max-width: 200px;
-  }
 }
 
 @media only screen and (max-width: 480px) {
-  .nav-active {
-    max-width: 150px;
-  }
-
   .title {
     font-size: 1.8em;
   }
@@ -594,19 +544,6 @@ code:not(pre code) {
 
   main {
     background-color: #303030 !important;
-  }
-
-  .nav-active {
-    background-color: #303030 !important;
-    color: #fff !important;
-    max-width: 300px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .nav-active[title] {
-    cursor: help;
   }
 
   a {
@@ -1714,6 +1651,133 @@ code:not(pre code) {
   display: none;
 }
 
+/* Mobile Navigation Hamburger Menu */
+.navbar {
+  position: relative;
+  background-color: #134dae;
+}
+
+.nav-hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: space-around;
+  width: 2rem;
+  height: 2rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  z-index: 10;
+  margin: 0.5rem auto;
+}
+
+.nav-hamburger span {
+  width: 2rem;
+  height: 0.2rem;
+  background: #fefefe;
+  border-radius: 10px;
+  transition: all 0.3s linear;
+  position: relative;
+  transform-origin: 1px;
+}
+
+.nav-hamburger.active span:nth-child(1) {
+  transform: rotate(45deg);
+}
+
+.nav-hamburger.active span:nth-child(2) {
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+.nav-hamburger.active span:nth-child(3) {
+  transform: rotate(-45deg);
+}
+
+.nav-menu {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  background-color: #134dae;
+  margin: 0;
+}
+
+.nav-menu a {
+  color: #fefefe;
+  text-decoration: none;
+  padding: 0.5rem 0.75rem;
+  transition: background-color 0.2s;
+}
+
+.nav-menu a:hover {
+  text-decoration: underline;
+}
+
+.nav-menu a:focus {
+  color: #000;
+  background-color: #ffbf47;
+}
+
+.nav-menu a.nav-active {
+  background-color: #fefefe !important;
+  color: #000 !important;
+  display: inline-block !important;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-menu a.nav-active[title] {
+  cursor: help;
+}
+
+/* Mobile styles */
+@media only screen and (max-width: 780px) {
+  .nav-hamburger {
+    display: flex;
+  }
+
+  .nav-menu {
+    display: none;
+    flex-direction: column;
+    width: 100%;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background-color: #134dae;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    z-index: 999;
+    gap: 0;
+  }
+
+  .nav-menu.active {
+    display: flex;
+  }
+
+  .nav-menu a {
+    width: 100%;
+    text-align: center;
+    padding: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .nav-menu a.nav-active {
+    max-width: 100%;
+  }
+}
+
+/* Dark mode support for navbar */
+@media (prefers-color-scheme: dark) {
+  .nav-menu a.nav-active {
+    background-color: #303030 !important;
+    color: #fff !important;
+  }
+}
+
 /* Overdue page help text */
 .overdue-help {
   margin-bottom: 1rem;
@@ -1768,6 +1832,16 @@ code:not(pre code) {
   display: flex;
   gap: 0.5em;
   margin: 1em 0;
+}
+
+/* Search Input */
+.search-input {
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  margin-bottom: 1rem;
 }
 
 .tag-list {
@@ -2325,6 +2399,13 @@ code:not(pre code) {
 
   .tag-pill-link:hover {
     color: #79c0ff;
+  }
+
+  /* Search input dark mode */
+  .search-input {
+    background-color: #434449;
+    border-color: #666;
+    color: #efefef;
   }
 }
 

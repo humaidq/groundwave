@@ -45,33 +45,33 @@ var (
 
 // GetZKConfig loads zettelkasten configuration from environment variables
 func GetZKConfig() (*ZettelkastenConfig, error) {
-	zkPath := os.Getenv("ZK_PATH")
-	username := os.Getenv("ZK_USERNAME")
-	password := os.Getenv("ZK_PASSWORD")
+	zkPath := os.Getenv("WEBDAV_ZK_PATH")
+	username := os.Getenv("WEBDAV_USERNAME")
+	password := os.Getenv("WEBDAV_PASSWORD")
 
 	if zkPath == "" {
-		return nil, fmt.Errorf("ZK_PATH not configured")
+		return nil, fmt.Errorf("WEBDAV_ZK_PATH not configured")
 	}
 
-	// Parse ZK_PATH to extract base URL and index filename
+	// Parse WEBDAV_ZK_PATH to extract base URL and index filename
 	// Example: https://webdav.example.com/org/abc-index.org
 	//   -> baseURL: https://webdav.example.com/org/
 	//   -> indexFile: abc-index.org
 
 	parsedURL, err := url.Parse(zkPath)
 	if err != nil {
-		return nil, fmt.Errorf("invalid ZK_PATH URL: %w", err)
+		return nil, fmt.Errorf("invalid WEBDAV_ZK_PATH URL: %w", err)
 	}
 
 	// Extract the directory path and filename
 	pathParts := strings.Split(strings.TrimPrefix(parsedURL.Path, "/"), "/")
 	if len(pathParts) == 0 {
-		return nil, fmt.Errorf("ZK_PATH must include a filename")
+		return nil, fmt.Errorf("WEBDAV_ZK_PATH must include a filename")
 	}
 
 	indexFile := pathParts[len(pathParts)-1]
 	if !strings.HasSuffix(indexFile, ".org") {
-		return nil, fmt.Errorf("ZK_PATH must point to a .org file")
+		return nil, fmt.Errorf("WEBDAV_ZK_PATH must point to a .org file")
 	}
 
 	// Reconstruct base URL (everything except the filename)

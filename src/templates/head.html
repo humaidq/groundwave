@@ -11,61 +11,27 @@
   <body>
     <header>
       <h1 class="title">Groundwave</h1>
-      <nav>
-        <p class="c nav">
+      <nav class="navbar">
+        <button class="nav-hamburger" aria-label="Toggle navigation menu" onclick="this.classList.toggle('active');this.nextElementSibling.classList.toggle('active')">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <div class="nav-menu">
+          <a href="/"{{ if .IsWelcome }} class="nav-active"{{ end }}>Home</a>
+          <a href="/contacts"{{ if and (not .ContactName) (not .IsNewContact) (not .IsQSOView) (not .IsInventory) (not .IsZettelkasten) (not .IsOverdue) (not .IsQSL) (not .IsWelcome) }} class="nav-active"{{ end }}>Contacts</a>
+          <a href="/overdue"{{ if .IsOverdue }} class="nav-active"{{ end }}>Overdue</a>
+          <a href="/qsl"{{ if .IsQSL }} class="nav-active"{{ end }}>QSL</a>
+          <a href="/zk"{{ if .IsZettelkasten }} class="nav-active"{{ end }}>Zettelkasten</a>
+          <a href="/inventory"{{ if .IsInventory }} class="nav-active"{{ end }}>Inventory</a>
           {{ if .ContactName }}
-            <a href="/">Home</a>
-            · <a href="/contacts">Contacts</a>
-            · <a href="/overdue">Overdue</a>
-            · <a href="/qsl">QSL</a>
-            · <a href="/zk">Zettelkasten</a>
-            · <span class="nav-active" title="{{ .ContactName }}">{{ .ContactName }}</span>
+            <a href="#" class="nav-active" title="{{ .ContactName }}">{{ .ContactName }}</a>
           {{ else if .IsNewContact }}
-            <a href="/">Home</a>
-            · <a href="/contacts">Contacts</a>
-            · <a href="/overdue">Overdue</a>
-            · <a href="/qsl">QSL</a>
-            · <a href="/zk">Zettelkasten</a>
-            · <span class="nav-active">Add New Contact</span>
+            <a href="#" class="nav-active">Add New Contact</a>
           {{ else if .IsQSOView }}
-            <a href="/">Home</a>
-            · <a href="/contacts">Contacts</a>
-            · <a href="/overdue">Overdue</a>
-            · <a href="/qsl">QSL</a>
-            · <a href="/zk">Zettelkasten</a>
-            · <span class="nav-active">QSO Details</span>
-          {{ else if .IsZettelkasten }}
-            <a href="/">Home</a>
-            · <a href="/contacts">Contacts</a>
-            · <a href="/overdue">Overdue</a>
-            · <a href="/qsl">QSL</a>
-            · <span class="nav-active">Zettelkasten</span>
-          {{ else if .IsOverdue }}
-            <a href="/">Home</a>
-            · <a href="/contacts">Contacts</a>
-            · <span class="nav-active">Overdue</span>
-            · <a href="/qsl">QSL</a>
-            · <a href="/zk">Zettelkasten</a>
-          {{ else if .IsQSL }}
-            <a href="/">Home</a>
-            · <a href="/contacts">Contacts</a>
-            · <a href="/overdue">Overdue</a>
-            · <span class="nav-active">QSL</span>
-            · <a href="/zk">Zettelkasten</a>
-          {{ else if .IsWelcome }}
-            <span class="nav-active">Home</span>
-            · <a href="/contacts">Contacts</a>
-            · <a href="/overdue">Overdue</a>
-            · <a href="/qsl">QSL</a>
-            · <a href="/zk">Zettelkasten</a>
-          {{ else }}
-            <a href="/">Home</a>
-            · <span class="nav-active">Contacts</span>
-            · <a href="/overdue">Overdue</a>
-            · <a href="/qsl">QSL</a>
-            · <a href="/zk">Zettelkasten</a>
+            <a href="#" class="nav-active">QSO Details</a>
           {{ end }}
-        </p>
+        </div>
       </nav>
     </header>
     <main>

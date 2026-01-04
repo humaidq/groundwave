@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/normalize-8.0.1.min.css" />
+    <link rel="stylesheet" href="/main.css" />
+    <title>Login</title>
+    <link rel="icon" href="/favicon.ico" />
+  </head>
+  <body>
+    <div class="login-container">
+      <div class="login-box">
+        <h1>Login</h1>
+
+        {{ if .Error }}
+        <div class="error-message">
+          {{ .Error }}
+        </div>
+        {{ end }}
+
+        <form method="POST" action="/login">
+          <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required autofocus />
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required />
+          </div>
+
+          <button type="submit" class="btn-primary">Login</button>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>

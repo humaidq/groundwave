@@ -1,0 +1,99 @@
+{{ template "head" . }}
+
+{{ if .Error }}
+<div class="alert alert-red">
+  {{ .Error }}
+</div>
+{{ end }}
+
+<div class="page-header">
+  <h2>{{ .Item.InventoryID }} - {{ .Item.Name }}</h2>
+  <div class="page-header-actions">
+    <a href="/inventory/{{ .Item.InventoryID }}/edit" class="btn">Edit</a>
+    <form method="POST" action="/inventory/{{ .Item.InventoryID }}/delete" class="inline-form" onsubmit="return confirm('Delete this inventory item? This cannot be undone.');">
+      <button type="submit" class="btn btn-danger">Delete</button>
+    </form>
+  </div>
+</div>
+
+<div class="contact-detail">
+  <!-- Item Details -->
+  <div class="contact-section">
+    <h3>Details</h3>
+    <div class="detail-item">
+      <span class="detail-label">Inventory ID:</span>
+      <span class="detail-value">{{ .Item.InventoryID }}</span>
+    </div>
+    {{ with .Item.Location }}
+    <div class="detail-item">
+      <span class="detail-label">Location:</span>
+      <span class="detail-value">{{ . }}</span>
+    </div>
+    {{ end }}
+    {{ with .Item.Description }}
+    <div class="detail-item">
+      <span class="detail-label">Description:</span>
+      <span class="detail-value">{{ . }}</span>
+    </div>
+    {{ end }}
+    <div class="detail-item">
+      <span class="detail-label">Created:</span>
+      <span class="detail-value">{{ .Item.CreatedAt.Format "Jan 2, 2006 3:04 PM" }}</span>
+    </div>
+  </div>
+
+  <!-- Files Section -->
+  <div class="contact-section">
+    <h3>Files</h3>
+    {{ if .Files }}
+    <ul class="file-list">
+      {{ range .Files }}
+      <li class="file-item">
+        <a href="/inventory/{{ $.Item.InventoryID }}/file/{{ .Name }}" class="file-link" target="_blank">
+          📄 {{ .Name }}
+        </a>
+        <span class="file-meta">{{ .Size }} bytes | {{ .ModTime.Format "Jan 2, 2006" }}</span>
+      </li>
+      {{ end }}
+    </ul>
+    {{ else }}
+    <p class="no-files">No files...</p>
+    {{ end }}
+  </div>
+
+  <!-- Comments Section -->
+  <div class="contact-section">
+    <h3>Comments</h3>
+    {{ if .Comments }}
+    <div class="log-list">
+      {{ range .Comments }}
+      <div class="log-entry">
+        <div class="log-header">
+          <span class="log-type log-type-note">comment</span>
+          <span class="log-date">{{ .CreatedAt.Format "Jan 2, 2006 3:04 PM" }}</span>
+          <form method="POST" action="/inventory/{{ $.Item.InventoryID }}/comment/{{ .ID }}/delete" class="log-delete-form" onsubmit="return confirm('Delete this comment?');">
+            <button type="submit" class="btn-delete" title="Delete">×</button>
+          </form>
+        </div>
+        <div class="log-content">{{ .Content }}</div>
+      </div>
+      {{ end }}
+    </div>
+    {{ else }}
+    <p class="no-comments">No comments yet.</p>
+    {{ end }}
+
+    <!-- Add Comment Form -->
+    <details class="add-item-details" open>
+      <summary class="add-item-summary">+ Add Comment</summary>
+      <form method="POST" action="/inventory/{{ .Item.InventoryID }}/comment" class="add-item-form">
+        <div class="add-item-field">
+          <textarea name="content" placeholder="Add a comment..." required class="form-item" rows="4"></textarea>
+        </div>
+        <button type="submit" class="btn btn-compact">Post Comment</button>
+      </form>
+    </details>
+  </div>
+</div>
+
+{{ template "foot" . }}

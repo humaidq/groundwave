@@ -1,0 +1,67 @@
+{{ template "head" . }}
+
+<div class="page-header">
+  <h2>Inventory</h2>
+  <a href="/inventory/new" class="btn">+ Add Item</a>
+</div>
+
+{{ if .Error }}
+<div class="alert alert-red">
+  {{ .Error }}
+</div>
+{{ end }}
+
+{{ if .Items }}
+<input type="text" id="inventorySearch" placeholder="Search inventory..." class="search-input">
+
+<div class="entry-list" id="inventoryList">
+  {{ range .Items }}
+  <div class="entry">
+    <a href="/inventory/{{ .InventoryID }}" class="entry-main-link">
+      <div class="entry-title">
+        <span class="inventory-id">{{ .InventoryID }}</span> - {{ .Name }}
+      </div>
+      {{ if or .Location .Description }}
+      <div class="entry-meta">
+        {{ with .Location }}
+        <span class="entry-location">📍 {{ . }}</span>
+        {{ end }}
+        {{ with .Description }}
+        <span class="entry-description">{{ . }}</span>
+        {{ end }}
+      </div>
+      {{ end }}
+    </a>
+  </div>
+  {{ end }}
+</div>
+{{ else }}
+<p class="empty-state">No inventory items yet. <a href="/inventory/new">Add your first item</a>.</p>
+{{ end }}
+
+{{ if .Items }}
+<script>
+(function() {
+  const searchInput = document.getElementById('inventorySearch');
+  const inventoryList = document.getElementById('inventoryList');
+  const entries = inventoryList.getElementsByClassName('entry');
+
+  if (searchInput && entries) {
+    searchInput.addEventListener('input', function(e) {
+      const searchTerm = e.target.value.toLowerCase();
+
+      Array.from(entries).forEach(function(entry) {
+        const text = entry.textContent.toLowerCase();
+        if (text.includes(searchTerm)) {
+          entry.style.display = '';
+        } else {
+          entry.style.display = 'none';
+        }
+      });
+    });
+  }
+})();
+</script>
+{{ end }}
+
+{{ template "foot" . }}

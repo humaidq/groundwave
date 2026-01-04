@@ -526,3 +526,23 @@ type ZettelCommentWithNote struct {
 	ZettelFilename string `db:"zettel_filename"` // For debugging
 	OrphanedNote   bool   `db:"orphaned_note"`   // True if zettel file not found
 }
+
+// InventoryItem represents an item in the inventory system
+type InventoryItem struct {
+	ID          int       `db:"id"`           // Numeric ID for DB relationships
+	InventoryID string    `db:"inventory_id"` // Formatted ID (GW-00001)
+	Name        string    `db:"name"`
+	Location    *string   `db:"location"`
+	Description *string   `db:"description"`
+	CreatedAt   time.Time `db:"created_at"`
+	UpdatedAt   time.Time `db:"updated_at"`
+}
+
+// InventoryComment represents a comment on an inventory item
+type InventoryComment struct {
+	ID        uuid.UUID `db:"id"`
+	ItemID    int       `db:"item_id"`
+	Content   string    `db:"content"`
+	CreatedAt time.Time `db:"created_at"`
+	UpdatedAt time.Time `db:"updated_at"`
+}

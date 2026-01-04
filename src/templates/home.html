@@ -70,8 +70,10 @@
 </script>
 {{ end }}
 
+<input type="text" id="contactSearch" placeholder="Search contacts..." class="search-input">
+
 {{ if .Contacts }}
-<div class="entry-list">
+<div class="entry-list" id="contactList">
   {{ range .Contacts }}
   <div class="entry">
     <a href="/contact/{{ .ID }}" class="entry-main-link">
@@ -100,5 +102,29 @@
 {{ else }}
 <p class="muted-text">No contacts found. <a href="/contact/new">Add your first contact</a>.</p>
 {{ end }}
+
+<script>
+(function() {
+  const searchInput = document.getElementById('contactSearch');
+  const contactList = document.getElementById('contactList');
+
+  if (searchInput && contactList) {
+    const entries = contactList.getElementsByClassName('entry');
+
+    searchInput.addEventListener('input', function(e) {
+      const searchTerm = e.target.value.toLowerCase();
+
+      Array.from(entries).forEach(function(entry) {
+        const text = entry.textContent.toLowerCase();
+        if (text.includes(searchTerm)) {
+          entry.style.display = '';
+        } else {
+          entry.style.display = 'none';
+        }
+      });
+    });
+  }
+})();
+</script>
 
 {{ template "foot" . }}

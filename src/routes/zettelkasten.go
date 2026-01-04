@@ -24,7 +24,7 @@ func ZettelkastenIndex(c flamego.Context, t template.Template, data template.Dat
 	note, err := db.GetIndexNote(ctx)
 	if err != nil {
 		log.Printf("Error fetching zettelkasten index: %v", err)
-		data["Error"] = "Failed to load zettelkasten. Please check your ZK_PATH, ZK_USERNAME, and ZK_PASSWORD environment variables."
+		data["Error"] = "Failed to load zettelkasten. Please check your WEBDAV_ZK_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables."
 		t.HTML(http.StatusInternalServerError, "error")
 		return
 	}
