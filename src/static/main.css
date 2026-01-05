@@ -2989,3 +2989,49 @@ code:not(pre code) {
   color: #ccc;
   margin: 0 0.5rem;
 }
+
+/* Lab result arrow indicators */
+.lab-arrow {
+  margin-left: 0.35rem;
+  font-size: 1.1em;
+  font-weight: bold;
+}
+
+.lab-arrow-critical {
+  color: #dc3545;
+}
+
+.lab-arrow-warning {
+  color: #ffc107;
+}
+
+/* Dark mode support for lab results */
+@media (prefers-color-scheme: dark) {
+  .lab-value-critical {
+    color: #ff6b6b;
+  }
+
+  .lab-value-warning {
+    color: #ffd93d;
+  }
+
+  .lab-arrow-critical {
+    color: #ff6b6b;
+  }
+
+  .lab-arrow-warning {
+    color: #ffd93d;
+  }
+
+  .lab-ranges {
+    color: #aaa;
+  }
+
+  .lab-ranges .range-label {
+    color: #ccc;
+  }
+
+  .lab-ranges .range-value {
+    color: #aaa;
+  }
+}

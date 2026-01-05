@@ -653,11 +653,14 @@ func ViewFollowup(c flamego.Context, t template.Template, data template.Data) {
 
 						// Check if outside reference range (RED)
 						outOfReference := false
+						var arrowDirection string
 						if refMin != nil && result.TestValue < *refMin {
 							outOfReference = true
+							arrowDirection = "down"
 						}
 						if refMax != nil && result.TestValue > *refMax {
 							outOfReference = true
+							arrowDirection = "up"
 						}
 
 						// Check if outside optimal range (GOLD)
@@ -665,17 +668,25 @@ func ViewFollowup(c flamego.Context, t template.Template, data template.Data) {
 						if hasOptimal {
 							if optMin != nil && result.TestValue < *optMin {
 								outOfOptimal = true
+								if arrowDirection == "" {
+									arrowDirection = "down"
+								}
 							}
 							if optMax != nil && result.TestValue > *optMax {
 								outOfOptimal = true
+								if arrowDirection == "" {
+									arrowDirection = "up"
+								}
 							}
 						}
 
 						// Set status (red takes priority over gold)
 						if outOfReference {
 							enrichedResult["RangeStatus"] = "out_of_reference"
+							enrichedResult["ArrowDirection"] = arrowDirection
 						} else if outOfOptimal {
 							enrichedResult["RangeStatus"] = "out_of_optimal"
+							enrichedResult["ArrowDirection"] = arrowDirection
 						}
 					}
 				}
@@ -685,6 +696,17 @@ func ViewFollowup(c flamego.Context, t template.Template, data template.Data) {
 		}
 
 		data["Results"] = enrichedResults
+
+		// Collect existing test names to disable them in the dropdown
+		existingTests := make(map[string]bool)
+		for _, categoryResults := range enrichedResults {
+			for _, result := range categoryResults {
+				if testName, ok := result["TestName"].(string); ok {
+					existingTests[testName] = true
+				}
+			}
+		}
+		data["ExistingTests"] = existingTests
 	}
 
 	data["Profile"] = profile

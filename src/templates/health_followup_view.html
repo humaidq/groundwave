@@ -57,7 +57,10 @@
               <optgroup label="{{ $category }}">
                 {{ range $.PredefinedTests }}
                   {{ if eq .Category $category }}
-                  <option value="{{ .Name }}" data-unit="{{ .Unit }}">{{ .Name }} ({{ .Unit }})</option>
+                    {{ $isDisabled := index $.ExistingTests .Name }}
+                    <option value="{{ .Name }}" data-unit="{{ .Unit }}" {{ if $isDisabled }}disabled{{ end }}>
+                      {{ .Name }} ({{ .Unit }}){{ if $isDisabled }} - Already added{{ end }}
+                    </option>
                   {{ end }}
                 {{ end }}
               </optgroup>
@@ -101,6 +104,21 @@
                   <span>{{ printf "%.3f" .TestValue }}</span>
                 {{ end }}
                 {{ if .TestUnit }} {{ .TestUnit }}{{ end }}
+                {{ if .ArrowDirection }}
+                  {{ if eq .RangeStatus "out_of_reference" }}
+                    {{ if eq .ArrowDirection "up" }}
+                      <span class="lab-arrow lab-arrow-critical" title="Above reference range">↑</span>
+                    {{ else }}
+                      <span class="lab-arrow lab-arrow-critical" title="Below reference range">↓</span>
+                    {{ end }}
+                  {{ else if eq .RangeStatus "out_of_optimal" }}
+                    {{ if eq .ArrowDirection "up" }}
+                      <span class="lab-arrow lab-arrow-warning" title="Above optimal range">↑</span>
+                    {{ else }}
+                      <span class="lab-arrow lab-arrow-warning" title="Below optimal range">↓</span>
+                    {{ end }}
+                  {{ end }}
+                {{ end }}
                 {{ if .IsCalculated }}<span class="muted-text calculated-label"> (calculated)</span>{{ end }}
               </div>
               {{ if .HasRanges }}
