@@ -26,9 +26,11 @@
 <div class="contact-detail">
   <div class="contact-section">
     <div class="contact-meta">
+      {{ if not .Contact.IsService }}
       <span class="contact-tier tier-{{ .TierLower }}">{{ .Contact.Tier }}</span>
       {{ with .Contact.CallSign }}
       <span class="contact-callsign">{{ . }}</span>
+      {{ end }}
       {{ end }}
     </div>
 
@@ -71,11 +73,12 @@
           <input type="text" name="tag_name" placeholder="Tag name (e.g., event:something-2025, place:uni-x)" required class="form-item" pattern="[a-z0-9._:-]+" title="Lowercase letters, numbers, and ._:- characters only">
           <p class="help-text">Use namespace:value format for categorization (e.g., event:something-2025)</p>
         </div>
-        <button type="submit" class="btn btn-compact">Add Tag</button>
+        <button type="submit" class="btn">Add Tag</button>
       </form>
     </details>
   </div>
 
+  {{ if not .Contact.IsService }}
   <div class="contact-section">
     <h3>Activity Feed</h3>
 
@@ -87,7 +90,7 @@
         </div>
         <div class="add-item-field">
           <input type="datetime-local" name="noted_at" id="noted_at" class="form-item" placeholder="Date/Time (optional)">
-          <button type="submit" class="btn btn-compact">Post Note</button>
+          <button type="submit" class="btn">Post Note</button>
         </div>
       </form>
     </details>
@@ -118,7 +121,7 @@
         <div class="add-item-field">
           <textarea name="content" id="content" class="form-item" rows="3" placeholder="Details (optional)"></textarea>
         </div>
-        <button type="submit" class="btn btn-compact">Add Log Entry</button>
+        <button type="submit" class="btn">Add Log Entry</button>
       </form>
     </details>
 
@@ -171,6 +174,7 @@
     <p class="muted-text">No activity recorded yet.</p>
     {{ end }}
   </div>
+  {{ end }}
 
   <div class="contact-section">
     <h3>Email Addresses</h3>

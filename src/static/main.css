@@ -124,11 +124,6 @@ code, pre {
   border: 1px solid #bd2130;
 }
 
-.btn-compact {
-  padding: 6px 12px;
-  font-size: 0.9rem;
-}
-
 /* Alert */
 .alert {
   margin: 15px 0;
@@ -2813,4 +2808,145 @@ code:not(pre code) {
   .empty-state p {
     color: #aaa;
   }
+}
+
+/* Service Contact Styles */
+.service-group-header {
+  font-weight: 600;
+  font-size: 1.1em;
+  padding: 12px 0 8px 0;
+  margin-top: 16px;
+  border-bottom: 2px solid #e0e0e0;
+  color: #333;
+}
+
+.service-group-header:first-child {
+  margin-top: 0;
+}
+
+/* Backlinks Section Styles */
+.backlinks-section {
+  margin-top: 2rem;
+  padding: 1rem;
+  background-color: #f5f5f5;
+  border-left: 3px solid #134dae;
+  border-radius: 4px;
+}
+
+.backlinks-section h3 {
+  margin-top: 0;
+  color: #134dae;
+  font-size: 1.2em;
+}
+
+.backlinks-description {
+  margin: 0.5rem 0;
+  color: #666;
+  font-size: 0.95em;
+}
+
+.backlinks-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0 0;
+}
+
+.backlinks-list li {
+  margin: 0.5rem 0;
+  padding: 0.4rem 0.6rem;
+  background-color: #fff;
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+
+.backlinks-list li:hover {
+  background-color: #e8f2ff;
+}
+
+.backlinks-list a {
+  color: #134dae;
+  text-decoration: none;
+  display: block;
+}
+
+.backlinks-list a:hover {
+  text-decoration: underline;
+}
+
+.cache-info {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background-color: #fafafa;
+  border-radius: 3px;
+  color: #666;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-small {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+  margin-left: 0.5rem;
+  background-color: #134dae;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.btn-small:hover {
+  background-color: #0f3d8e;
+}
+
+.btn-small:active {
+  background-color: #0a2f6e;
+}
+
+/* Chart categories */
+.chart-category {
+  margin-bottom: 2.5rem;
+}
+
+.category-header {
+  color: #666;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 0.3rem;
+  font-size: 1.1rem;
+}
+
+/* Chart grid container */
+.chart-category {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+.category-header {
+  grid-column: 1 / -1;
+}
+
+/* Desktop: 2-column grid */
+@media only screen and (min-width: 781px) {
+  .chart-category {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.chart-item {
+  margin-bottom: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Make echarts responsive - override inline styles */
+.chart-item > div,
+.chart-item > div > div,
+.chart-item canvas {
+  max-width: 100% !important;
+  width: 100% !important;
+  height: auto !important;
 }

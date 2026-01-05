@@ -1,0 +1,45 @@
+{{ template "head" . }}
+
+{{ if .Error }}
+<div class="alert alert-red">
+  {{ .Error }}
+</div>
+{{ end }}
+
+<div class="page-header">
+  <h2>Add Health Profile</h2>
+</div>
+
+<form method="POST" action="/health/new">
+  <div class="form-group">
+    <label for="name" class="item-title">Name <span class="required">*</span></label>
+    <input type="text" id="name" name="name" class="form-item" required
+           placeholder="e.g., John Doe"
+           value="{{ if .FormData }}{{ index .FormData "name" }}{{ end }}">
+    <small class="muted-text">Full name of the person</small>
+  </div>
+
+  <div class="form-group">
+    <label for="date_of_birth" class="item-title">Date of Birth</label>
+    <input type="date" id="date_of_birth" name="date_of_birth" class="form-item"
+           value="{{ if .FormData }}{{ index .FormData "date_of_birth" }}{{ end }}">
+    <small class="muted-text">Used to calculate age-based reference ranges</small>
+  </div>
+
+  <div class="form-group">
+    <label for="gender" class="item-title">Gender</label>
+    <select id="gender" name="gender" class="form-item">
+      <option value="">-- Not specified --</option>
+      <option value="Male" {{ if and .FormData (eq (index .FormData "gender") "Male") }}selected{{ end }}>Male</option>
+      <option value="Female" {{ if and .FormData (eq (index .FormData "gender") "Female") }}selected{{ end }}>Female</option>
+    </select>
+    <small class="muted-text">Used for gender-based reference ranges</small>
+  </div>
+
+  <div class="form-group">
+    <button type="submit" class="btn">Create Profile</button>
+    <a href="/health" class="btn">Cancel</a>
+  </div>
+</form>
+
+{{ template "foot" . }}

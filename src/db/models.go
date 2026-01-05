@@ -22,6 +22,25 @@ const (
 	TierF Tier = "F"
 )
 
+// Gender represents biological sex for medical reference ranges
+type Gender string
+
+const (
+	GenderMale   Gender = "Male"
+	GenderFemale Gender = "Female"
+	GenderUnisex Gender = "Unisex" // For ranges that don't vary by gender
+)
+
+// AgeRange represents age-based categorization for reference ranges
+type AgeRange string
+
+const (
+	AgePediatric AgeRange = "Pediatric" // 0-17
+	AgeAdult     AgeRange = "Adult"     // 18-49
+	AgeMiddleAge AgeRange = "MiddleAge" // 50-64
+	AgeSenior    AgeRange = "Senior"    // 65+
+)
+
 // Contact represents a person in the CRM
 type Contact struct {
 	ID             uuid.UUID  `db:"id"`
@@ -43,6 +62,7 @@ type Contact struct {
 	PhotoURL       *string    `db:"photo_url"`
 	Tier           Tier       `db:"tier"`
 	CallSign       *string    `db:"call_sign"`
+	IsService      bool       `db:"is_service"`
 	CardDAVUUID    *string    `db:"carddav_uuid"`
 	CreatedAt      time.Time  `db:"created_at"`
 	UpdatedAt      time.Time  `db:"updated_at"`
@@ -545,4 +565,206 @@ type InventoryComment struct {
 	Content   string    `db:"content"`
 	CreatedAt time.Time `db:"created_at"`
 	UpdatedAt time.Time `db:"updated_at"`
+}
+
+// LabTestCategory represents the category of a lab test
+type LabTestCategory string
+
+const (
+	CategoryBloodCounts      LabTestCategory = "Blood Counts"
+	CategoryLipidPanel       LabTestCategory = "Lipid Panel"
+	CategoryMetabolic        LabTestCategory = "Metabolic"
+	CategoryLiverFunction    LabTestCategory = "Liver Function"
+	CategoryVitaminsMinerals LabTestCategory = "Vitamins & Minerals"
+	CategoryEndocrineOther   LabTestCategory = "Endocrine & Other"
+)
+
+// LabTest represents a predefined medical lab test
+type LabTest struct {
+	Name     string
+	Unit     string
+	Category LabTestCategory
+}
+
+// HealthProfile represents a person being tracked in the health system
+type HealthProfile struct {
+	ID          uuid.UUID  `db:"id"`
+	Name        string     `db:"name"`
+	DateOfBirth *time.Time `db:"date_of_birth"`
+	Gender      *Gender    `db:"gender"`
+	CreatedAt   time.Time  `db:"created_at"`
+	UpdatedAt   time.Time  `db:"updated_at"`
+}
+
+// GetAge calculates the age in years at a given date
+func (h *HealthProfile) GetAge(atDate time.Time) *int {
+	if h.DateOfBirth == nil {
+		return nil
+	}
+	years := atDate.Year() - h.DateOfBirth.Year()
+	// Adjust if birthday hasn't occurred yet this year
+	if atDate.Month() < h.DateOfBirth.Month() ||
+		(atDate.Month() == h.DateOfBirth.Month() && atDate.Day() < h.DateOfBirth.Day()) {
+		years--
+	}
+	return &years
+}
+
+// GetAgeRange returns the age range category for reference ranges
+func (h *HealthProfile) GetAgeRange(atDate time.Time) AgeRange {
+	age := h.GetAge(atDate)
+	if age == nil {
+		// Default to adult if no DOB
+		return AgeAdult
+	}
+	switch {
+	case *age <= 17:
+		return AgePediatric
+	case *age <= 49:
+		return AgeAdult
+	case *age <= 64:
+		return AgeMiddleAge
+	default:
+		return AgeSenior
+	}
+}
+
+// HealthProfileSummary represents a profile with follow-up statistics
+type HealthProfileSummary struct {
+	HealthProfile
+	FollowupCount    int        `db:"followup_count"`
+	LastFollowupDate *time.Time `db:"last_followup_date"`
+}
+
+// HealthFollowup represents a medical visit or report
+type HealthFollowup struct {
+	ID           uuid.UUID `db:"id"`
+	ProfileID    uuid.UUID `db:"profile_id"`
+	FollowupDate time.Time `db:"followup_date"`
+	HospitalName string    `db:"hospital_name"`
+	Notes        *string   `db:"notes"`
+	CreatedAt    time.Time `db:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at"`
+}
+
+// HealthFollowupSummary represents a follow-up with result statistics
+type HealthFollowupSummary struct {
+	HealthFollowup
+	ResultCount int `db:"result_count"`
+}
+
+// HealthLabResult represents an individual lab test result
+type HealthLabResult struct {
+	ID         uuid.UUID `db:"id"`
+	FollowupID uuid.UUID `db:"followup_id"`
+	TestName   string    `db:"test_name"`
+	TestUnit   *string   `db:"test_unit"`
+	TestValue  float64   `db:"test_value"`
+	CreatedAt  time.Time `db:"created_at"`
+}
+
+// ReferenceRange represents reference and optimal ranges for a lab test
+type ReferenceRange struct {
+	ID           uuid.UUID `db:"id"`
+	TestName     string    `db:"test_name"`
+	AgeRange     AgeRange  `db:"age_range"`
+	Gender       Gender    `db:"gender"`
+	ReferenceMin *float64  `db:"reference_min"`
+	ReferenceMax *float64  `db:"reference_max"`
+	OptimalMin   *float64  `db:"optimal_min"`
+	OptimalMax   *float64  `db:"optimal_max"`
+	CreatedAt    time.Time `db:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at"`
+}
+
+// GetDisplayRange returns the range to display based on the logic:
+// - If both optimal min/max missing: use reference only
+// - If only optimal max set: optimal min = reference min
+// - If only optimal min set: optimal max = reference max
+func (r *ReferenceRange) GetDisplayRange() (refMin, refMax, optMin, optMax *float64, hasOptimal bool) {
+	refMin = r.ReferenceMin
+	refMax = r.ReferenceMax
+
+	// If both optimal values are nil, no optimal range
+	if r.OptimalMin == nil && r.OptimalMax == nil {
+		return refMin, refMax, nil, nil, false
+	}
+
+	// Fill in missing optimal boundaries from reference
+	optMin = r.OptimalMin
+	if optMin == nil {
+		optMin = r.ReferenceMin
+	}
+
+	optMax = r.OptimalMax
+	if optMax == nil {
+		optMax = r.ReferenceMax
+	}
+
+	return refMin, refMax, optMin, optMax, true
+}
+
+// GetPredefinedLabTests returns all predefined lab tests organized by category
+func GetPredefinedLabTests() []LabTest {
+	return []LabTest{
+		// Blood Counts (15 tests)
+		{Name: "White blood cells", Unit: "×10³/μL", Category: CategoryBloodCounts},
+		{Name: "Red blood cells", Unit: "×10⁶/μL", Category: CategoryBloodCounts},
+		{Name: "Hemoglobin", Unit: "g/dL", Category: CategoryBloodCounts},
+		{Name: "HCT", Unit: "%", Category: CategoryBloodCounts},
+		{Name: "M.C.V", Unit: "fL", Category: CategoryBloodCounts},
+		{Name: "RDW - CV", Unit: "%", Category: CategoryBloodCounts},
+		{Name: "Platelets", Unit: "×10³/μL", Category: CategoryBloodCounts},
+		{Name: "M.C.H", Unit: "pg", Category: CategoryBloodCounts},
+		{Name: "M.C.H.C", Unit: "g/dL", Category: CategoryBloodCounts},
+		{Name: "M.P.V", Unit: "fL", Category: CategoryBloodCounts},
+		{Name: "Neutrophils", Unit: "%", Category: CategoryBloodCounts},
+		{Name: "Lymphocytes", Unit: "%", Category: CategoryBloodCounts},
+		{Name: "Monocytes", Unit: "%", Category: CategoryBloodCounts},
+		{Name: "Eosinophils", Unit: "%", Category: CategoryBloodCounts},
+		{Name: "Basophils", Unit: "%", Category: CategoryBloodCounts},
+
+		// Lipid Panel (6 tests)
+		{Name: "Total Cholesterol", Unit: "mg/dL", Category: CategoryLipidPanel},
+		{Name: "LDL Cholesterol", Unit: "mg/dL", Category: CategoryLipidPanel},
+		{Name: "HDL Cholesterol", Unit: "mg/dL", Category: CategoryLipidPanel},
+		{Name: "Triglycerides", Unit: "mg/dL", Category: CategoryLipidPanel},
+		{Name: "Non-HDL Cholesterol", Unit: "mg/dL", Category: CategoryLipidPanel},
+		{Name: "Apolipoprotein B", Unit: "mg/dL", Category: CategoryLipidPanel},
+
+		// Metabolic (8 tests)
+		{Name: "Glucose fasting FBS", Unit: "mg/dL", Category: CategoryMetabolic},
+		{Name: "Creatinine", Unit: "mg/dL", Category: CategoryMetabolic},
+		{Name: "Calcium", Unit: "mmol/L", Category: CategoryMetabolic},
+		{Name: "Uric Acid", Unit: "umol/L", Category: CategoryMetabolic},
+		{Name: "Bicarbonate", Unit: "mmol/L", Category: CategoryMetabolic},
+		{Name: "Sodium", Unit: "mmol/L", Category: CategoryMetabolic},
+		{Name: "Potassium", Unit: "mmol/L", Category: CategoryMetabolic},
+		{Name: "Chloride", Unit: "mmol/L", Category: CategoryMetabolic},
+
+		// Liver Function (10 tests)
+		{Name: "SGPT (ALT), Serum", Unit: "IU/L", Category: CategoryLiverFunction},
+		{Name: "SGOT (AST)", Unit: "IU/L", Category: CategoryLiverFunction},
+		{Name: "GGT", Unit: "IU/L", Category: CategoryLiverFunction},
+		{Name: "Bilirubin Total", Unit: "mg/dL", Category: CategoryLiverFunction},
+		{Name: "Bilirubin Indirect", Unit: "mg/dL", Category: CategoryLiverFunction},
+		{Name: "Bilirubin Direct", Unit: "mg/dL", Category: CategoryLiverFunction},
+		{Name: "Alkaline Phosphatase (ALP)", Unit: "IU/L", Category: CategoryLiverFunction},
+		{Name: "Albumin", Unit: "g/dL", Category: CategoryLiverFunction},
+		{Name: "Globulin", Unit: "g/dL", Category: CategoryLiverFunction},
+		{Name: "Total Protein", Unit: "g/dL", Category: CategoryLiverFunction},
+
+		// Vitamins & Minerals (6 tests)
+		{Name: "Vitamin D", Unit: "nmol/L", Category: CategoryVitaminsMinerals},
+		{Name: "Vitamin B12", Unit: "pmol/L", Category: CategoryVitaminsMinerals},
+		{Name: "Magnesium, Serum", Unit: "mmol/L", Category: CategoryVitaminsMinerals},
+		{Name: "Iron, Serum", Unit: "umol/L", Category: CategoryVitaminsMinerals},
+		{Name: "Ferritin", Unit: "ng/mL", Category: CategoryVitaminsMinerals},
+		{Name: "Zinc", Unit: "umol/L", Category: CategoryVitaminsMinerals},
+
+		// Endocrine & Other (3 tests)
+		{Name: "TSH", Unit: "uIU/mL", Category: CategoryEndocrineOther},
+		{Name: "Haemoglobin HbA1c", Unit: "%", Category: CategoryEndocrineOther},
+		{Name: "ESR", Unit: "mm/h", Category: CategoryEndocrineOther},
+	}
 }

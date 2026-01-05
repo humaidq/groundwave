@@ -1,63 +1,87 @@
 {{ template "head" . }}
 
-<main>
-  {{ if .Error }}
-    <div class="zk-error">
-      <h2>Error Loading Note</h2>
-      <p>{{ .Error }}</p>
-      {{ if .BackLink }}
-        <p><a href="{{ .BackLink }}" class="zk-link">← Return to Index</a></p>
-      {{ end }}
-    </div>
-  {{ else }}
-    <div class="zk-note">
-      <header class="zk-header">
-        <div class="zk-meta">
-          <a href="/zk" class="btn btn-compact">Index</a>
-          <a href="/zettel-inbox" class="btn btn-compact">Comments Inbox</a>
-        </div>
-      </header>
-
-      <div class="zk-content">
-        {{ .Note.HTMLBody }}
+{{ if .Error }}
+  <div class="zk-error">
+    <h2>Error Loading Note</h2>
+    <p>{{ .Error }}</p>
+    {{ if .BackLink }}
+      <p><a href="{{ .BackLink }}" class="zk-link">← Return to Index</a></p>
+    {{ end }}
+  </div>
+{{ else }}
+  <div class="zk-note">
+    <header class="zk-header">
+      <div class="zk-meta">
+        <a href="/zk" class="btn">Index</a>
+        <a href="/zettel-inbox" class="btn">Comments Inbox</a>
       </div>
+    </header>
 
-      <!-- Comments Section -->
-      <div class="zk-comments-section">
-        <h3>Comments</h3>
+    <div class="zk-content">
+      {{ .Note.HTMLBody }}
+    </div>
 
-        {{ if .Comments }}
-        <div class="log-list">
-          {{ range .Comments }}
-          <div class="log-entry">
-            <div class="log-header">
-              <span class="log-type log-type-note">comment</span>
-              <span class="log-date">{{ .CreatedAt.Format "Jan 2, 2006 3:04 PM" }}</span>
-              <form method="POST" action="/zk/{{ $.NoteID }}/comment/{{ .ID }}/delete" class="log-delete-form" onsubmit="return confirm('Delete this comment?');">
-                <button type="submit" class="btn-delete" title="Delete">×</button>
-              </form>
-            </div>
-            <div class="log-content">{{ .Content }}</div>
-          </div>
-          {{ end }}
-        </div>
-        {{ else }}
-        <p class="no-comments">No comments yet.</p>
+    <!-- Backlinks Section -->
+    {{ if .Backlinks }}
+    <div class="backlinks-section">
+      <h3>Backlinks ({{ len .Backlinks }})</h3>
+      <p class="backlinks-description">Notes that link to this page:</p>
+      <ul class="backlinks-list">
+        {{ range .Backlinks }}
+        <li><a href="/zk/{{ .ID }}">{{ .Title }}</a></li>
         {{ end }}
+      </ul>
+    </div>
+    {{ end }}
 
-        <!-- Always-visible comment form (NOT collapsible) -->
-        <div class="zk-comment-form">
-          <h4>Add Comment</h4>
-          <form method="POST" action="/zk/{{ .NoteID }}/comment" class="comment-form">
-            <div class="form-field">
-              <textarea name="content" id="comment_content" class="form-item" rows="4" placeholder="Add a temporary comment..." required></textarea>
-            </div>
-            <button type="submit" class="btn btn-compact">Post Comment</button>
-          </form>
+    <!-- Cache Info -->
+    <div class="cache-info">
+      {{ if .LastCacheUpdate.IsZero }}
+      <small>Links index not yet built...</small>
+      {{ else }}
+      <small>Links last updated: {{ .LastCacheUpdate.Format "Jan 2, 2006 3:04 PM" }}</small>
+      {{ end }}
+      <form method="POST" action="/zk/refresh-links" style="display:inline" onsubmit="return confirm('This will scan all notes and may take a minute. Continue?');">
+        {{ .CSRFToken }}
+        <button type="submit" class="btn-small">Refresh Now</button>
+      </form>
+    </div>
+
+    <!-- Comments Section -->
+    <div class="zk-comments-section">
+      <h3>Comments</h3>
+
+      {{ if .Comments }}
+      <div class="log-list">
+        {{ range .Comments }}
+        <div class="log-entry">
+          <div class="log-header">
+            <span class="log-type log-type-note">comment</span>
+            <span class="log-date">{{ .CreatedAt.Format "Jan 2, 2006 3:04 PM" }}</span>
+            <form method="POST" action="/zk/{{ $.NoteID }}/comment/{{ .ID }}/delete" class="log-delete-form" onsubmit="return confirm('Delete this comment?');">
+              <button type="submit" class="btn-delete" title="Delete">×</button>
+            </form>
+          </div>
+          <div class="log-content">{{ .Content }}</div>
         </div>
+        {{ end }}
+      </div>
+      {{ else }}
+      <p class="no-comments">No comments yet.</p>
+      {{ end }}
+
+      <!-- Always-visible comment form (NOT collapsible) -->
+      <div class="zk-comment-form">
+        <h4>Add Comment</h4>
+        <form method="POST" action="/zk/{{ .NoteID }}/comment" class="comment-form">
+          <div class="form-field">
+            <textarea name="content" id="comment_content" class="form-item" rows="4" placeholder="Add a temporary comment..." required></textarea>
+          </div>
+          <button type="submit" class="btn">Post Comment</button>
+        </form>
       </div>
     </div>
-  {{ end }}
-</main>
+  </div>
+{{ end }}
 
 {{ template "foot" . }}

@@ -72,6 +72,9 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	}
 	log.Println("Database schema synced successfully")
 
+	// Start backlink cache refresh worker
+	db.StartBacklinkRefreshWorker(context.Background())
+
 	// Sync CardDAV contacts
 	log.Println("Syncing contacts from CardDAV...")
 	if err := db.SyncAllCardDAVContacts(ctx); err != nil {
@@ -91,7 +94,19 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	if err != nil {
 		panic(err)
 	}
-	f.Use(session.Sessioner())
+	// Configure PostgreSQL session store with 30-day expiry
+	f.Use(session.Sessioner(session.Options{
+		Initer: db.PostgresSessionIniter(),
+		Config: db.PostgresSessionConfig{
+			Lifetime:  30 * 24 * time.Hour, // 30 days
+			TableName: "flamego_sessions",
+		},
+		Cookie: session.CookieOptions{
+			MaxAge:   30 * 24 * 60 * 60, // 30 days in seconds
+			HTTPOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		},
+	}))
 	f.Use(csrf.Csrfer())
 	f.Use(template.Templater(template.Options{
 		FileSystem: fs,
@@ -161,6 +176,9 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Post("/contact/{id}/tag", routes.AddTag)
 		f.Post("/contact/{id}/tag/{tag_id}/delete", routes.RemoveTag)
 
+		// Service contacts routes
+		f.Get("/service-contacts", routes.ListServiceContacts)
+
 		// Tag management routes
 		f.Get("/tags", routes.ListTags)
 		f.Get("/tags/{id}", routes.ViewTagContacts)
@@ -173,6 +191,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Post("/zk/{id}/comment", routes.AddZettelComment)
 		f.Post("/zk/{id}/comment/{comment_id}/delete", routes.DeleteZettelComment)
 		f.Get("/zettel-inbox", routes.ZettelCommentsInbox)
+		f.Post("/zk/refresh-links", routes.RefreshBacklinks)
 
 		// Inventory routes
 		f.Get("/inventory", routes.InventoryList)
@@ -185,6 +204,25 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Post("/inventory/{id}/comment", routes.AddInventoryComment)
 		f.Post("/inventory/{id}/comment/{comment_id}/delete", routes.DeleteInventoryComment)
 		f.Get("/inventory/{id}/file/{filename}", routes.DownloadInventoryFile)
+
+		// Health tracking routes
+		f.Get("/health", routes.ListHealthProfiles)
+		f.Get("/health/new", routes.NewHealthProfileForm)
+		f.Post("/health/new", routes.CreateHealthProfile)
+		f.Get("/health/{id}", routes.ViewHealthProfile)
+		f.Get("/health/{id}/edit", routes.EditHealthProfileForm)
+		f.Post("/health/{id}/edit", routes.UpdateHealthProfile)
+		f.Post("/health/{id}/delete", routes.DeleteHealthProfile)
+		f.Get("/health/{profile_id}/followup/new", routes.NewFollowupForm)
+		f.Post("/health/{profile_id}/followup/new", routes.CreateFollowup)
+		f.Get("/health/{profile_id}/followup/{id}", routes.ViewFollowup)
+		f.Get("/health/{profile_id}/followup/{id}/edit", routes.EditFollowupForm)
+		f.Post("/health/{profile_id}/followup/{id}/edit", routes.UpdateFollowup)
+		f.Post("/health/{profile_id}/followup/{id}/delete", routes.DeleteFollowup)
+		f.Post("/health/{profile_id}/followup/{followup_id}/result", routes.AddLabResult)
+		f.Get("/health/{profile_id}/followup/{followup_id}/result/{id}/edit", routes.EditLabResultForm)
+		f.Post("/health/{profile_id}/followup/{followup_id}/result/{id}/edit", routes.UpdateLabResult)
+		f.Post("/health/{profile_id}/followup/{followup_id}/result/{id}/delete", routes.DeleteLabResult)
 	}, routes.RequireAuth)
 
 	port := cmd.String("port")

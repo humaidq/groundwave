@@ -3,5 +3,20 @@
       <p>Groundwave is released under Apache 2.0 license.</p>
       <p><a href="https://huma.id/groundwave">View source</a></p>
     </footer>
+    {{ if .IsZettelkasten }}
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+              delimiters: [
+                  {left: '$$', right: '$$', display: true},
+                  {left: '$', right: '$', display: false},
+                  {left: '\\(', right: '\\)', display: false},
+                  {left: '\\[', right: '\\]', display: true}
+              ],
+              throwOnError : false
+            });
+        });
+    </script>
+    {{ end }}
   </body>
 </html>

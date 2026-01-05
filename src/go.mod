@@ -12,6 +12,7 @@ require (
 	github.com/flamego/session v1.6.5
 	github.com/flamego/template v1.2.2
 	github.com/flopp/go-staticmaps v0.0.0-20250629121348-973b17999e19
+	github.com/go-echarts/go-echarts/v2 v2.6.7
 	github.com/golang/geo v0.0.0-20250627182359-f4b81656db99
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0

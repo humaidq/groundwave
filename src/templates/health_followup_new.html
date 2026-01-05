@@ -1,0 +1,42 @@
+{{ template "head" . }}
+
+{{ if .Error }}
+<div class="alert alert-red">
+  {{ .Error }}
+</div>
+{{ end }}
+
+<div class="page-header">
+  <h2>Add Follow-up for {{ .Profile.Name }}</h2>
+</div>
+
+<form method="POST" action="/health/{{ .Profile.ID }}/followup/new">
+  <div class="form-group">
+    <label for="followup_date" class="item-title">Date <span class="required">*</span></label>
+    <input type="date" id="followup_date" name="followup_date" class="form-item" required
+           value="{{ if .FormData }}{{ index .FormData "followup_date" }}{{ end }}">
+    <small class="muted-text">Date of the medical visit or report</small>
+  </div>
+
+  <div class="form-group">
+    <label for="hospital_name" class="item-title">Hospital/Clinic <span class="required">*</span></label>
+    <input type="text" id="hospital_name" name="hospital_name" class="form-item" required
+           placeholder="e.g., General Hospital"
+           value="{{ if .FormData }}{{ index .FormData "hospital_name" }}{{ end }}">
+    <small class="muted-text">Name of the hospital or clinic</small>
+  </div>
+
+  <div class="form-group">
+    <label for="notes" class="item-title">Notes</label>
+    <textarea id="notes" name="notes" class="form-item" rows="3"
+              placeholder="Optional notes about this visit">{{ if .FormData }}{{ index .FormData "notes" }}{{ end }}</textarea>
+    <small class="muted-text">Additional information (optional)</small>
+  </div>
+
+  <div class="form-group">
+    <button type="submit" class="btn">Create Follow-up</button>
+    <a href="/health/{{ .Profile.ID }}" class="btn">Cancel</a>
+  </div>
+</form>
+
+{{ template "foot" . }}

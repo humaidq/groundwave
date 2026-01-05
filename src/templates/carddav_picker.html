@@ -169,9 +169,19 @@
                 const displayName = contact.DisplayName || `${contact.GivenName || ''} ${contact.FamilyName || ''}`.trim() || 'Unnamed Contact';
                 const primaryEmail = contact.Emails && contact.Emails.length > 0 ? contact.Emails[0].Email : '';
                 const isLinked = contact.IsLinked || false;
-                const linkedClass = isLinked ? ' linked' : '';
-                const linkedBadge = isLinked ? '<span class="linked-badge">Already Linked</span>' : '';
-                const onclick = isLinked ? '' : `onclick="selectContact('${escapeHtml(contact.UUID)}')"`;
+                const isService = contact.IsService || false;
+                const linkedClass = (isLinked || isService) ? ' linked' : '';
+
+                let linkedBadge = '';
+                if (isLinked && isService) {
+                    linkedBadge = '<span class="linked-badge">Service Contact (Linked)</span>';
+                } else if (isLinked) {
+                    linkedBadge = '<span class="linked-badge">Already Linked</span>';
+                } else if (isService) {
+                    linkedBadge = '<span class="linked-badge">Service Contact</span>';
+                }
+
+                const onclick = (isLinked || isService) ? '' : `onclick="selectContact('${escapeHtml(contact.UUID)}')"`;
 
                 return `
                     <div class="contact-item${linkedClass}" ${onclick}>

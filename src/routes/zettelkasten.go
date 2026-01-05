@@ -81,10 +81,37 @@ func ViewZKNote(c flamego.Context, t template.Template, data template.Data) {
 		comments = []db.ZettelComment{}
 	}
 
+	// Fetch backlinks for this zettel
+	backlinkIDs := db.GetBacklinksFromCache(noteID)
+
+	// Enrich backlinks with note titles
+	type Backlink struct {
+		ID    string
+		Title string
+	}
+	backlinks := make([]Backlink, 0, len(backlinkIDs))
+	for _, backlinkID := range backlinkIDs {
+		backlinkNote, err := db.GetNoteByID(ctx, backlinkID)
+		if err != nil {
+			log.Printf("Error fetching backlink note %s: %v", backlinkID, err)
+			// Skip this backlink if we can't fetch it
+			continue
+		}
+		backlinks = append(backlinks, Backlink{
+			ID:    backlinkID,
+			Title: backlinkNote.Title,
+		})
+	}
+
+	// Get last cache build time
+	lastCacheUpdate := db.GetLastCacheBuildTime()
+
 	// Set template data
 	data["Note"] = note
 	data["Comments"] = comments
 	data["NoteID"] = noteID // Pass note ID explicitly from URL
+	data["Backlinks"] = backlinks
+	data["LastCacheUpdate"] = lastCacheUpdate
 	data["IsZettelkasten"] = true
 
 	t.HTML(http.StatusOK, "zettelkasten")
@@ -161,6 +188,21 @@ func DeleteZettelComment(c flamego.Context, t template.Template, data template.D
 
 	// Redirect back to the zettel
 	c.Redirect("/zk/" + zettelID)
+}
+
+// RefreshBacklinks manually triggers a backlink cache rebuild
+func RefreshBacklinks(c flamego.Context) {
+	ctx := c.Request().Context()
+
+	// Trigger cache rebuild
+	if err := db.BuildBacklinkCache(ctx); err != nil {
+		log.Printf("Error refreshing backlink cache: %v", err)
+		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// Redirect back to the zettelkasten index
+	c.Redirect("/zk")
 }
 
 // ZettelCommentsInbox renders the unified inbox of all zettel comments

@@ -1,0 +1,38 @@
+{{ template "head" . }}
+
+{{ if .Error }}
+<div class="alert alert-red">
+  {{ .Error }}
+</div>
+{{ end }}
+
+<div class="page-header">
+  <h2>Health Profiles</h2>
+  <div class="page-header-actions">
+    <a href="/health/new" class="btn">Add Profile</a>
+  </div>
+</div>
+
+{{ if .Profiles }}
+<div class="entry-list">
+  {{ range .Profiles }}
+  <div class="entry">
+    <a href="/health/{{ .ID }}" class="entry-main-link">
+      <div class="entry-title">{{ .Name }}</div>
+      <div class="entry-meta">
+        <span class="muted-text">
+          {{ .FollowupCount }} follow-up{{ if ne .FollowupCount 1 }}s{{ end }}
+          {{ if .LastFollowupDate }}
+            • Last: {{ .LastFollowupDate.Format "Jan 2, 2006" }}
+          {{ end }}
+        </span>
+      </div>
+    </a>
+  </div>
+  {{ end }}
+</div>
+{{ else }}
+<p class="muted-text">No health profiles found. <a href="/health/new">Add your first profile</a>.</p>
+{{ end }}
+
+{{ template "foot" . }}

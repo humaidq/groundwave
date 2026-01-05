@@ -57,6 +57,8 @@ func Welcome(c flamego.Context, t template.Template, data template.Data) {
 
 // Home renders the contacts list
 func Home(c flamego.Context, t template.Template, data template.Data) {
+	ctx := c.Request().Context()
+
 	// Get tag filter from URL query
 	tagIDs := c.QueryStrings("tag")
 
@@ -65,10 +67,10 @@ func Home(c flamego.Context, t template.Template, data template.Data) {
 
 	if len(tagIDs) == 0 {
 		// No filter - list all contacts
-		contacts, err = db.ListContacts(c.Request().Context())
+		contacts, err = db.ListContacts(ctx)
 	} else {
 		// Filter by tags
-		contacts, err = db.GetContactsByTags(c.Request().Context(), tagIDs)
+		contacts, err = db.GetContactsByTags(ctx, tagIDs)
 	}
 
 	if err != nil {
@@ -79,12 +81,21 @@ func Home(c flamego.Context, t template.Template, data template.Data) {
 	}
 
 	// Fetch all tags for the filter UI
-	allTags, err := db.ListAllTags(c.Request().Context())
+	allTags, err := db.ListAllTags(ctx)
 	if err != nil {
 		log.Printf("Error fetching tags: %v", err)
 	} else {
 		data["AllTags"] = allTags
 		data["SelectedTags"] = tagIDs
+	}
+
+	// Get overdue contacts count for the button
+	overdueContacts, err := db.GetOverdueContacts(ctx)
+	if err != nil {
+		log.Printf("Error fetching overdue contacts: %v", err)
+		data["OverdueCount"] = 0
+	} else {
+		data["OverdueCount"] = len(overdueContacts)
 	}
 
 	t.HTML(http.StatusOK, "home")

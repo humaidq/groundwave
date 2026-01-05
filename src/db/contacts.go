@@ -23,6 +23,7 @@ type ContactListItem struct {
 	PrimaryEmail *string `db:"primary_email"`
 	PrimaryPhone *string `db:"primary_phone"`
 	CallSign     *string `db:"call_sign"`
+	IsService    bool    `db:"is_service"`
 	Tags         []Tag   // Tags associated with this contact
 }
 
@@ -40,6 +41,7 @@ func ListContacts(ctx context.Context) ([]ContactListItem, error) {
 			c.title,
 			c.tier,
 			c.call_sign,
+			c.is_service,
 			(SELECT email FROM contact_emails WHERE contact_id = c.id
 			 ORDER BY is_primary DESC, created_at LIMIT 1) AS primary_email,
 			(SELECT phone FROM contact_phones WHERE contact_id = c.id
@@ -57,6 +59,7 @@ func ListContacts(ctx context.Context) ([]ContactListItem, error) {
 				'[]'::json
 			) AS tags
 		FROM contacts c
+		WHERE c.is_service = false
 		ORDER BY c.tier ASC, c.name_display ASC
 	`
 
@@ -77,6 +80,7 @@ func ListContacts(ctx context.Context) ([]ContactListItem, error) {
 			&contact.Title,
 			&contact.Tier,
 			&contact.CallSign,
+			&contact.IsService,
 			&contact.PrimaryEmail,
 			&contact.PrimaryPhone,
 			&tagsJSON,
@@ -117,6 +121,7 @@ type CreateContactInput struct {
 	Phone        *string
 	CallSign     *string
 	CardDAVUUID  *string
+	IsService    bool
 	Tier         Tier
 }
 
@@ -144,8 +149,8 @@ func CreateContact(ctx context.Context, input CreateContactInput) (string, error
 	query := `
 		INSERT INTO contacts (
 			name_display, name_given, name_family,
-			organization, title, call_sign, carddav_uuid, tier
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			organization, title, call_sign, is_service, carddav_uuid, tier
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id
 	`
 	err = tx.QueryRow(ctx, query,
@@ -155,6 +160,7 @@ func CreateContact(ctx context.Context, input CreateContactInput) (string, error
 		input.Organization,
 		input.Title,
 		input.CallSign,
+		input.IsService,
 		input.CardDAVUUID,
 		input.Tier,
 	).Scan(&contactID)
@@ -238,7 +244,7 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 			id, name_given, name_additional, name_family,
 			name_display, nickname, organization, title, role, birthday, anniversary,
 			gender, timezone, geo_lat, geo_lon, language, photo_url,
-			tier, call_sign, carddav_uuid, created_at, updated_at
+			tier, call_sign, is_service, carddav_uuid, created_at, updated_at
 		FROM contacts
 		WHERE id = $1
 	`
@@ -262,6 +268,7 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 		&contact.PhotoURL,
 		&contact.Tier,
 		&contact.CallSign,
+		&contact.IsService,
 		&contact.CardDAVUUID,
 		&contact.CreatedAt,
 		&contact.UpdatedAt,
@@ -802,6 +809,7 @@ func GetOverdueContacts(ctx context.Context) ([]OverdueContactItem, error) {
 		LEFT JOIN last_contacts lc ON c.id = lc.contact_id
 		WHERE
 			ci.interval_days IS NOT NULL
+			AND c.is_service = false
 			AND (
 				CASE
 					WHEN lc.last_contact_date IS NULL THEN
@@ -920,11 +928,13 @@ func GetRecentContacts(ctx context.Context, limit int) ([]ContactListItem, error
 			c.title,
 			c.tier,
 			c.call_sign,
+			c.is_service,
 			(SELECT email FROM contact_emails WHERE contact_id = c.id
 			 ORDER BY is_primary DESC, created_at LIMIT 1) AS primary_email,
 			(SELECT phone FROM contact_phones WHERE contact_id = c.id
 			 ORDER BY is_primary DESC, created_at LIMIT 1) AS primary_phone
 		FROM contacts c
+		WHERE c.is_service = false
 		ORDER BY c.updated_at DESC
 		LIMIT $1
 	`
@@ -945,6 +955,7 @@ func GetRecentContacts(ctx context.Context, limit int) ([]ContactListItem, error
 			&contact.Title,
 			&contact.Tier,
 			&contact.CallSign,
+			&contact.IsService,
 			&contact.PrimaryEmail,
 			&contact.PrimaryPhone,
 		)
@@ -960,4 +971,134 @@ func GetRecentContacts(ctx context.Context, limit int) ([]ContactListItem, error
 	}
 
 	return contacts, nil
+}
+
+// ListServiceContacts returns all service contacts ordered by organization
+func ListServiceContacts(ctx context.Context) ([]ContactListItem, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		SELECT
+			c.id,
+			c.name_display,
+			c.organization,
+			c.title,
+			c.tier,
+			c.call_sign,
+			c.is_service,
+			(SELECT email FROM contact_emails WHERE contact_id = c.id
+			 ORDER BY is_primary DESC, created_at LIMIT 1) AS primary_email,
+			(SELECT phone FROM contact_phones WHERE contact_id = c.id
+			 ORDER BY is_primary DESC, created_at LIMIT 1) AS primary_phone,
+			COALESCE(
+				(SELECT json_agg(json_build_object(
+					'id', t.id::text,
+					'name', t.name,
+					'description', t.description,
+					'created_at', t.created_at
+				) ORDER BY t.name)
+				 FROM tags t
+				 INNER JOIN contact_tags ct ON t.id = ct.tag_id
+				 WHERE ct.contact_id = c.id),
+				'[]'::json
+			) AS tags
+		FROM contacts c
+		WHERE c.is_service = true
+		ORDER BY
+			COALESCE(c.organization, c.name_display) ASC,
+			c.name_display ASC
+	`
+
+	rows, err := pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query service contacts: %w", err)
+	}
+	defer rows.Close()
+
+	var contacts []ContactListItem
+	for rows.Next() {
+		var contact ContactListItem
+		var tagsJSON []byte
+		err := rows.Scan(
+			&contact.ID,
+			&contact.NameDisplay,
+			&contact.Organization,
+			&contact.Title,
+			&contact.Tier,
+			&contact.CallSign,
+			&contact.IsService,
+			&contact.PrimaryEmail,
+			&contact.PrimaryPhone,
+			&tagsJSON,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan service contact: %w", err)
+		}
+
+		// Unmarshal tags JSON
+		if len(tagsJSON) > 0 && string(tagsJSON) != "[]" {
+			if err := json.Unmarshal(tagsJSON, &contact.Tags); err != nil {
+				log.Printf("Warning: failed to unmarshal tags for contact %s: %v", contact.ID, err)
+				contact.Tags = []Tag{}
+			}
+		} else {
+			contact.Tags = []Tag{}
+		}
+
+		contact.TierLower = strings.ToLower(string(contact.Tier))
+		contacts = append(contacts, contact)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating service contacts: %w", err)
+	}
+
+	return contacts, nil
+}
+
+// ToggleServiceStatus converts a contact between service and personal
+func ToggleServiceStatus(ctx context.Context, contactID string, isService bool) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	query := `UPDATE contacts SET is_service = $1 WHERE id = $2`
+	_, err := pool.Exec(ctx, query, isService, contactID)
+	if err != nil {
+		return fmt.Errorf("failed to toggle service status: %w", err)
+	}
+
+	return nil
+}
+
+// GetLinkedCardDAVUUIDsWithServiceStatus returns CardDAV UUIDs with service flag
+func GetLinkedCardDAVUUIDsWithServiceStatus(ctx context.Context) (map[string]bool, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	query := `SELECT carddav_uuid, is_service FROM contacts WHERE carddav_uuid IS NOT NULL`
+	rows, err := pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query linked CardDAV UUIDs: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]bool)
+	for rows.Next() {
+		var uuid string
+		var isService bool
+		if err := rows.Scan(&uuid, &isService); err != nil {
+			return nil, fmt.Errorf("failed to scan UUID: %w", err)
+		}
+		result[strings.ToLower(uuid)] = isService
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating UUIDs: %w", err)
+	}
+
+	return result, nil
 }

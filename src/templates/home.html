@@ -2,7 +2,11 @@
 
 <div class="page-header">
   <h2>Contacts</h2>
-  <a href="/contact/new" class="btn">+ Add Contact</a>
+  <div class="page-header-actions">
+    <a href="/overdue" class="btn btn-secondary">Overdue{{ if .OverdueCount }} ({{ .OverdueCount }}){{ end }}</a>
+    <a href="/service-contacts" class="btn btn-secondary">Service Contacts</a>
+    <a href="/contact/new" class="btn">+ Add Contact</a>
+  </div>
 </div>
 
 {{ if .Error }}
@@ -39,8 +43,8 @@
           {{ end }}
         </div>
         <div class="tag-dropdown-footer">
-          <button type="submit" class="btn btn-compact">Apply</button>
-          <a href="/contacts" class="btn btn-compact btn-secondary">Clear</a>
+          <button type="submit" class="btn">Apply</button>
+          <a href="/contacts" class="btn btn-secondary">Clear</a>
         </div>
       </div>
     </div>

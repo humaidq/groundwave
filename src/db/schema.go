@@ -55,5 +55,10 @@ func SyncSchema(ctx context.Context) error {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
+	// After migrations complete successfully, sync reference ranges
+	if err := SyncReferenceRanges(ctx); err != nil {
+		return fmt.Errorf("failed to sync reference ranges: %w", err)
+	}
+
 	return nil
 }

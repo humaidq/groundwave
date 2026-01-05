@@ -1,0 +1,97 @@
+{{ template "head" . }}
+
+{{ if .Error }}
+<div class="alert alert-red">
+  {{ .Error }}
+</div>
+{{ end }}
+
+<div class="page-header">
+  <h2>{{ .Profile.Name }}</h2>
+  <div class="page-header-actions">
+    <a href="/health/{{ .Profile.ID }}/edit" class="btn">Edit</a>
+    <form method="POST" action="/health/{{ .Profile.ID }}/delete" class="inline-form" onsubmit="return confirm('Delete this profile and all follow-ups? This cannot be undone.');">
+      <button type="submit" class="btn btn-danger">Delete</button>
+    </form>
+  </div>
+</div>
+
+<div class="contact-detail">
+  <!-- Profile Details -->
+  <div class="contact-section">
+    <h3>Profile Information</h3>
+    <div class="detail-item">
+      <span class="detail-label">Name:</span>
+      <span class="detail-value">{{ .Profile.Name }}</span>
+    </div>
+    {{ if .Profile.DateOfBirth }}
+    <div class="detail-item">
+      <span class="detail-label">Date of Birth:</span>
+      <span class="detail-value">
+        {{ .Profile.DateOfBirth.Format "Jan 2, 2006" }}
+        {{ if .CurrentAge }}(Age: {{ .CurrentAge }} years){{ end }}
+      </span>
+    </div>
+    {{ end }}
+    {{ if .Profile.Gender }}
+    <div class="detail-item">
+      <span class="detail-label">Gender:</span>
+      <span class="detail-value">{{ .Profile.Gender }}</span>
+    </div>
+    {{ end }}
+    <div class="detail-item">
+      <span class="detail-label">Created:</span>
+      <span class="detail-value">{{ .Profile.CreatedAt.Format "Jan 2, 2006" }}</span>
+    </div>
+  </div>
+
+  <!-- Follow-ups Section -->
+  <div class="contact-section">
+    <h3>Medical Follow-ups</h3>
+    <div class="section-actions">
+      <a href="/health/{{ .Profile.ID }}/followup/new" class="btn">Add Follow-up</a>
+    </div>
+
+    {{ if .Followups }}
+    <div class="entry-list">
+      {{ range .Followups }}
+      <div class="entry">
+        <a href="/health/{{ $.Profile.ID }}/followup/{{ .ID }}" class="entry-main-link">
+          <div class="entry-title">{{ .FollowupDate.Format "Jan 2, 2006" }} - {{ .HospitalName }}</div>
+          <div class="entry-meta">
+            <span class="muted-text">
+              {{ .ResultCount }} test result{{ if ne .ResultCount 1 }}s{{ end }}
+              {{ if .Notes }}
+                • {{ .Notes }}
+              {{ end }}
+            </span>
+          </div>
+        </a>
+      </div>
+      {{ end }}
+    </div>
+    {{ else }}
+    <p class="muted-text">No follow-ups recorded. <a href="/health/{{ .Profile.ID }}/followup/new">Add the first follow-up</a>.</p>
+    {{ end }}
+  </div>
+
+  <!-- Lab Trends Charts Section -->
+  {{ if .ChartCategories }}
+  <div class="contact-section">
+    <h3>Lab Test Trends</h3>
+
+    {{ range .ChartCategories }}
+    <div class="chart-category">
+      <h4 class="category-header">{{ .CategoryName }}</h4>
+      {{ range .Charts }}
+      <div class="chart-item">
+        {{ .HTML }}
+      </div>
+      {{ end }}
+    </div>
+    {{ end }}
+  </div>
+  {{ end }}
+</div>
+
+{{ template "foot" . }}

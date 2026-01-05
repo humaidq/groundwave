@@ -63,6 +63,7 @@
     {{ end }}
   </div>
 
+  {{ if not .Contact.IsService }}
   <div class="form-group">
     <label for="call_sign" class="item-title">Amateur Radio Call Sign</label>
     <input type="text" id="call_sign" name="call_sign" class="form-item callsign-input"
@@ -83,6 +84,27 @@
       <option value="F" {{ if eq .Contact.Tier "F" }}selected{{ end }}>F - No regular contact needed</option>
     </select>
     <small class="muted-text">How often you should stay in touch with this person</small>
+  </div>
+  {{ end }}
+
+  <div class="form-group">
+    <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #e0e0e0;">
+    <h4 style="margin-bottom: 0.5rem;">Contact Type</h4>
+    {{ if .Contact.IsService }}
+    <p class="muted-text" style="margin-bottom: 1rem;">This is a service contact. Service contacts have simplified profiles without relationship tracking features.</p>
+    <button type="submit" name="toggle_service" value="true" class="btn btn-secondary"
+            onclick="document.getElementById('service_type').value='false'; return true;">
+      Convert to Personal Contact
+    </button>
+    <input type="hidden" id="service_type" name="is_service" value="false">
+    {{ else }}
+    <p class="muted-text" style="margin-bottom: 1rem;">This is a personal contact with full relationship tracking features.</p>
+    <button type="submit" name="toggle_service" value="true" class="btn btn-secondary"
+            onclick="if(confirm('Convert to service contact? This will hide relationship tracking features like tier, notes, and contact logs.')) { document.getElementById('service_type').value='true'; return true; } return false;">
+      Convert to Service Contact
+    </button>
+    <input type="hidden" id="service_type" name="is_service" value="true">
+    {{ end }}
   </div>
 
   <div class="form-group">

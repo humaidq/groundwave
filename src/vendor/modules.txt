@@ -56,6 +56,16 @@ github.com/flopp/go-staticmaps
 # github.com/fogleman/gg v1.3.0
 ## explicit
 github.com/fogleman/gg
+# github.com/go-echarts/go-echarts/v2 v2.6.7
+## explicit; go 1.18
+github.com/go-echarts/go-echarts/v2/charts
+github.com/go-echarts/go-echarts/v2/datasets
+github.com/go-echarts/go-echarts/v2/event
+github.com/go-echarts/go-echarts/v2/opts
+github.com/go-echarts/go-echarts/v2/render
+github.com/go-echarts/go-echarts/v2/templates
+github.com/go-echarts/go-echarts/v2/types
+github.com/go-echarts/go-echarts/v2/util
 # github.com/go-logfmt/logfmt v0.6.0
 ## explicit; go 1.17
 github.com/go-logfmt/logfmt

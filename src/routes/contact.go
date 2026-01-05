@@ -102,6 +102,9 @@ func CreateContact(c flamego.Context, t template.Template, data template.Data) {
 	}
 	tier := db.Tier(tierStr)
 
+	// Check if this is a service contact
+	isService := form.Get("is_service") == "on"
+
 	// Create input struct
 	input := db.CreateContactInput{
 		NameGiven:    nameGiven,
@@ -112,6 +115,7 @@ func CreateContact(c flamego.Context, t template.Template, data template.Data) {
 		Phone:        getOptionalString("phone"),
 		CallSign:     getOptionalString("call_sign"),
 		CardDAVUUID:  cardDAVUUID,
+		IsService:    isService,
 		Tier:         tier,
 	}
 
@@ -245,6 +249,15 @@ func UpdateContact(c flamego.Context, t template.Template, data template.Data) {
 		tierStr = "C"
 	}
 	tier := db.Tier(tierStr)
+
+	// Check if service status toggle was requested
+	if form.Get("toggle_service") == "true" {
+		isService := form.Get("is_service") == "true"
+		err := db.ToggleServiceStatus(c.Request().Context(), contactID, isService)
+		if err != nil {
+			log.Printf("Error toggling service status: %v", err)
+		}
+	}
 
 	// Create input struct
 	input := db.UpdateContactInput{
@@ -611,7 +624,8 @@ func UnlinkCardDAV(c flamego.Context) {
 // CardDAVContactWithStatus represents a CardDAV contact with linked status
 type CardDAVContactWithStatus struct {
 	db.CardDAVContact
-	IsLinked bool `json:"IsLinked"`
+	IsLinked  bool `json:"IsLinked"`
+	IsService bool `json:"IsService"`
 }
 
 // shouldHideCardDAVContact returns true if contact should be hidden from the list
@@ -649,8 +663,8 @@ func ListCardDAVContacts(c flamego.Context) {
 		}
 	}
 
-	// Get all linked CardDAV UUIDs
-	linkedUUIDs, err := db.GetLinkedCardDAVUUIDs(c.Request().Context())
+	// Get all linked CardDAV UUIDs with service status
+	linkedMap, err := db.GetLinkedCardDAVUUIDsWithServiceStatus(c.Request().Context())
 	if err != nil {
 		log.Printf("Error getting linked CardDAV UUIDs: %v", err)
 		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
@@ -660,18 +674,17 @@ func ListCardDAVContacts(c flamego.Context) {
 		return
 	}
 
-	// Create a map for quick lookup
-	linkedMap := make(map[string]bool)
-	for _, uuid := range linkedUUIDs {
-		linkedMap[strings.ToLower(uuid)] = true
-	}
-
-	// Add IsLinked status to each contact
+	// Add IsLinked and IsService status to each contact
 	contactsWithStatus := make([]CardDAVContactWithStatus, 0, len(filteredContacts))
 	for _, contact := range filteredContacts {
+		isService, isLinked := linkedMap[strings.ToLower(contact.UUID)]
+		if !isLinked {
+			isService = false // Not linked means not a service contact
+		}
 		contactsWithStatus = append(contactsWithStatus, CardDAVContactWithStatus{
 			CardDAVContact: contact,
-			IsLinked:       linkedMap[strings.ToLower(contact.UUID)],
+			IsLinked:       isLinked,
+			IsService:      isService,
 		})
 	}
 
@@ -790,4 +803,18 @@ func RemoveTag(c flamego.Context) {
 	}
 
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+}
+
+// ListServiceContacts renders the service contacts list page
+func ListServiceContacts(c flamego.Context, t template.Template, data template.Data) {
+	contacts, err := db.ListServiceContacts(c.Request().Context())
+	if err != nil {
+		log.Printf("Error fetching service contacts: %v", err)
+		data["Error"] = "Failed to load service contacts"
+	} else {
+		data["ServiceContacts"] = contacts
+	}
+
+	data["IsServiceContacts"] = true
+	t.HTML(http.StatusOK, "service_contacts")
 }

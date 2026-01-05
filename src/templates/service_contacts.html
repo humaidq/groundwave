@@ -1,0 +1,90 @@
+{{ template "head" . }}
+
+<div class="page-header">
+  <h2>Service Contacts</h2>
+  <div class="page-header-actions">
+    <a href="/contacts" class="btn btn-secondary">Back to Contacts</a>
+    <a href="/contact/new?is_service=true" class="btn">+ Add Service Contact</a>
+  </div>
+</div>
+
+{{ if .Error }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Error</h5>
+  <p>{{.Error}}</p>
+</div>
+{{end}}
+
+<input type="text" id="serviceSearch" placeholder="Search services..." class="search-input">
+
+{{ if .ServiceContacts }}
+<div class="entry-list" id="serviceList">
+  {{ range .ServiceContacts }}
+    <div class="entry" data-org="{{ if .Organization }}{{ .Organization }}{{ end }}" data-name="{{ .NameDisplay }}">
+      <a href="/contact/{{ .ID }}" class="entry-main-link">
+        <div class="entry-title">
+          {{ if .Organization }}
+            <strong>{{ .Organization }}</strong> — {{ .NameDisplay }}{{ if .Title }} ({{ .Title }}){{ end }}
+          {{ else }}
+            {{ .NameDisplay }}{{ if .Title }} - {{ .Title }}{{ end }}
+          {{ end }}
+        </div>
+        {{ if or .PrimaryPhone .PrimaryEmail }}
+        <div class="entry-meta muted-text">
+          {{ if .PrimaryPhone }}<span>{{ .PrimaryPhone }}</span>{{ end }}
+          {{ if and .PrimaryPhone .PrimaryEmail }} • {{ end }}
+          {{ if .PrimaryEmail }}<span>{{ .PrimaryEmail }}</span>{{ end }}
+        </div>
+        {{ end }}
+      </a>
+    </div>
+  {{ end }}
+</div>
+{{ else }}
+<p class="muted-text">No service contacts found. <a href="/contact/new?is_service=true">Add your first service contact</a>.</p>
+{{ end }}
+
+<script>
+(function() {
+  const searchInput = document.getElementById('serviceSearch');
+  const serviceList = document.getElementById('serviceList');
+
+  if (searchInput && serviceList) {
+    const entries = Array.from(serviceList.getElementsByClassName('entry'));
+    const headers = Array.from(serviceList.getElementsByClassName('service-group-header'));
+
+    searchInput.addEventListener('input', function(e) {
+      const searchTerm = e.target.value.toLowerCase();
+
+      if (!searchTerm) {
+        // Show all
+        entries.forEach(entry => entry.style.display = '');
+        headers.forEach(header => header.style.display = '');
+        return;
+      }
+
+      // Track which organizations have visible entries
+      const visibleOrgs = new Set();
+
+      entries.forEach(function(entry) {
+        const text = entry.textContent.toLowerCase();
+        if (text.includes(searchTerm)) {
+          entry.style.display = '';
+          const org = entry.getAttribute('data-org');
+          if (org) visibleOrgs.add(org);
+        } else {
+          entry.style.display = 'none';
+        }
+      });
+
+      // Show/hide headers based on whether their org has visible entries
+      headers.forEach(function(header) {
+        const orgName = header.textContent;
+        header.style.display = visibleOrgs.has(orgName) ? '' : 'none';
+      });
+    });
+  }
+})();
+</script>
+
+{{ template "foot" . }}
