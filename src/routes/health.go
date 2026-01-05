@@ -47,12 +47,37 @@ func generateLabTestChart(ctx flamego.Context, profileID, testName string) (stri
 		unitLabel = *results[0].TestUnit
 	}
 
+	// Deduplicate results by date (keep most recent entry for each date)
+	// This prevents "double points" when multiple followups exist on the same day
+	dateMap := make(map[string]db.LabResultWithDate)
+	for _, result := range results {
+		dateKey := result.FollowupDate.Format("2006-01-02")
+		existing, exists := dateMap[dateKey]
+		if !exists || result.CreatedAt.After(existing.CreatedAt) {
+			dateMap[dateKey] = result
+		}
+	}
+
+	// Convert map back to slice and sort by date
+	dedupedResults := make([]db.LabResultWithDate, 0, len(dateMap))
+	for _, result := range dateMap {
+		dedupedResults = append(dedupedResults, result)
+	}
+	// Sort by followup date ascending
+	for i := 0; i < len(dedupedResults)-1; i++ {
+		for j := i + 1; j < len(dedupedResults); j++ {
+			if dedupedResults[i].FollowupDate.After(dedupedResults[j].FollowupDate) {
+				dedupedResults[i], dedupedResults[j] = dedupedResults[j], dedupedResults[i]
+			}
+		}
+	}
+
 	// Prepare data and track min/max values
-	xAxis := make([]string, 0, len(results))
-	yData := make([]opts.LineData, 0, len(results))
+	xAxis := make([]string, 0, len(dedupedResults))
+	yData := make([]opts.LineData, 0, len(dedupedResults))
 	var dataMin, dataMax float64
 
-	for i, result := range results {
+	for i, result := range dedupedResults {
 		xAxis = append(xAxis, result.FollowupDate.Format("Jan 2, 2006"))
 		yData = append(yData, opts.LineData{Value: result.TestValue})
 
@@ -138,7 +163,7 @@ func generateLabTestChart(ctx flamego.Context, profileID, testName string) (stri
 	// Add reference range bands if profile has DOB and gender
 	if profile.DateOfBirth != nil && profile.Gender != nil {
 		// Use the most recent follow-up date to determine age range
-		mostRecentDate := results[len(results)-1].FollowupDate
+		mostRecentDate := dedupedResults[len(dedupedResults)-1].FollowupDate
 		ageRange := profile.GetAgeRange(mostRecentDate)
 
 		// Get reference range for this test from database
@@ -578,7 +603,88 @@ func ViewFollowup(c flamego.Context, t template.Template, data template.Data) {
 		log.Printf("Error fetching lab results for follow-up %s: %v", followupID, err)
 		data["Error"] = "Failed to load lab results"
 	} else {
-		data["Results"] = results
+		// Enrich results with range status for color coding
+		enrichedResults := make(map[db.LabTestCategory][]map[string]interface{})
+
+		// Get age range for reference lookup
+		var ageRange db.AgeRange
+		if profile.DateOfBirth != nil {
+			ageRange = profile.GetAgeRange(followup.FollowupDate)
+		}
+
+		for category, categoryResults := range results {
+			for _, result := range categoryResults {
+				enrichedResult := map[string]interface{}{
+					"ID":           result.ID,
+					"TestName":     result.TestName,
+					"TestUnit":     result.TestUnit,
+					"TestValue":    result.TestValue,
+					"CreatedAt":    result.CreatedAt,
+					"IsCalculated": result.IsCalculated,
+					"RangeStatus":  "normal", // default
+					"HasRanges":    false,
+				}
+
+				// Check against reference ranges if we have age and gender
+				if profile.DateOfBirth != nil && profile.Gender != nil {
+					refRange, err := db.GetReferenceRange(ctx, result.TestName, ageRange, *profile.Gender)
+					if err == nil && refRange != nil {
+						refMin, refMax, optMin, optMax, hasOptimal := refRange.GetDisplayRange()
+
+						enrichedResult["HasRanges"] = true
+						// Dereference pointers for template use
+						if refMin != nil {
+							enrichedResult["RefMin"] = *refMin
+						}
+						if refMax != nil {
+							enrichedResult["RefMax"] = *refMax
+						}
+						if hasOptimal {
+							if optMin != nil {
+								enrichedResult["OptMin"] = *optMin
+							}
+							if optMax != nil {
+								enrichedResult["OptMax"] = *optMax
+							}
+							enrichedResult["HasOptimal"] = true
+						} else {
+							enrichedResult["HasOptimal"] = false
+						}
+
+						// Check if outside reference range (RED)
+						outOfReference := false
+						if refMin != nil && result.TestValue < *refMin {
+							outOfReference = true
+						}
+						if refMax != nil && result.TestValue > *refMax {
+							outOfReference = true
+						}
+
+						// Check if outside optimal range (GOLD)
+						outOfOptimal := false
+						if hasOptimal {
+							if optMin != nil && result.TestValue < *optMin {
+								outOfOptimal = true
+							}
+							if optMax != nil && result.TestValue > *optMax {
+								outOfOptimal = true
+							}
+						}
+
+						// Set status (red takes priority over gold)
+						if outOfReference {
+							enrichedResult["RangeStatus"] = "out_of_reference"
+						} else if outOfOptimal {
+							enrichedResult["RangeStatus"] = "out_of_optimal"
+						}
+					}
+				}
+
+				enrichedResults[category] = append(enrichedResults[category], enrichedResult)
+			}
+		}
+
+		data["Results"] = enrichedResults
 	}
 
 	data["Profile"] = profile

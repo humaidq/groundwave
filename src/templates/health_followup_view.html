@@ -92,9 +92,48 @@
           <div class="contact-item">
             <div class="contact-item-content">
               <div class="contact-item-value">
-                <strong>{{ .TestName }}</strong>: {{ printf "%.3f" .TestValue }}{{ if .TestUnit }} {{ .TestUnit }}{{ end }}
-                {{ if .IsCalculated }}<span class="muted-text" style="font-size: 0.85em;"> (calculated)</span>{{ end }}
+                <strong>{{ .TestName }}</strong>:
+                {{ if eq .RangeStatus "out_of_reference" }}
+                  <span class="lab-value-critical">{{ printf "%.3f" .TestValue }}</span>
+                {{ else if eq .RangeStatus "out_of_optimal" }}
+                  <span class="lab-value-warning">{{ printf "%.3f" .TestValue }}</span>
+                {{ else }}
+                  <span>{{ printf "%.3f" .TestValue }}</span>
+                {{ end }}
+                {{ if .TestUnit }} {{ .TestUnit }}{{ end }}
+                {{ if .IsCalculated }}<span class="muted-text calculated-label"> (calculated)</span>{{ end }}
               </div>
+              {{ if .HasRanges }}
+              <div class="lab-ranges">
+                <span class="range-label">Reference:</span>
+                <span class="range-value">
+                  {{ if and .RefMin .RefMax }}
+                    {{ printf "%.1f" .RefMin }} - {{ printf "%.1f" .RefMax }}
+                  {{ else if .RefMax }}
+                    &lt; {{ printf "%.1f" .RefMax }}
+                  {{ else if .RefMin }}
+                    &gt; {{ printf "%.1f" .RefMin }}
+                  {{ else }}
+                    N/A
+                  {{ end }}
+                </span>
+                {{ if .HasOptimal }}
+                <span class="range-separator">|</span>
+                <span class="range-label">Optimal:</span>
+                <span class="range-value">
+                  {{ if and .OptMin .OptMax }}
+                    {{ printf "%.1f" .OptMin }} - {{ printf "%.1f" .OptMax }}
+                  {{ else if .OptMax }}
+                    &lt; {{ printf "%.1f" .OptMax }}
+                  {{ else if .OptMin }}
+                    &gt; {{ printf "%.1f" .OptMin }}
+                  {{ else }}
+                    N/A
+                  {{ end }}
+                </span>
+                {{ end }}
+              </div>
+              {{ end }}
               <div class="contact-item-meta">
                 {{ if .IsCalculated }}
                 <span class="muted-text">Calculated from WBC and percentage</span>

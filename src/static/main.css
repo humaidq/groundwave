@@ -2950,3 +2950,42 @@ code:not(pre code) {
   width: 100% !important;
   height: auto !important;
 }
+
+/* Lab result value color coding */
+.lab-value-critical {
+  color: #dc3545;
+  font-weight: bold;
+}
+
+.lab-value-warning {
+  color: #ffc107;
+  font-weight: bold;
+}
+
+.calculated-label {
+  font-size: 0.85em;
+}
+
+/* Lab result ranges display */
+.lab-ranges {
+  font-size: 0.9em;
+  color: #666;
+  margin-top: 0.25rem;
+  line-height: 1.4;
+}
+
+.lab-ranges .range-label {
+  font-weight: 500;
+  color: #444;
+  margin-right: 0.25rem;
+}
+
+.lab-ranges .range-value {
+  color: #666;
+  margin-right: 0.5rem;
+}
+
+.lab-ranges .range-separator {
+  color: #ccc;
+  margin: 0 0.5rem;
+}
