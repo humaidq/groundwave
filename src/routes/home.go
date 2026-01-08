@@ -12,6 +12,7 @@ import (
 	"github.com/flamego/template"
 
 	"github.com/humaidq/groundwave/db"
+	"github.com/humaidq/groundwave/whatsapp"
 )
 
 // Welcome renders the welcome/dashboard page
@@ -49,6 +50,39 @@ func Welcome(c flamego.Context, t template.Template, data template.Data) {
 		log.Printf("Error fetching recent contacts: %v", err)
 	} else {
 		data["RecentContacts"] = recentContacts
+	}
+
+	// Get inventory count
+	inventoryCount, err := db.GetInventoryCount(ctx)
+	if err != nil {
+		log.Printf("Error fetching inventory count: %v", err)
+		inventoryCount = 0
+	}
+	data["InventoryCount"] = inventoryCount
+
+	// Get notes count (from zettelkasten cache)
+	orgFiles, err := db.ListOrgFiles(ctx)
+	if err != nil {
+		log.Printf("Error fetching org files: %v", err)
+		data["NotesCount"] = 0
+	} else {
+		data["NotesCount"] = len(orgFiles)
+	}
+
+	// Get recent QSOs (last 5)
+	recentQSOs, err := db.ListRecentQSOs(ctx, 5)
+	if err != nil {
+		log.Printf("Error fetching recent QSOs: %v", err)
+	} else {
+		data["RecentQSOs"] = recentQSOs
+	}
+
+	// Get WhatsApp status
+	waClient := whatsapp.GetClient()
+	if waClient != nil {
+		data["WhatsAppStatus"] = string(waClient.GetStatus())
+	} else {
+		data["WhatsAppStatus"] = "unavailable"
 	}
 
 	data["IsWelcome"] = true
@@ -98,6 +132,10 @@ func Home(c flamego.Context, t template.Template, data template.Data) {
 		data["OverdueCount"] = len(overdueContacts)
 	}
 
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "Contacts", URL: "/contacts", IsCurrent: true},
+	}
+
 	t.HTML(http.StatusOK, "home")
 }
 
@@ -113,5 +151,9 @@ func Overdue(c flamego.Context, t template.Template, data template.Data) {
 	}
 
 	data["IsOverdue"] = true
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "Contacts", URL: "/contacts", IsCurrent: false},
+		{Name: "Overdue", URL: "", IsCurrent: true},
+	}
 	t.HTML(http.StatusOK, "overdue")
 }

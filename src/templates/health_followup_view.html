@@ -1,5 +1,18 @@
 {{ template "head" . }}
 
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
 {{ if .Error }}
 <div class="alert alert-red">
   {{ .Error }}
@@ -43,6 +56,12 @@
   <!-- Lab Results Section -->
   <div class="contact-section">
     <h3>Lab Test Results</h3>
+
+    <!-- AI Summary -->
+    <div class="ai-summary-section">
+      <button type="button" id="ai-summary-btn" class="btn">✨ AI Summary</button>
+      <div id="ai-summary-output" class="ai-summary-output"></div>
+    </div>
 
     <!-- Add Result Form -->
     <details class="add-item-details">
@@ -126,11 +145,11 @@
                 <span class="range-label">Reference:</span>
                 <span class="range-value">
                   {{ if and .RefMin .RefMax }}
-                    {{ printf "%.1f" .RefMin }} - {{ printf "%.1f" .RefMax }}
+                    {{ printf "%.2f" .RefMin }} - {{ printf "%.2f" .RefMax }}
                   {{ else if .RefMax }}
-                    &lt; {{ printf "%.1f" .RefMax }}
+                    &lt; {{ printf "%.2f" .RefMax }}
                   {{ else if .RefMin }}
-                    &gt; {{ printf "%.1f" .RefMin }}
+                    &gt; {{ printf "%.2f" .RefMin }}
                   {{ else }}
                     N/A
                   {{ end }}
@@ -140,11 +159,11 @@
                 <span class="range-label">Optimal:</span>
                 <span class="range-value">
                   {{ if and .OptMin .OptMax }}
-                    {{ printf "%.1f" .OptMin }} - {{ printf "%.1f" .OptMax }}
+                    {{ printf "%.2f" .OptMin }} - {{ printf "%.2f" .OptMax }}
                   {{ else if .OptMax }}
-                    &lt; {{ printf "%.1f" .OptMax }}
+                    &lt; {{ printf "%.2f" .OptMax }}
                   {{ else if .OptMin }}
-                    &gt; {{ printf "%.1f" .OptMin }}
+                    &gt; {{ printf "%.2f" .OptMin }}
                   {{ else }}
                     N/A
                   {{ end }}
@@ -187,6 +206,38 @@ function updateUnit() {
   const unit = selectedOption.getAttribute('data-unit');
   unitInput.value = unit || '';
 }
+
+(function() {
+  const btn = document.getElementById('ai-summary-btn');
+  const output = document.getElementById('ai-summary-output');
+
+  if (btn && output) {
+    btn.addEventListener('click', async function() {
+      btn.disabled = true;
+      btn.textContent = 'Generating...';
+      output.textContent = 'Loading...';
+      output.style.display = 'block';
+
+      try {
+        const response = await fetch(window.location.pathname + '/ai-summary', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'}
+        });
+        const data = await response.json();
+        if (data.error) {
+          output.textContent = 'Error: ' + data.error;
+        } else {
+          output.textContent = data.summary;
+        }
+      } catch (err) {
+        output.textContent = 'Error: ' + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '✨ AI Summary';
+      }
+    });
+  }
+})();
 </script>
 
 {{ template "foot" . }}

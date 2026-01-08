@@ -1,0 +1,112 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $index, $crumb := .Breadcrumbs }}
+    {{ if $crumb.IsCurrent }}
+      <span class="breadcrumb-item current">{{ $crumb.Name }}</span>
+    {{ else }}
+      <a href="{{ $crumb.URL }}" class="breadcrumb-item">{{ $crumb.Name }}</a>
+      <span class="breadcrumb-separator">/</span>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+<div class="page-header">
+  <h2>WhatsApp Connection</h2>
+</div>
+
+<div class="whatsapp-container">
+  <div class="whatsapp-status-box">
+    <div class="status-indicator status-{{ .Status }}">
+      <span class="status-dot"></span>
+      <span class="status-text">{{ .Status }}</span>
+    </div>
+  </div>
+
+  {{ if eq .Status "pairing" }}
+  <div class="qr-section">
+    <h3>Scan QR Code with WhatsApp</h3>
+    <p>Open WhatsApp on your phone, go to <strong>Settings &gt; Linked Devices &gt; Link a Device</strong></p>
+    <div class="qr-container" id="qr-container">
+      {{ if .QRCode }}
+      <img src="data:image/png;base64,{{ .QRCode }}" alt="WhatsApp QR Code" class="qr-code" />
+      {{ else }}
+      <div class="qr-loading">Generating QR code...</div>
+      {{ end }}
+    </div>
+    <p class="qr-note">The QR code will refresh automatically. If pairing succeeds, this page will update.</p>
+  </div>
+
+  {{ else if eq .Status "connected" }}
+  <div class="connected-section">
+    <p class="success-message">WhatsApp is connected and tracking messages.</p>
+    <p>When you send or receive messages on WhatsApp, the corresponding contact's "last contact" timestamp will be automatically updated.</p>
+    <form method="POST" action="/whatsapp/disconnect" class="whatsapp-form">
+      <input type="hidden" name="_csrf" value="{{ .CSRFToken }}" />
+      <button type="submit" class="btn btn-danger">Disconnect WhatsApp</button>
+    </form>
+  </div>
+
+  {{ else if eq .Status "connecting" }}
+  <div class="connecting-section">
+    <p>Connecting to WhatsApp...</p>
+    <div class="loading-spinner"></div>
+  </div>
+
+  {{ else if eq .Status "unavailable" }}
+  <div class="unavailable-section">
+    <p class="error-message">WhatsApp integration is not available.</p>
+    <p>The WhatsApp client failed to initialize. Check the server logs for more details.</p>
+  </div>
+
+  {{ else }}
+  <div class="disconnected-section">
+    <p>Connect WhatsApp to automatically track message activity with your contacts.</p>
+    <p>When you send or receive WhatsApp messages, the app will automatically update the "last contact" timestamp for matching contacts, helping keep your overdue list accurate.</p>
+    <form method="POST" action="/whatsapp/connect" class="whatsapp-form">
+      <input type="hidden" name="_csrf" value="{{ .CSRFToken }}" />
+      <button type="submit" class="btn">Connect WhatsApp</button>
+    </form>
+  </div>
+  {{ end }}
+</div>
+
+{{ if or (eq .Status "pairing") (eq .Status "connecting") }}
+<script>
+(function() {
+  // Poll for status updates every 2 seconds
+  var pollInterval = setInterval(function() {
+    fetch('/whatsapp/status')
+      .then(function(response) { return response.json(); })
+      .then(function(data) {
+        // Reload page if status changed
+        if (data.status !== '{{ .Status }}') {
+          location.reload();
+          return;
+        }
+        // Update QR code if we have a new one
+        if (data.qrCode && data.status === 'pairing') {
+          var container = document.getElementById('qr-container');
+          if (container) {
+            container.innerHTML = '<img src="data:image/png;base64,' + data.qrCode + '" alt="WhatsApp QR Code" class="qr-code" />';
+          }
+        }
+      })
+      .catch(function(err) {
+        console.error('Failed to poll WhatsApp status:', err);
+      });
+  }, 2000);
+
+  // Stop polling when page is hidden
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+      clearInterval(pollInterval);
+    }
+  });
+})();
+</script>
+{{ end }}
+
+{{ template "foot" . }}

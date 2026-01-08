@@ -101,6 +101,61 @@ func ListQSOs(ctx context.Context) ([]QSOListItem, error) {
 	return qsos, nil
 }
 
+// ListRecentQSOs returns the most recent N QSOs sorted by date/time
+func ListRecentQSOs(ctx context.Context, limit int) ([]QSOListItem, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		SELECT
+			id,
+			call,
+			qso_date,
+			time_on,
+			band,
+			mode,
+			rst_sent,
+			rst_rcvd,
+			country
+		FROM qsos
+		ORDER BY qso_date DESC, time_on DESC
+		LIMIT $1
+	`
+
+	rows, err := pool.Query(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query recent QSOs: %w", err)
+	}
+	defer rows.Close()
+
+	var qsos []QSOListItem
+	for rows.Next() {
+		var qso QSOListItem
+		err := rows.Scan(
+			&qso.ID,
+			&qso.Call,
+			&qso.QSODate,
+			&qso.TimeOn,
+			&qso.Band,
+			&qso.Mode,
+			&qso.RSTSent,
+			&qso.RSTRcvd,
+			&qso.Country,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan QSO: %w", err)
+		}
+		qsos = append(qsos, qso)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating recent QSOs: %w", err)
+	}
+
+	return qsos, nil
+}
+
 // ImportADIFQSOs imports QSOs from parsed ADIF data with merge logic
 // Merge logic: file values override DB values, but DB values are kept if file field is empty
 func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {

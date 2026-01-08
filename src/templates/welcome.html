@@ -2,56 +2,72 @@
 
 <div class="welcome-container">
   <h2>Welcome to Groundwave</h2>
-  <p class="welcome-subtitle">Not an Operating System</p>
+  <p class="welcome-subtitle">Your personal database</p>
 
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-number">{{ .TotalContacts }}</div>
-      <div class="stat-label">Total Contacts</div>
-      <a href="/contacts" class="stat-link">View All →</a>
+  <div class="stats-compact">
+    <div class="stat-item">
+      <span class="stat-item-label">Contacts</span>
+      <span class="stat-item-value">{{ .TotalContacts }}</span>
     </div>
-
-    <div class="stat-card stat-warning">
-      <div class="stat-number">{{ .OverdueCount }}</div>
-      <div class="stat-label">Overdue Follow-ups</div>
-      <a href="/overdue" class="stat-link">View Overdue →</a>
+    <div class="stat-item">
+      <span class="stat-item-label">Overdue</span>
+      <span class="stat-item-value warning">{{ .OverdueCount }}</span>
     </div>
-
-    <div class="stat-card">
-      <div class="stat-number">{{ .QSOCount }}</div>
-      <div class="stat-label">QSO Contacts</div>
-      <a href="/qsl" class="stat-link">View Log →</a>
+    <div class="stat-item">
+      <span class="stat-item-label">QSOs</span>
+      <span class="stat-item-value">{{ .QSOCount }}</span>
     </div>
-  </div>
-
-  <div class="quick-actions">
-    <h3>Quick Actions</h3>
-    <div class="action-grid">
-      <a href="/contact/new" class="action-btn">
-        <span class="action-text">Add Contact</span>
-      </a>
-      <a href="/qsl" class="action-btn">
-        <span class="action-text">Import ADIF</span>
-      </a>
-      <a href="/tags" class="action-btn">
-        <span class="action-text">Manage Tags</span>
-      </a>
+    <div class="stat-item">
+      <span class="stat-item-label">Inventory</span>
+      <span class="stat-item-value">{{ .InventoryCount }}</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-item-label">Notes</span>
+      <span class="stat-item-value">{{ .NotesCount }}</span>
     </div>
   </div>
+
+  <div class="welcome-actions">
+    {{ if gt .OverdueCount 0 }}
+    <a href="/overdue" class="btn">View Overdue Contacts ({{ .OverdueCount }})</a>
+    {{ end }}
+    <a href="/whatsapp" class="btn{{ if eq .WhatsAppStatus "connected" }} btn-success{{ end }}">WhatsApp: {{ .WhatsAppStatus }}</a>
+  </div>
+
+  {{ if .RecentQSOs }}
+  <div class="recent-section">
+    <h3>Recent QSOs</h3>
+    <div class="entry-list">
+      {{ range .RecentQSOs }}
+      <a href="/qsl/{{ .ID }}">
+        <div class="entry">
+          <div class="entry-title">{{ .Call }}</div>
+          <div class="entry-meta">
+            {{ .FormatDate }} {{ .FormatTime }}
+            {{ if .Mode }}• {{ .Mode }}{{ end }}
+            {{ if .Band }}• {{ .Band }}{{ end }}
+            {{ if .Country }}• {{ .Country }}{{ end }}
+          </div>
+        </div>
+      </a>
+      {{ end }}
+    </div>
+  </div>
+  {{ end }}
 
   {{ if .RecentContacts }}
   <div class="recent-section">
     <h3>Recently Updated</h3>
     <div class="entry-list">
       {{ range .RecentContacts }}
-      <div class="entry">
-        <a href="/contact/{{ .ID }}">
+      <a href="/contact/{{ .ID }}">
+        <div class="entry">
           <div class="entry-title">{{ .NameDisplay }}</div>
           {{ if .Organization }}
-          <div class="muted-text">{{ .Organization }}</div>
+          <div class="entry-meta">{{ .Organization }}</div>
           {{ end }}
-        </a>
-      </div>
+        </div>
+      </a>
       {{ end }}
     </div>
   </div>

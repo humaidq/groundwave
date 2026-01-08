@@ -1,5 +1,18 @@
 {{ template "head" . }}
 
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
 <div class="page-header">
   <h2>Tag Management</h2>
   <a href="/contacts" class="btn">← Back to Contacts</a>
@@ -13,7 +26,7 @@
   <input type="text" name="q" placeholder="Search tags..." value="{{ .SearchQuery }}" class="form-item">
   <button type="submit" class="btn">Search</button>
   {{ if .SearchQuery }}
-  <a href="/tags" class="btn btn-secondary">Clear</a>
+  <a href="/tags" class="btn">Clear</a>
   {{ end }}
 </form>
 

@@ -15,7 +15,7 @@ pkgs.buildGoModule {
   subPackages = [ "." ];
 
   meta = with pkgs.lib; {
-    description = "Groundwave - Personal CRM with Amateur Radio Logging";
+    description = "Groundwave - Personal Database";
     homepage = "https://github.com/humaidq/groundwave";
     license = licenses.asl20;
     maintainers = [ ];

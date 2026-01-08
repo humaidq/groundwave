@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/flamego/flamego"
+	"github.com/flamego/session"
 	"github.com/flamego/template"
 
 	"github.com/humaidq/groundwave/db"
@@ -36,32 +37,40 @@ func ListTags(c flamego.Context, t template.Template, data template.Data) {
 		data["SearchQuery"] = searchQuery
 	}
 
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "Tags", URL: "/tags", IsCurrent: true},
+	}
 	t.HTML(http.StatusOK, "tags")
 }
 
 // EditTagForm renders the edit tag form
-func EditTagForm(c flamego.Context, t template.Template, data template.Data) {
+func EditTagForm(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	tagID := c.Param("id")
 	if tagID == "" {
-		data["Error"] = "Tag ID is required"
-		t.HTML(http.StatusBadRequest, "error")
+		SetErrorFlash(s, "Tag ID is required")
+		c.Redirect("/tags", http.StatusSeeOther)
 		return
 	}
 
 	tag, err := db.GetTag(c.Request().Context(), tagID)
 	if err != nil {
 		log.Printf("Error fetching tag %s: %v", tagID, err)
-		data["Error"] = "Tag not found"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "Tag not found")
+		c.Redirect("/tags", http.StatusSeeOther)
 		return
 	}
 
 	data["Tag"] = tag
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "Tags", URL: "/tags", IsCurrent: false},
+		{Name: tag.Name, URL: "/tags/" + tagID + "/contacts", IsCurrent: false},
+		{Name: "Edit", URL: "", IsCurrent: true},
+	}
 	t.HTML(http.StatusOK, "tag_edit")
 }
 
 // UpdateTag handles tag rename/update
-func UpdateTag(c flamego.Context) {
+func UpdateTag(c flamego.Context, s session.Session) {
 	tagID := c.Param("id")
 	if tagID == "" {
 		c.Redirect("/tags", http.StatusSeeOther)
@@ -92,25 +101,28 @@ func UpdateTag(c flamego.Context) {
 	err := db.RenameTag(c.Request().Context(), tagID, name, getOptionalString("description"))
 	if err != nil {
 		log.Printf("Error updating tag: %v", err)
+		SetErrorFlash(s, "Failed to update tag")
+	} else {
+		SetSuccessFlash(s, "Tag updated successfully")
 	}
 
 	c.Redirect("/tags", http.StatusSeeOther)
 }
 
 // ViewTagContacts shows all contacts with a specific tag
-func ViewTagContacts(c flamego.Context, t template.Template, data template.Data) {
+func ViewTagContacts(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	tagID := c.Param("id")
 	if tagID == "" {
-		data["Error"] = "Tag ID is required"
-		t.HTML(http.StatusBadRequest, "error")
+		SetErrorFlash(s, "Tag ID is required")
+		c.Redirect("/tags", http.StatusSeeOther)
 		return
 	}
 
 	tag, err := db.GetTag(c.Request().Context(), tagID)
 	if err != nil {
 		log.Printf("Error fetching tag %s: %v", tagID, err)
-		data["Error"] = "Tag not found"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "Tag not found")
+		c.Redirect("/tags", http.StatusSeeOther)
 		return
 	}
 
@@ -123,5 +135,9 @@ func ViewTagContacts(c flamego.Context, t template.Template, data template.Data)
 	}
 
 	data["Tag"] = tag
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "Tags", URL: "/tags", IsCurrent: false},
+		{Name: tag.Name, URL: "", IsCurrent: true},
+	}
 	t.HTML(http.StatusOK, "tag_contacts")
 }

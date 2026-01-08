@@ -17,7 +17,7 @@ import (
 func main() {
 	app := &cli.Command{
 		Name:  "groundwave",
-		Usage: "Groundwave - Personal CRM with Amateur Radio Logging",
+		Usage: "Groundwave - Personal Database",
 		Commands: []*cli.Command{
 			cmd.CmdStart,
 			cmd.CmdMigrate,

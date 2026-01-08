@@ -1,5 +1,18 @@
 {{ template "head" . }}
 
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
 <h2>Edit Contact</h2>
 
 {{ if .Error }}
@@ -88,18 +101,18 @@
   {{ end }}
 
   <div class="form-group">
-    <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #e0e0e0;">
-    <h4 style="margin-bottom: 0.5rem;">Contact Type</h4>
+    <hr class="contact-type-divider">
+    <h4 class="contact-type-heading">Contact Type</h4>
     {{ if .Contact.IsService }}
-    <p class="muted-text" style="margin-bottom: 1rem;">This is a service contact. Service contacts have simplified profiles without relationship tracking features.</p>
-    <button type="submit" name="toggle_service" value="true" class="btn btn-secondary"
+    <p class="muted-text contact-type-description">This is a service contact. Service contacts have simplified profiles without relationship tracking features.</p>
+    <button type="submit" name="toggle_service" value="true" class="btn"
             onclick="document.getElementById('service_type').value='false'; return true;">
       Convert to Personal Contact
     </button>
     <input type="hidden" id="service_type" name="is_service" value="false">
     {{ else }}
-    <p class="muted-text" style="margin-bottom: 1rem;">This is a personal contact with full relationship tracking features.</p>
-    <button type="submit" name="toggle_service" value="true" class="btn btn-secondary"
+    <p class="muted-text contact-type-description">This is a personal contact with full relationship tracking features.</p>
+    <button type="submit" name="toggle_service" value="true" class="btn"
             onclick="if(confirm('Convert to service contact? This will hide relationship tracking features like tier, notes, and contact logs.')) { document.getElementById('service_type').value='true'; return true; } return false;">
       Convert to Service Contact
     </button>

@@ -14,7 +14,7 @@ let
 in
 {
   options.services.groundwave = {
-    enable = mkEnableOption "Groundwave personal CRM with amateur radio logging";
+    enable = mkEnableOption "Groundwave personal service";
 
     port = mkOption {
       type = types.port;
@@ -57,7 +57,7 @@ in
 
     # Systemd service
     systemd.services.groundwave = {
-      description = "Groundwave Personal CRM";
+      description = "Groundwave Personal Service";
       wantedBy = [ "multi-user.target" ];
       after = [
         "network.target"

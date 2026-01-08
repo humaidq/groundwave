@@ -165,7 +165,22 @@
                 return;
             }
 
-            listEl.innerHTML = contacts.map(contact => {
+            // Sort contacts: alphabetically by name, with linked/service contacts at the bottom
+            const sortedContacts = contacts.slice().sort((a, b) => {
+                const aIsLinked = a.IsLinked || a.IsService || false;
+                const bIsLinked = b.IsLinked || b.IsService || false;
+
+                // If one is linked and the other isn't, linked goes to bottom
+                if (aIsLinked && !bIsLinked) return 1;
+                if (!aIsLinked && bIsLinked) return -1;
+
+                // Otherwise, sort alphabetically by display name
+                const aName = (a.DisplayName || `${a.GivenName || ''} ${a.FamilyName || ''}`.trim() || 'Unnamed Contact').toLowerCase();
+                const bName = (b.DisplayName || `${b.GivenName || ''} ${b.FamilyName || ''}`.trim() || 'Unnamed Contact').toLowerCase();
+                return aName.localeCompare(bName);
+            });
+
+            listEl.innerHTML = sortedContacts.map(contact => {
                 const displayName = contact.DisplayName || `${contact.GivenName || ''} ${contact.FamilyName || ''}`.trim() || 'Unnamed Contact';
                 const primaryEmail = contact.Emails && contact.Emails.length > 0 ? contact.Emails[0].Email : '';
                 const isLinked = contact.IsLinked || false;

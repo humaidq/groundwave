@@ -2,6 +2,37 @@
  * Copyright 2025 Humaid Alqasimi
  * SPDX-License-Identifier: Apache-2.0
  */
+
+/* Design System Documentation (for reference only)
+ * These values document the existing spacing/typography scales
+ * They are not used as CSS variables yet, but serve as a guide for consistency
+ *
+ * Spacing scale (used throughout):
+ *   --spacing-xs: 0.5rem
+ *   --spacing-sm: 1rem
+ *   --spacing-md: 1.5rem
+ *   --spacing-lg: 2rem
+ *
+ * Font sizes:
+ *   --font-size-base: 1.15em
+ *   --font-size-small: 0.9rem
+ *   --font-size-large: 1.1rem
+ *
+ * Colors - Grays (light mode):
+ *   --gray-100: #f9f9f9
+ *   --gray-200: #e0e0e0
+ *   --gray-400: #999
+ *   --gray-600: #666
+ *   --gray-800: #333
+ *
+ * Colors - Grays (dark mode):
+ *   --dark-gray-100: #3c4043
+ *   --dark-gray-200: #444
+ *   --dark-gray-400: #999
+ *   --dark-gray-600: #ccc
+ *   --dark-gray-800: #eee
+ */
+
 /* Page style matching your website */
 html {
   overflow-y: scroll;
@@ -106,12 +137,22 @@ code, pre {
 
 .btn {
   display: inline-block;
-  font-align: center;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.4;
+  vertical-align: middle;
+  text-align: center;
   color: #333;
   background-color: #fafafa;
-  padding: 3px 5px;
-  border: #ccc 1px solid;
+  padding: 3px 8px;
+  border: 1px solid #ccc;
+  border-radius: 0;
   text-decoration: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
 }
 
 .btn:focus {
@@ -122,6 +163,19 @@ code, pre {
   background-color: #dc3545;
   color: #fff;
   border: 1px solid #bd2130;
+}
+
+/* Utility Classes */
+.ml-half {
+  margin-left: 0.5rem;
+}
+
+.hidden {
+  display: none;
+}
+
+.inline-form {
+  display: inline;
 }
 
 /* Alert */
@@ -165,6 +219,35 @@ code, pre {
   border-color: #dc3545;
   background-color: #f8d7da;
 }
+
+/* Breadcrumb Navigation */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.breadcrumb-item {
+  color: inherit;
+  text-decoration: none;
+}
+
+.breadcrumb-item:hover {
+  text-decoration: underline;
+}
+
+.breadcrumb-separator {
+  color: #999;
+  font-weight: 300;
+}
+
+.breadcrumb-current {
+  color: #666;
+}
+
 textarea, input {
   border-radius: 0;
   border: #ccc 1px solid;
@@ -280,6 +363,12 @@ input {
   .qso-summary small {
     font-size: 0.6rem;
   }
+}
+
+/* QSO list: Current entry indicator (non-clickable) */
+.qso-current {
+  color: #666;
+  text-decoration: none;
 }
 
 /* Latest QSOs table styling */
@@ -468,6 +557,20 @@ section {
   text-decoration: underline;
 }
 
+.tier-heading {
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #134dae;
+  color: #134dae;
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.tier-heading:first-of-type {
+  margin-top: 1rem;
+}
+
 .project a {
   display: inline;
 }
@@ -574,6 +677,14 @@ code:not(pre code) {
     background-color: #3a1a1e;
   }
 
+  .breadcrumb-separator {
+    color: #666;
+  }
+
+  .breadcrumb-current {
+    color: #999;
+  }
+
   .meta p {
     color: #aaa;
   }
@@ -614,6 +725,10 @@ code:not(pre code) {
 
   .qso-summary th {
     background-color: #3c4043;
+  }
+
+  .qso-current {
+    color: #999;
   }
 }
 
@@ -920,6 +1035,21 @@ code:not(pre code) {
   padding-bottom: 0.5rem;
 }
 
+/* Contact type section styling */
+.contact-type-divider {
+  margin: 1.5rem 0;
+  border: none;
+  border-top: 1px solid #e0e0e0;
+}
+
+.contact-type-heading {
+  margin-bottom: 0.5rem;
+}
+
+.contact-type-description {
+  margin-bottom: 1rem;
+}
+
 .contact-meta {
   margin-bottom: 1rem;
   display: flex;
@@ -1159,22 +1289,54 @@ code:not(pre code) {
 .item-delete-form {
   margin: 0;
   padding: 0;
+  display: inline;
+}
+
+/* Inline action buttons for items (edit/delete) */
+.contact-item-actions {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  margin-left: 0.5rem;
+}
+
+.btn-edit,
+.btn-delete {
+  background: none;
+  border: 1px solid transparent;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s, border-color 0.2s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-edit {
+  color: #666;
+}
+
+.btn-edit:hover {
+  background-color: #f0f0f0;
+  border-color: #ccc;
+  color: #333;
+}
+
+.btn-edit:focus {
+  outline: 0.2rem solid #ffbf47;
 }
 
 .btn-delete {
-  background: none;
-  border: none;
   color: #dc3545;
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  transition: background-color 0.2s;
 }
 
 .btn-delete:hover {
   background-color: #fee;
+  border-color: #fcc;
   color: #c82333;
 }
 
@@ -1182,15 +1344,8 @@ code:not(pre code) {
   outline: 0.2rem solid #ffbf47;
 }
 
-.btn-danger {
-  background-color: #dc3545;
-  color: white;
-  border-color: #dc3545;
-}
-
 .btn-danger:hover {
   background-color: #c82333;
-  border-color: #bd2130;
 }
 
 /* Contacts List Styles */
@@ -1482,6 +1637,10 @@ code:not(pre code) {
     border-bottom-color: #666;
   }
 
+  .contact-type-divider {
+    border-top-color: #444;
+  }
+
   .detail-label {
     color: #aaa;
   }
@@ -1589,8 +1748,19 @@ code:not(pre code) {
     border-top-color: #666;
   }
 
+  .btn-edit {
+    color: #aaa;
+  }
+
+  .btn-edit:hover {
+    background-color: #434449;
+    border-color: #666;
+    color: #eee;
+  }
+
   .btn-delete:hover {
     background-color: #3a1a1e;
+    border-color: #5a2a2e;
   }
 
   .btn-danger {
@@ -1646,7 +1816,38 @@ code:not(pre code) {
   display: none;
 }
 
-/* Mobile Navigation Hamburger Menu */
+/* Header */
+.govuk-header {
+  background-color: #134dae;
+  margin-top: 1rem;
+}
+
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header-logo {
+  color: #ffffff;
+  font-size: 1.25rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.header-logo:hover {
+  text-decoration: underline;
+}
+
+.header-logo:focus {
+  outline: 2px solid #ffbf47;
+  outline-offset: 2px;
+}
+
+/* Navigation Bar */
 .navbar {
   position: relative;
   background-color: #134dae;
@@ -1656,37 +1857,25 @@ code:not(pre code) {
   display: none;
   flex-direction: column;
   justify-content: space-around;
-  width: 2rem;
-  height: 2rem;
+  width: 1.75rem;
+  height: 1.75rem;
   background: transparent;
   border: none;
   cursor: pointer;
   padding: 0;
   z-index: 10;
-  margin: 0.5rem auto;
 }
 
 .nav-hamburger span {
-  width: 2rem;
-  height: 0.2rem;
-  background: #fefefe;
-  border-radius: 10px;
-  transition: all 0.3s linear;
-  position: relative;
-  transform-origin: 1px;
+  width: 1.75rem;
+  height: 0.15rem;
+  background: #ffffff;
+  border-radius: 2px;
 }
 
-.nav-hamburger.active span:nth-child(1) {
-  transform: rotate(45deg);
-}
-
-.nav-hamburger.active span:nth-child(2) {
-  opacity: 0;
-  transform: translateX(20px);
-}
-
-.nav-hamburger.active span:nth-child(3) {
-  transform: rotate(-45deg);
+.nav-hamburger:focus {
+  outline: 2px solid #ffbf47;
+  outline-offset: 2px;
 }
 
 .nav-menu {
@@ -1694,36 +1883,42 @@ code:not(pre code) {
   flex-direction: row;
   justify-content: center;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0;
+  gap: 0.25rem;
+  padding: 0.25rem 0;
   background-color: #134dae;
   margin: 0;
 }
 
 .nav-menu a {
-  color: #fefefe;
+  color: #ffffff;
   text-decoration: none;
-  padding: 0.5rem 0.75rem;
-  transition: background-color 0.2s;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.95rem;
+  border-radius: 3px;
+  transition: background-color 0.15s;
 }
 
 .nav-menu a:hover {
-  text-decoration: underline;
+  background-color: rgba(255, 255, 255, 0.15);
 }
 
 .nav-menu a:focus {
-  color: #000;
-  background-color: #ffbf47;
+  outline: 2px solid #ffbf47;
+  outline-offset: 1px;
 }
 
 .nav-menu a.nav-active {
-  background-color: #fefefe !important;
-  color: #000 !important;
-  display: inline-block !important;
+  background-color: #ffffff;
+  color: #134dae;
+  font-weight: 600;
   max-width: 300px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.nav-menu a.nav-active:hover {
+  background-color: #f0f0f0;
 }
 
 .nav-menu a.nav-active[title] {
@@ -1732,6 +1927,14 @@ code:not(pre code) {
 
 /* Mobile styles */
 @media only screen and (max-width: 780px) {
+  .header-container {
+    padding: 0.5rem 1rem;
+  }
+
+  .header-logo {
+    font-size: 1.1rem;
+  }
+
   .nav-hamburger {
     display: flex;
   }
@@ -1741,12 +1944,13 @@ code:not(pre code) {
     flex-direction: column;
     width: 100%;
     position: absolute;
-    top: 100%;
+    top: 0;
     left: 0;
     background-color: #134dae;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
     z-index: 999;
     gap: 0;
+    padding: 0;
   }
 
   .nav-menu.active {
@@ -1756,8 +1960,13 @@ code:not(pre code) {
   .nav-menu a {
     width: 100%;
     text-align: center;
-    padding: 1rem;
+    padding: 0.85rem;
+    border-radius: 0;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .nav-menu a:hover {
+    background-color: rgba(255, 255, 255, 0.1);
   }
 
   .nav-menu a.nav-active {
@@ -1765,11 +1974,27 @@ code:not(pre code) {
   }
 }
 
-/* Dark mode support for navbar */
+/* Dark mode */
 @media (prefers-color-scheme: dark) {
+  .govuk-header {
+    background-color: #1a1a1a;
+  }
+
+  .navbar {
+    background-color: #1a1a1a;
+  }
+
+  .nav-menu {
+    background-color: #1a1a1a;
+  }
+
   .nav-menu a.nav-active {
-    background-color: #303030 !important;
-    color: #fff !important;
+    background-color: #303030;
+    color: #ffffff;
+  }
+
+  .nav-menu a.nav-active:hover {
+    background-color: #404040;
   }
 }
 
@@ -1980,42 +2205,38 @@ code:not(pre code) {
   text-decoration: underline;
 }
 
-.quick-actions {
-  margin: 3rem 0;
+/* Compact stats for welcome page */
+.stats-compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 8px;
 }
 
-.quick-actions h3 {
-  margin-bottom: 1rem;
-}
-
-.action-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-}
-
-.action-btn {
+.stat-item {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1.5rem 1rem;
-  background: #fafafa;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  text-decoration: none;
-  color: #333;
-  transition: background-color 0.2s, border-color 0.2s;
+  gap: 0.25rem;
 }
 
-.action-btn:hover {
-  background: #f0f0f0;
-  border-color: #888;
+.stat-item-label {
+  font-size: 0.85rem;
+  color: #666;
+  font-weight: 500;
 }
 
-.action-text {
-  font-weight: 600;
-  font-size: 1rem;
+.stat-item-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #134dae;
+}
+
+.stat-item-value.warning {
+  color: #ffc107;
 }
 
 .recent-section {
@@ -2032,12 +2253,17 @@ code:not(pre code) {
     grid-template-columns: 1fr;
   }
 
-  .action-grid {
-    grid-template-columns: 1fr;
+  .stats-compact {
+    flex-direction: column;
+    gap: 1rem;
   }
 
   .stat-number {
     font-size: 2.5rem;
+  }
+
+  .stat-item-value {
+    font-size: 1.25rem;
   }
 }
 
@@ -2061,25 +2287,7 @@ code:not(pre code) {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 3px 5px;
-  background-color: #fafafa;
-  border: 1px solid #ccc;
   cursor: pointer;
-  font-size: 1rem;
-  color: #333;
-  transition: border-color 0.2s;
-}
-
-.tag-dropdown-toggle:hover {
-  border-color: #888;
-}
-
-.tag-dropdown-toggle:focus {
-  outline: 0.2rem solid #ffbf47;
-}
-
-.dropdown-label {
-  font-weight: 600;
 }
 
 .tag-count-badge {
@@ -2181,11 +2389,6 @@ code:not(pre code) {
   font-size: 0.85rem;
 }
 
-.btn-secondary {
-  background-color: #f6f8fa;
-  color: #24292f;
-  border-color: #d0d7de;
-}
 
 /* Tag Badges in Contact Lists */
 .entry-main-link {
@@ -2276,16 +2479,6 @@ code:not(pre code) {
   }
 
   /* Tag dropdown dark mode */
-  .tag-dropdown-toggle {
-    background-color: #3c4043;
-    border-color: #666;
-    color: #feffff;
-  }
-
-  .tag-dropdown-toggle:hover {
-    border-color: #888;
-  }
-
   .tag-count-badge {
     background-color: #1f6feb;
   }
@@ -2322,11 +2515,6 @@ code:not(pre code) {
     border-top-color: #555;
   }
 
-  .btn-secondary {
-    background-color: #3c4043;
-    color: #eee;
-    border-color: #666;
-  }
 
   /* Welcome page dark mode */
   .welcome-subtitle {
@@ -3033,5 +3221,316 @@ code:not(pre code) {
 
   .lab-ranges .range-value {
     color: #aaa;
+  }
+}
+
+/* AI Summary section */
+.ai-summary-section {
+  margin-bottom: 1rem;
+}
+
+.ai-summary-output {
+  display: none;
+  margin-top: 0.75rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ai-summary-output {
+    background: #2d2d2d;
+    border-color: #444;
+    color: #e0e0e0;
+  }
+}
+
+/* Inventory Status Badges */
+.status-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+.status-active {
+  background-color: #28a745;
+  color: white;
+}
+
+.status-stored {
+  background-color: #17a2b8;
+  color: white;
+}
+
+.status-damaged {
+  background-color: #ffc107;
+  color: #333;
+}
+
+.status-given {
+  background-color: #6f42c1;
+  color: white;
+}
+
+.status-disposed {
+  background-color: #6c757d;
+  color: white;
+}
+
+.status-lost {
+  background-color: #dc3545;
+  color: white;
+}
+
+/* Dark mode support for inventory status */
+@media (prefers-color-scheme: dark) {
+  .status-active {
+    background-color: #198754;
+  }
+
+  .status-stored {
+    background-color: #0dcaf0;
+    color: #000;
+  }
+
+  .status-damaged {
+    background-color: #ffca2c;
+    color: #000;
+  }
+
+  .status-given {
+    background-color: #7c4dff;
+  }
+
+  .status-disposed {
+    background-color: #5c636a;
+  }
+
+  .status-lost {
+    background-color: #bb2d3b;
+  }
+}
+
+/* Welcome Actions */
+.welcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+/* Button Variants */
+.btn-success {
+  background-color: #28a745;
+  color: white;
+  border-color: #28a745;
+}
+
+.btn-success:hover {
+  background-color: #218838;
+  border-color: #1e7e34;
+}
+
+/* WhatsApp Pairing Page */
+.whatsapp-container {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.whatsapp-status-box {
+  margin-bottom: 2rem;
+}
+
+.whatsapp-status-box .status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.whatsapp-status-box .status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.whatsapp-status-box .status-disconnected {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.whatsapp-status-box .status-disconnected .status-dot {
+  background-color: #dc3545;
+}
+
+.whatsapp-status-box .status-connecting,
+.whatsapp-status-box .status-pairing {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.whatsapp-status-box .status-connecting .status-dot,
+.whatsapp-status-box .status-pairing .status-dot {
+  background-color: #ffc107;
+}
+
+.whatsapp-status-box .status-connected {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.whatsapp-status-box .status-connected .status-dot {
+  background-color: #28a745;
+}
+
+.whatsapp-status-box .status-unavailable {
+  background-color: #e2e3e5;
+  color: #383d41;
+}
+
+.whatsapp-status-box .status-unavailable .status-dot {
+  background-color: #6c757d;
+}
+
+.qr-section,
+.connected-section,
+.connecting-section,
+.unavailable-section,
+.disconnected-section {
+  background-color: #f9f9f9;
+  padding: 2rem;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+.qr-section h3 {
+  margin-top: 0;
+}
+
+.qr-container {
+  text-align: center;
+  margin: 1.5rem 0;
+}
+
+.qr-code {
+  max-width: 256px;
+  height: auto;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.qr-loading {
+  padding: 4rem;
+  color: #666;
+}
+
+.qr-note {
+  font-size: 0.9rem;
+  color: #666;
+  text-align: center;
+}
+
+.success-message {
+  color: #155724;
+  font-weight: 600;
+}
+
+.error-message {
+  color: #721c24;
+  font-weight: 600;
+}
+
+.whatsapp-form {
+  margin-top: 1.5rem;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  margin: 1rem auto;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #134dae;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Dark mode support for WhatsApp */
+@media (prefers-color-scheme: dark) {
+  .btn-success {
+    background-color: #198754;
+    border-color: #198754;
+  }
+
+  .btn-success:hover {
+    background-color: #157347;
+    border-color: #146c43;
+  }
+
+  .whatsapp-status-box .status-disconnected {
+    background-color: #3a1a1e;
+    color: #f8d7da;
+  }
+
+  .whatsapp-status-box .status-connecting,
+  .whatsapp-status-box .status-pairing {
+    background-color: #3d3516;
+    color: #fff3cd;
+  }
+
+  .whatsapp-status-box .status-connected {
+    background-color: #1e3a24;
+    color: #d4edda;
+  }
+
+  .whatsapp-status-box .status-unavailable {
+    background-color: #3c4043;
+    color: #e2e3e5;
+  }
+
+  .qr-section,
+  .connected-section,
+  .connecting-section,
+  .unavailable-section,
+  .disconnected-section {
+    background-color: #2c2d30;
+    border-color: #555;
+  }
+
+  .qr-code {
+    border-color: #555;
+  }
+
+  .qr-loading,
+  .qr-note {
+    color: #aaa;
+  }
+
+  .success-message {
+    color: #81c784;
+  }
+
+  .error-message {
+    color: #f48fb1;
+  }
+
+  .loading-spinner {
+    border-color: #444;
+    border-top-color: #acbbf9;
   }
 }

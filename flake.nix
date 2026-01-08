@@ -1,7 +1,7 @@
 # Copyright 2025 Humaid Alqasimi
 # SPDX-License-Identifier: Apache-2.0
 {
-  description = "Groundwave - Personal CRM with Amateur Radio Logging";
+  description = "Groundwave - Not an OS";
 
   inputs = {
     # Our source of packages

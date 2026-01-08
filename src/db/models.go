@@ -63,9 +63,10 @@ type Contact struct {
 	Tier           Tier       `db:"tier"`
 	CallSign       *string    `db:"call_sign"`
 	IsService      bool       `db:"is_service"`
-	CardDAVUUID    *string    `db:"carddav_uuid"`
-	CreatedAt      time.Time  `db:"created_at"`
-	UpdatedAt      time.Time  `db:"updated_at"`
+	CardDAVUUID     *string    `db:"carddav_uuid"`
+	CreatedAt       time.Time  `db:"created_at"`
+	UpdatedAt       time.Time  `db:"updated_at"`
+	LastAutoContact *time.Time `db:"last_auto_contact"` // Auto-updated by WhatsApp message tracking
 }
 
 // EmailType represents the type of email
@@ -547,15 +548,28 @@ type ZettelCommentWithNote struct {
 	OrphanedNote   bool   `db:"orphaned_note"`   // True if zettel file not found
 }
 
+// InventoryStatus represents the status of an inventory item
+type InventoryStatus string
+
+const (
+	InventoryStatusActive   InventoryStatus = "active"
+	InventoryStatusStored   InventoryStatus = "stored"
+	InventoryStatusDamaged  InventoryStatus = "damaged"
+	InventoryStatusGiven    InventoryStatus = "given"
+	InventoryStatusDisposed InventoryStatus = "disposed"
+	InventoryStatusLost     InventoryStatus = "lost"
+)
+
 // InventoryItem represents an item in the inventory system
 type InventoryItem struct {
-	ID          int       `db:"id"`           // Numeric ID for DB relationships
-	InventoryID string    `db:"inventory_id"` // Formatted ID (GW-00001)
-	Name        string    `db:"name"`
-	Location    *string   `db:"location"`
-	Description *string   `db:"description"`
-	CreatedAt   time.Time `db:"created_at"`
-	UpdatedAt   time.Time `db:"updated_at"`
+	ID          int             `db:"id"`           // Numeric ID for DB relationships
+	InventoryID string          `db:"inventory_id"` // Formatted ID (GW-00001)
+	Name        string          `db:"name"`
+	Location    *string         `db:"location"`
+	Description *string         `db:"description"`
+	Status      InventoryStatus `db:"status"`
+	CreatedAt   time.Time       `db:"created_at"`
+	UpdatedAt   time.Time       `db:"updated_at"`
 }
 
 // InventoryComment represents a comment on an inventory item

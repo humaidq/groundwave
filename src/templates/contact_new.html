@@ -1,5 +1,18 @@
 {{ template "head" . }}
 
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
 <h2>Add New Contact</h2>
 
 {{ if .Error }}
@@ -12,7 +25,7 @@
 <div class="contact-create-options">
   <div class="create-option">
     <h3>Import from CardDAV</h3>
-    <p class="muted-text">Import an existing contact from your CardDAV server. The contact's name, organization, and job title will be automatically synced.</p>
+    <p class="muted-text">Import an existing contact from your CardDAV server (auto-sync).</p>
     <button type="button" class="btn" onclick="openCardDAVPicker()">Browse CardDAV Contacts</button>
   </div>
 
@@ -25,7 +38,7 @@
   </div>
 </div>
 
-<form method="POST" action="/contact/new" id="standalone-form" style="display: none;">
+<form method="POST" action="/contact/new" id="standalone-form" class="hidden">
   <div class="form-group">
     <label for="name_given" class="item-title">First Name <span class="required">*</span></label>
     <input type="text" id="name_given" name="name_given" class="form-item" required

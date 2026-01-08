@@ -69,7 +69,7 @@ func newWebDAVHTTPClient(config *WebDAVConfig) *http.Client {
 	}
 
 	return &http.Client{
-		Timeout:   30 * time.Second,
+		Timeout:   3 * time.Second, // Fast timeout for local/same-network WebDAV
 		Transport: transport,
 	}
 }

@@ -7,6 +7,12 @@
   <p>{{ if .Error }}{{ .Error }}{{ else }}An error occurred while processing your request.{{ end }}</p>
 </div>
 
-<p><a href="/" class="btn">← Back to Contacts</a></p>
+<p>
+  {{ if .BackLink }}
+    <a href="{{ .BackLink }}" class="btn">← Go Back</a>
+  {{ else }}
+    <a href="/" class="btn">← Back to Home</a>
+  {{ end }}
+</p>
 
 {{ template "foot" . }}

@@ -2,7 +2,7 @@
 
 ## Description
 
-The extension of my second brain. Vibe-coded mess. Contains contacts (CardDAV),
+A personal database. Vibe-coded mess. Contains contacts (CardDAV),
 QSL logs (ADIF), Zettelkasten (org-roam over WebDAV).
 
 ## Usage

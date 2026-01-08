@@ -6,6 +6,7 @@ package routes
 
 import (
 	"bytes"
+	"encoding/json"
 	htmltemplate "html/template"
 	"log"
 	"net/http"
@@ -14,12 +15,41 @@ import (
 	"time"
 
 	"github.com/flamego/flamego"
+	"github.com/flamego/session"
 	"github.com/flamego/template"
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/opts"
 
 	"github.com/humaidq/groundwave/db"
 )
+
+// ========== Health Breadcrumb Helpers ==========
+
+// BreadcrumbItem represents a single breadcrumb navigation item
+type BreadcrumbItem struct {
+	Name      string
+	URL       string
+	IsCurrent bool
+}
+
+// healthBreadcrumb returns the base "Health" breadcrumb
+func healthBreadcrumb(isCurrent bool) BreadcrumbItem {
+	return BreadcrumbItem{Name: "Health", URL: "/health", IsCurrent: isCurrent}
+}
+
+// profileBreadcrumb returns a breadcrumb for a health profile
+func profileBreadcrumb(profileID, profileName string, isCurrent bool) BreadcrumbItem {
+	return BreadcrumbItem{Name: profileName, URL: "/health/" + profileID, IsCurrent: isCurrent}
+}
+
+// followupBreadcrumb returns a breadcrumb for a followup
+func followupBreadcrumb(profileID, followupID, label string, isCurrent bool) BreadcrumbItem {
+	return BreadcrumbItem{
+		Name:      label,
+		URL:       "/health/" + profileID + "/followup/" + followupID,
+		IsCurrent: isCurrent,
+	}
+}
 
 // ========== Health Chart Helpers ==========
 
@@ -245,6 +275,9 @@ func generateLabTestChart(ctx flamego.Context, profileID, testName string) (stri
 // ListHealthProfiles displays all health profiles
 func ListHealthProfiles(c flamego.Context, t template.Template, data template.Data) {
 	data["IsHealth"] = true
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		healthBreadcrumb(true),
+	}
 
 	ctx := c.Request().Context()
 	profiles, err := db.ListHealthProfiles(ctx)
@@ -261,15 +294,20 @@ func ListHealthProfiles(c flamego.Context, t template.Template, data template.Da
 // NewHealthProfileForm renders the add profile form
 func NewHealthProfileForm(c flamego.Context, t template.Template, data template.Data) {
 	data["IsHealth"] = true
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		healthBreadcrumb(false),
+		{Name: "New Profile", URL: "", IsCurrent: true},
+	}
 	t.HTML(http.StatusOK, "health_profile_new")
 }
 
 // CreateHealthProfile handles profile creation
-func CreateHealthProfile(c flamego.Context) {
+func CreateHealthProfile(c flamego.Context, s session.Session) {
 	ctx := c.Request().Context()
 
 	if err := c.Request().ParseForm(); err != nil {
 		log.Printf("Error parsing form: %v", err)
+		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/health", http.StatusSeeOther)
 		return
 	}
@@ -277,6 +315,7 @@ func CreateHealthProfile(c flamego.Context) {
 	name := strings.TrimSpace(c.Request().Form.Get("name"))
 	if name == "" {
 		log.Printf("Profile name is required")
+		SetErrorFlash(s, "Profile name is required")
 		c.Redirect("/health/new", http.StatusSeeOther)
 		return
 	}
@@ -288,6 +327,7 @@ func CreateHealthProfile(c flamego.Context) {
 		parsed, err := time.Parse("2006-01-02", dobStr)
 		if err != nil {
 			log.Printf("Invalid date of birth format: %v", err)
+			SetErrorFlash(s, "Invalid date of birth format")
 			c.Redirect("/health/new", http.StatusSeeOther)
 			return
 		}
@@ -305,26 +345,27 @@ func CreateHealthProfile(c flamego.Context) {
 	profileID, err := db.CreateHealthProfile(ctx, name, dob, gender)
 	if err != nil {
 		log.Printf("Error creating health profile: %v", err)
+		SetErrorFlash(s, "Failed to create health profile")
 		c.Redirect("/health/new", http.StatusSeeOther)
 		return
 	}
 
 	log.Printf("Created health profile: %s", profileID)
+	SetSuccessFlash(s, "Health profile created successfully")
 	c.Redirect("/health/"+profileID, http.StatusSeeOther)
 }
 
 // ViewHealthProfile displays a single profile with all follow-ups
-func ViewHealthProfile(c flamego.Context, t template.Template, data template.Data) {
+func ViewHealthProfile(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	data["IsHealth"] = true
-
 	profileID := c.Param("id")
 	ctx := c.Request().Context()
 
 	profile, err := db.GetHealthProfile(ctx, profileID)
 	if err != nil {
 		log.Printf("Error fetching health profile %s: %v", profileID, err)
-		data["Error"] = "Profile not found"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "Profile not found")
+		c.Redirect("/health", http.StatusSeeOther)
 		return
 	}
 
@@ -407,31 +448,39 @@ func ViewHealthProfile(c flamego.Context, t template.Template, data template.Dat
 
 	data["Profile"] = profile
 	data["ProfileName"] = profile.Name
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		healthBreadcrumb(false),
+		profileBreadcrumb(profileID, profile.Name, true),
+	}
 	t.HTML(http.StatusOK, "health_profile_view")
 }
 
 // EditHealthProfileForm renders the edit profile form
-func EditHealthProfileForm(c flamego.Context, t template.Template, data template.Data) {
+func EditHealthProfileForm(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	data["IsHealth"] = true
-
 	profileID := c.Param("id")
 	ctx := c.Request().Context()
 
 	profile, err := db.GetHealthProfile(ctx, profileID)
 	if err != nil {
 		log.Printf("Error fetching health profile %s: %v", profileID, err)
-		data["Error"] = "Profile not found"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "Profile not found")
+		c.Redirect("/health", http.StatusSeeOther)
 		return
 	}
 
 	data["Profile"] = profile
 	data["ProfileName"] = profile.Name
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		healthBreadcrumb(false),
+		profileBreadcrumb(profileID, profile.Name, false),
+		{Name: "Edit", URL: "", IsCurrent: true},
+	}
 	t.HTML(http.StatusOK, "health_profile_edit")
 }
 
 // UpdateHealthProfile handles profile update
-func UpdateHealthProfile(c flamego.Context) {
+func UpdateHealthProfile(c flamego.Context, s session.Session) {
 	profileID := c.Param("id")
 	ctx := c.Request().Context()
 
@@ -477,17 +526,21 @@ func UpdateHealthProfile(c flamego.Context) {
 	}
 
 	log.Printf("Updated health profile: %s", profileID)
+	SetSuccessFlash(s, "Health profile updated successfully")
 	c.Redirect("/health/"+profileID, http.StatusSeeOther)
 }
 
 // DeleteHealthProfile handles profile deletion
-func DeleteHealthProfile(c flamego.Context) {
+func DeleteHealthProfile(c flamego.Context, s session.Session) {
 	profileID := c.Param("id")
 	ctx := c.Request().Context()
 
 	err := db.DeleteHealthProfile(ctx, profileID)
 	if err != nil {
 		log.Printf("Error deleting health profile %s: %v", profileID, err)
+		SetErrorFlash(s, "Failed to delete health profile")
+	} else {
+		SetSuccessFlash(s, "Health profile deleted successfully")
 	}
 
 	c.Redirect("/health", http.StatusSeeOther)
@@ -496,27 +549,31 @@ func DeleteHealthProfile(c flamego.Context) {
 // ========== Health Follow-up Handlers ==========
 
 // NewFollowupForm renders the add follow-up form
-func NewFollowupForm(c flamego.Context, t template.Template, data template.Data) {
+func NewFollowupForm(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	data["IsHealth"] = true
-
 	profileID := c.Param("profile_id")
 	ctx := c.Request().Context()
 
 	profile, err := db.GetHealthProfile(ctx, profileID)
 	if err != nil {
 		log.Printf("Error fetching health profile %s: %v", profileID, err)
-		data["Error"] = "Profile not found"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "Profile not found")
+		c.Redirect("/health", http.StatusSeeOther)
 		return
 	}
 
 	data["Profile"] = profile
 	data["ProfileName"] = profile.Name
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		healthBreadcrumb(false),
+		profileBreadcrumb(profileID, profile.Name, false),
+		{Name: "New Follow-up", URL: "", IsCurrent: true},
+	}
 	t.HTML(http.StatusOK, "health_followup_new")
 }
 
 // CreateFollowup handles follow-up creation
-func CreateFollowup(c flamego.Context) {
+func CreateFollowup(c flamego.Context, s session.Session) {
 	profileID := c.Param("profile_id")
 	ctx := c.Request().Context()
 
@@ -571,11 +628,12 @@ func CreateFollowup(c flamego.Context) {
 	}
 
 	log.Printf("Created follow-up: %s", followupID)
+	SetSuccessFlash(s, "Follow-up created successfully")
 	c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
 }
 
 // ViewFollowup displays a single follow-up with all lab results
-func ViewFollowup(c flamego.Context, t template.Template, data template.Data) {
+func ViewFollowup(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	data["IsHealth"] = true
 
 	profileID := c.Param("profile_id")
@@ -585,16 +643,16 @@ func ViewFollowup(c flamego.Context, t template.Template, data template.Data) {
 	profile, err := db.GetHealthProfile(ctx, profileID)
 	if err != nil {
 		log.Printf("Error fetching health profile %s: %v", profileID, err)
-		data["Error"] = "Profile not found"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "Profile not found")
+		c.Redirect("/health", http.StatusSeeOther)
 		return
 	}
 
 	followup, err := db.GetFollowup(ctx, followupID)
 	if err != nil {
 		log.Printf("Error fetching follow-up %s: %v", followupID, err)
-		data["Error"] = "Follow-up not found"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "Follow-up not found")
+		c.Redirect("/health/"+profileID, http.StatusSeeOther)
 		return
 	}
 
@@ -725,13 +783,19 @@ func ViewFollowup(c flamego.Context, t template.Template, data template.Data) {
 	}
 	data["Categories"] = categories
 
+	followupLabel := followup.FollowupDate.Format("Jan 2, 2006") + " - " + followup.HospitalName
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		healthBreadcrumb(false),
+		profileBreadcrumb(profileID, profile.Name, false),
+		followupBreadcrumb(profileID, followupID, followupLabel, true),
+	}
+
 	t.HTML(http.StatusOK, "health_followup_view")
 }
 
 // EditFollowupForm renders the edit follow-up form
-func EditFollowupForm(c flamego.Context, t template.Template, data template.Data) {
+func EditFollowupForm(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	data["IsHealth"] = true
-
 	profileID := c.Param("profile_id")
 	followupID := c.Param("id")
 	ctx := c.Request().Context()
@@ -739,27 +803,34 @@ func EditFollowupForm(c flamego.Context, t template.Template, data template.Data
 	profile, err := db.GetHealthProfile(ctx, profileID)
 	if err != nil {
 		log.Printf("Error fetching health profile %s: %v", profileID, err)
-		data["Error"] = "Profile not found"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "Profile not found")
+		c.Redirect("/health", http.StatusSeeOther)
 		return
 	}
 
 	followup, err := db.GetFollowup(ctx, followupID)
 	if err != nil {
 		log.Printf("Error fetching follow-up %s: %v", followupID, err)
-		data["Error"] = "Follow-up not found"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "Follow-up not found")
+		c.Redirect("/health/"+profileID, http.StatusSeeOther)
 		return
 	}
 
+	followupLabel := followup.FollowupDate.Format("Jan 2, 2006")
 	data["Profile"] = profile
 	data["ProfileName"] = profile.Name
 	data["Followup"] = followup
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		healthBreadcrumb(false),
+		profileBreadcrumb(profileID, profile.Name, false),
+		followupBreadcrumb(profileID, followupID, followupLabel, false),
+		{Name: "Edit", URL: "", IsCurrent: true},
+	}
 	t.HTML(http.StatusOK, "health_followup_edit")
 }
 
 // UpdateFollowup handles follow-up update
-func UpdateFollowup(c flamego.Context) {
+func UpdateFollowup(c flamego.Context, s session.Session) {
 	profileID := c.Param("profile_id")
 	followupID := c.Param("id")
 	ctx := c.Request().Context()
@@ -814,11 +885,12 @@ func UpdateFollowup(c flamego.Context) {
 	}
 
 	log.Printf("Updated follow-up: %s", followupID)
+	SetSuccessFlash(s, "Follow-up updated successfully")
 	c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
 }
 
 // DeleteFollowup handles follow-up deletion
-func DeleteFollowup(c flamego.Context) {
+func DeleteFollowup(c flamego.Context, s session.Session) {
 	profileID := c.Param("profile_id")
 	followupID := c.Param("id")
 	ctx := c.Request().Context()
@@ -826,6 +898,9 @@ func DeleteFollowup(c flamego.Context) {
 	err := db.DeleteFollowup(ctx, followupID)
 	if err != nil {
 		log.Printf("Error deleting follow-up %s: %v", followupID, err)
+		SetErrorFlash(s, "Failed to delete follow-up")
+	} else {
+		SetSuccessFlash(s, "Follow-up deleted successfully")
 	}
 
 	c.Redirect("/health/"+profileID, http.StatusSeeOther)
@@ -834,7 +909,7 @@ func DeleteFollowup(c flamego.Context) {
 // ========== Lab Result Handlers ==========
 
 // AddLabResult handles adding a lab result via inline form
-func AddLabResult(c flamego.Context) {
+func AddLabResult(c flamego.Context, s session.Session) {
 	profileID := c.Param("profile_id")
 	followupID := c.Param("followup_id")
 	ctx := c.Request().Context()
@@ -890,13 +965,13 @@ func AddLabResult(c flamego.Context) {
 	}
 
 	log.Printf("Created lab result: %s", resultID)
+	SetSuccessFlash(s, "Lab result added successfully")
 	c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
 }
 
 // EditLabResultForm renders the edit lab result form
-func EditLabResultForm(c flamego.Context, t template.Template, data template.Data) {
+func EditLabResultForm(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	data["IsHealth"] = true
-
 	profileID := c.Param("profile_id")
 	followupID := c.Param("followup_id")
 	resultID := c.Param("id")
@@ -905,36 +980,43 @@ func EditLabResultForm(c flamego.Context, t template.Template, data template.Dat
 	profile, err := db.GetHealthProfile(ctx, profileID)
 	if err != nil {
 		log.Printf("Error fetching health profile %s: %v", profileID, err)
-		data["Error"] = "Profile not found"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "Profile not found")
+		c.Redirect("/health", http.StatusSeeOther)
 		return
 	}
 
 	followup, err := db.GetFollowup(ctx, followupID)
 	if err != nil {
 		log.Printf("Error fetching follow-up %s: %v", followupID, err)
-		data["Error"] = "Follow-up not found"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "Follow-up not found")
+		c.Redirect("/health/"+profileID, http.StatusSeeOther)
 		return
 	}
 
 	result, err := db.GetLabResult(ctx, resultID)
 	if err != nil {
 		log.Printf("Error fetching lab result %s: %v", resultID, err)
-		data["Error"] = "Lab result not found"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "Lab result not found")
+		c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
 		return
 	}
 
+	followupLabel := followup.FollowupDate.Format("Jan 2, 2006")
 	data["Profile"] = profile
 	data["ProfileName"] = profile.Name
 	data["Followup"] = followup
 	data["Result"] = result
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		healthBreadcrumb(false),
+		profileBreadcrumb(profileID, profile.Name, false),
+		followupBreadcrumb(profileID, followupID, followupLabel, false),
+		{Name: "Edit Result", URL: "", IsCurrent: true},
+	}
 	t.HTML(http.StatusOK, "health_result_edit")
 }
 
 // UpdateLabResult handles lab result update
-func UpdateLabResult(c flamego.Context) {
+func UpdateLabResult(c flamego.Context, s session.Session) {
 	profileID := c.Param("profile_id")
 	followupID := c.Param("followup_id")
 	resultID := c.Param("id")
@@ -972,11 +1054,12 @@ func UpdateLabResult(c flamego.Context) {
 	}
 
 	log.Printf("Updated lab result: %s", resultID)
+	SetSuccessFlash(s, "Lab result updated successfully")
 	c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
 }
 
 // DeleteLabResult handles lab result deletion
-func DeleteLabResult(c flamego.Context) {
+func DeleteLabResult(c flamego.Context, s session.Session) {
 	profileID := c.Param("profile_id")
 	followupID := c.Param("followup_id")
 	resultID := c.Param("id")
@@ -985,7 +1068,111 @@ func DeleteLabResult(c flamego.Context) {
 	err := db.DeleteLabResult(ctx, resultID)
 	if err != nil {
 		log.Printf("Error deleting lab result %s: %v", resultID, err)
+		SetErrorFlash(s, "Failed to delete lab result")
+	} else {
+		SetSuccessFlash(s, "Lab result deleted successfully")
 	}
 
 	c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
+}
+
+// ========== AI Summary Handler ==========
+
+// GenerateAISummary handles AI-powered lab result summarization
+func GenerateAISummary(c flamego.Context) {
+	profileID := c.Param("profile_id")
+	followupID := c.Param("id")
+	ctx := c.Request().Context()
+
+	// Set JSON content type
+	c.ResponseWriter().Header().Set("Content-Type", "application/json")
+
+	// Helper to write JSON error response
+	writeError := func(message string, status int) {
+		c.ResponseWriter().WriteHeader(status)
+		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": message})
+	}
+
+	// Get profile
+	profile, err := db.GetHealthProfile(ctx, profileID)
+	if err != nil {
+		log.Printf("Error fetching health profile %s: %v", profileID, err)
+		writeError("Profile not found", http.StatusNotFound)
+		return
+	}
+
+	// Get followup
+	followup, err := db.GetFollowup(ctx, followupID)
+	if err != nil {
+		log.Printf("Error fetching follow-up %s: %v", followupID, err)
+		writeError("Follow-up not found", http.StatusNotFound)
+		return
+	}
+
+	// Get lab results
+	results, err := db.GetLabResultsByFollowupWithCalculated(ctx, followupID)
+	if err != nil {
+		log.Printf("Error fetching lab results for follow-up %s: %v", followupID, err)
+		writeError("Failed to load lab results", http.StatusInternalServerError)
+		return
+	}
+
+	// Build lab result summaries for the AI
+	var labSummaries []db.LabResultSummary
+
+	// Get age range for reference lookup
+	var ageRange db.AgeRange
+	if profile.DateOfBirth != nil {
+		ageRange = profile.GetAgeRange(followup.FollowupDate)
+	}
+
+	for _, categoryResults := range results {
+		for _, result := range categoryResults {
+			summary := db.LabResultSummary{
+				TestName:    result.TestName,
+				TestValue:   result.TestValue,
+				RangeStatus: "normal",
+			}
+
+			if result.TestUnit != nil {
+				summary.TestUnit = *result.TestUnit
+			}
+
+			// Get reference ranges if available
+			if profile.DateOfBirth != nil && profile.Gender != nil {
+				refRange, err := db.GetReferenceRange(ctx, result.TestName, ageRange, *profile.Gender)
+				if err == nil && refRange != nil {
+					refMin, refMax, _, _, _ := refRange.GetDisplayRange()
+					summary.RefMin = refMin
+					summary.RefMax = refMax
+
+					// Determine status
+					if refMin != nil && result.TestValue < *refMin {
+						summary.RangeStatus = "out_of_reference"
+					}
+					if refMax != nil && result.TestValue > *refMax {
+						summary.RangeStatus = "out_of_reference"
+					}
+				}
+			}
+
+			labSummaries = append(labSummaries, summary)
+		}
+	}
+
+	if len(labSummaries) == 0 {
+		writeError("No lab results to summarize", http.StatusBadRequest)
+		return
+	}
+
+	// Generate summary using Ollama
+	summary, err := db.GenerateLabSummary(ctx, profile, followup, labSummaries)
+	if err != nil {
+		log.Printf("Error generating AI summary: %v", err)
+		writeError("Failed to generate summary: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Return success response
+	json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"summary": summary})
 }

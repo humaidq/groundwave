@@ -1,5 +1,18 @@
 {{ template "head" . }}
 
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
 <div class="page-header">
   <h2>Edit Tag: {{ .Tag.Name }}</h2>
 </div>
@@ -22,7 +35,7 @@
 
   <div class="form-actions">
     <button type="submit" class="btn">Save Changes</button>
-    <a href="/tags" class="btn btn-secondary">Cancel</a>
+    <a href="/tags" class="btn">Cancel</a>
   </div>
 </form>
 

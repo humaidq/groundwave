@@ -88,7 +88,7 @@ func GetCardDAVConfig() (*CardDAVConfig, error) {
 func newCardDAVClient(config *CardDAVConfig) (*carddav.Client, error) {
 	// Create HTTP client with Basic Auth
 	httpClient := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: 3 * time.Second, // Fast timeout for local/same-network CardDAV
 		Transport: &basicAuthTransport{
 			Username: config.Username,
 			Password: config.Password,
@@ -125,7 +125,7 @@ func ListCardDAVContacts(ctx context.Context) ([]CardDAVContact, error) {
 
 	// Create HTTP client with Basic Auth
 	httpClient := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: 3 * time.Second, // Fast timeout for local/same-network CardDAV
 		Transport: &basicAuthTransport{
 			Username: config.Username,
 			Password: config.Password,

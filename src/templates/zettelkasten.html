@@ -1,5 +1,18 @@
 {{ template "head" . }}
 
+{{ if .ZKHistory }}
+<nav class="breadcrumb" aria-label="Navigation history">
+  {{ range $i, $h := .ZKHistory }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $h.IsCurrent }}
+      <span class="breadcrumb-current">{{ $h.Title }}</span>
+    {{ else }}
+      <a href="/zk/{{ $h.ID }}" class="breadcrumb-item">{{ $h.Title }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
 {{ if .Error }}
   <div class="zk-error">
     <h2>Error Loading Note</h2>
@@ -41,7 +54,7 @@
       {{ else }}
       <small>Links last updated: {{ .LastCacheUpdate.Format "Jan 2, 2006 3:04 PM" }}</small>
       {{ end }}
-      <form method="POST" action="/zk/refresh-links" style="display:inline" onsubmit="return confirm('This will scan all notes and may take a minute. Continue?');">
+      <form method="POST" action="/zk/refresh-links" class="inline-form" onsubmit="return confirm('This will scan all notes and may take a minute. Continue?');">
         {{ .CSRFToken }}
         <button type="submit" class="btn-small">Refresh Now</button>
       </form>

@@ -12,18 +12,33 @@ import (
 )
 
 // ListInventoryItems returns all inventory items ordered by id DESC (newest first)
-func ListInventoryItems(ctx context.Context) ([]InventoryItem, error) {
+// If status is provided, filters by that status
+func ListInventoryItems(ctx context.Context, status ...InventoryStatus) ([]InventoryItem, error) {
 	if pool == nil {
 		return nil, fmt.Errorf("database connection not initialized")
 	}
 
-	query := `
-		SELECT id, inventory_id, name, location, description, created_at, updated_at
-		FROM inventory_items
-		ORDER BY id DESC
-	`
+	var query string
+	var rows interface{ Next() bool; Scan(dest ...any) error; Close(); Err() error }
+	var err error
 
-	rows, err := pool.Query(ctx, query)
+	if len(status) > 0 && status[0] != "" {
+		query = `
+			SELECT id, inventory_id, name, location, description, status, created_at, updated_at
+			FROM inventory_items
+			WHERE status = $1
+			ORDER BY id DESC
+		`
+		rows, err = pool.Query(ctx, query, status[0])
+	} else {
+		query = `
+			SELECT id, inventory_id, name, location, description, status, created_at, updated_at
+			FROM inventory_items
+			ORDER BY id DESC
+		`
+		rows, err = pool.Query(ctx, query)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to query inventory items: %w", err)
 	}
@@ -38,6 +53,7 @@ func ListInventoryItems(ctx context.Context) ([]InventoryItem, error) {
 			&item.Name,
 			&item.Location,
 			&item.Description,
+			&item.Status,
 			&item.CreatedAt,
 			&item.UpdatedAt,
 		)
@@ -61,7 +77,7 @@ func GetInventoryItem(ctx context.Context, inventoryID string) (*InventoryItem, 
 	}
 
 	query := `
-		SELECT id, inventory_id, name, location, description, created_at, updated_at
+		SELECT id, inventory_id, name, location, description, status, created_at, updated_at
 		FROM inventory_items
 		WHERE inventory_id = $1
 	`
@@ -73,6 +89,7 @@ func GetInventoryItem(ctx context.Context, inventoryID string) (*InventoryItem, 
 		&item.Name,
 		&item.Location,
 		&item.Description,
+		&item.Status,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 	)
@@ -84,7 +101,7 @@ func GetInventoryItem(ctx context.Context, inventoryID string) (*InventoryItem, 
 }
 
 // CreateInventoryItem creates a new inventory item (inventory_id auto-generated)
-func CreateInventoryItem(ctx context.Context, name string, location *string, description *string) (string, error) {
+func CreateInventoryItem(ctx context.Context, name string, location *string, description *string, status InventoryStatus) (string, error) {
 	if pool == nil {
 		return "", fmt.Errorf("database connection not initialized")
 	}
@@ -94,14 +111,19 @@ func CreateInventoryItem(ctx context.Context, name string, location *string, des
 		return "", fmt.Errorf("name is required")
 	}
 
+	// Default to active if not specified
+	if status == "" {
+		status = InventoryStatusActive
+	}
+
 	query := `
-		INSERT INTO inventory_items (name, location, description)
-		VALUES ($1, $2, $3)
+		INSERT INTO inventory_items (name, location, description, status)
+		VALUES ($1, $2, $3, $4)
 		RETURNING inventory_id
 	`
 
 	var inventoryID string
-	err := pool.QueryRow(ctx, query, name, location, description).Scan(&inventoryID)
+	err := pool.QueryRow(ctx, query, name, location, description, status).Scan(&inventoryID)
 	if err != nil {
 		return "", fmt.Errorf("failed to create inventory item: %w", err)
 	}
@@ -110,7 +132,7 @@ func CreateInventoryItem(ctx context.Context, name string, location *string, des
 }
 
 // UpdateInventoryItem updates an existing inventory item
-func UpdateInventoryItem(ctx context.Context, inventoryID string, name string, location *string, description *string) error {
+func UpdateInventoryItem(ctx context.Context, inventoryID string, name string, location *string, description *string, status InventoryStatus) error {
 	if pool == nil {
 		return fmt.Errorf("database connection not initialized")
 	}
@@ -121,11 +143,11 @@ func UpdateInventoryItem(ctx context.Context, inventoryID string, name string, l
 
 	query := `
 		UPDATE inventory_items
-		SET name = $1, location = $2, description = $3
-		WHERE inventory_id = $4
+		SET name = $1, location = $2, description = $3, status = $4
+		WHERE inventory_id = $5
 	`
 
-	result, err := pool.Exec(ctx, query, name, location, description, inventoryID)
+	result, err := pool.Exec(ctx, query, name, location, description, status, inventoryID)
 	if err != nil {
 		return fmt.Errorf("failed to update inventory item: %w", err)
 	}
@@ -275,4 +297,20 @@ func DeleteInventoryComment(ctx context.Context, commentID uuid.UUID) error {
 	}
 
 	return nil
+}
+
+// GetInventoryCount returns the total number of inventory items
+func GetInventoryCount(ctx context.Context) (int, error) {
+	if pool == nil {
+		return 0, fmt.Errorf("database connection not initialized")
+	}
+
+	var count int
+	query := `SELECT COUNT(*) FROM inventory_items`
+	err := pool.QueryRow(ctx, query).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count inventory items: %w", err)
+	}
+
+	return count, nil
 }

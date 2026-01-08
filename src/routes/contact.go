@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/flamego/flamego"
+	"github.com/flamego/session"
 	"github.com/flamego/template"
 
 	"github.com/humaidq/groundwave/db"
@@ -19,11 +20,25 @@ import (
 // NewContactForm renders the add contact form
 func NewContactForm(c flamego.Context, t template.Template, data template.Data) {
 	data["IsNewContact"] = true
+	isService := c.Query("is_service") == "true"
+	data["IsService"] = isService
+	if isService {
+		data["Breadcrumbs"] = []BreadcrumbItem{
+			{Name: "Contacts", URL: "/contacts", IsCurrent: false},
+			{Name: "Service Contacts", URL: "/service-contacts", IsCurrent: false},
+			{Name: "New Service Contact", URL: "", IsCurrent: true},
+		}
+	} else {
+		data["Breadcrumbs"] = []BreadcrumbItem{
+			{Name: "Contacts", URL: "/contacts", IsCurrent: false},
+			{Name: "New Contact", URL: "", IsCurrent: true},
+		}
+	}
 	t.HTML(http.StatusOK, "contact_new")
 }
 
 // CreateContact handles the contact creation form submission
-func CreateContact(c flamego.Context, t template.Template, data template.Data) {
+func CreateContact(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	// Parse form data
 	if err := c.Request().ParseForm(); err != nil {
 		log.Printf("Error parsing form: %v", err)
@@ -131,23 +146,24 @@ func CreateContact(c flamego.Context, t template.Template, data template.Data) {
 
 	// Redirect to contact view page on success
 	log.Printf("Successfully created contact: %s", contactID)
+	SetSuccessFlash(s, "Contact created successfully")
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 }
 
 // ViewContact displays a contact's details
-func ViewContact(c flamego.Context, t template.Template, data template.Data) {
+func ViewContact(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	contactID := c.Param("id")
 	if contactID == "" {
-		data["Error"] = "Contact ID is required"
-		t.HTML(http.StatusBadRequest, "error")
+		SetErrorFlash(s, "Contact ID is required")
+		c.Redirect("/contacts", http.StatusSeeOther)
 		return
 	}
 
 	contact, err := db.GetContact(c.Request().Context(), contactID)
 	if err != nil {
 		log.Printf("Error fetching contact %s: %v", contactID, err)
-		data["Error"] = "Contact not found"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "Contact not found")
+		c.Redirect("/contacts", http.StatusSeeOther)
 		return
 	}
 
@@ -170,6 +186,18 @@ func ViewContact(c flamego.Context, t template.Template, data template.Data) {
 	data["ContactName"] = contact.NameDisplay
 	data["TierLower"] = strings.ToLower(string(contact.Tier))
 	data["CardDAVContact"] = contact.CardDAVContact
+	if contact.IsService {
+		data["Breadcrumbs"] = []BreadcrumbItem{
+			{Name: "Contacts", URL: "/contacts", IsCurrent: false},
+			{Name: "Service Contacts", URL: "/service-contacts", IsCurrent: false},
+			{Name: contact.NameDisplay, URL: "", IsCurrent: true},
+		}
+	} else {
+		data["Breadcrumbs"] = []BreadcrumbItem{
+			{Name: "Contacts", URL: "/contacts", IsCurrent: false},
+			{Name: contact.NameDisplay, URL: "", IsCurrent: true},
+		}
+	}
 
 	// If contact has a call sign, fetch QSOs
 	if contact.CallSign != nil && *contact.CallSign != "" {
@@ -185,33 +213,47 @@ func ViewContact(c flamego.Context, t template.Template, data template.Data) {
 }
 
 // EditContactForm displays the edit contact form
-func EditContactForm(c flamego.Context, t template.Template, data template.Data) {
+func EditContactForm(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	contactID := c.Param("id")
 	if contactID == "" {
-		data["Error"] = "Contact ID is required"
-		t.HTML(http.StatusBadRequest, "error")
+		SetErrorFlash(s, "Contact ID is required")
+		c.Redirect("/contacts", http.StatusSeeOther)
 		return
 	}
 
 	contact, err := db.GetContact(c.Request().Context(), contactID)
 	if err != nil {
 		log.Printf("Error fetching contact %s: %v", contactID, err)
-		data["Error"] = "Contact not found"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "Contact not found")
+		c.Redirect("/contacts", http.StatusSeeOther)
 		return
 	}
 
 	data["Contact"] = contact
 	data["ContactName"] = contact.NameDisplay
+	if contact.IsService {
+		data["Breadcrumbs"] = []BreadcrumbItem{
+			{Name: "Contacts", URL: "/contacts", IsCurrent: false},
+			{Name: "Service Contacts", URL: "/service-contacts", IsCurrent: false},
+			{Name: contact.NameDisplay, URL: "/contact/" + contactID, IsCurrent: false},
+			{Name: "Edit", URL: "", IsCurrent: true},
+		}
+	} else {
+		data["Breadcrumbs"] = []BreadcrumbItem{
+			{Name: "Contacts", URL: "/contacts", IsCurrent: false},
+			{Name: contact.NameDisplay, URL: "/contact/" + contactID, IsCurrent: false},
+			{Name: "Edit", URL: "", IsCurrent: true},
+		}
+	}
 	t.HTML(http.StatusOK, "contact_edit")
 }
 
 // UpdateContact handles the contact update form submission
-func UpdateContact(c flamego.Context, t template.Template, data template.Data) {
+func UpdateContact(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	contactID := c.Param("id")
 	if contactID == "" {
-		data["Error"] = "Contact ID is required"
-		t.HTML(http.StatusBadRequest, "error")
+		SetErrorFlash(s, "Contact ID is required")
+		c.Redirect("/contacts", http.StatusSeeOther)
 		return
 	}
 
@@ -281,6 +323,7 @@ func UpdateContact(c flamego.Context, t template.Template, data template.Data) {
 
 	// Redirect to contact view page on success
 	log.Printf("Successfully updated contact: %s", contactID)
+	SetSuccessFlash(s, "Contact updated successfully")
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 }
 
@@ -475,7 +518,7 @@ func DeleteURL(c flamego.Context) {
 }
 
 // DeleteContact handles deleting an entire contact
-func DeleteContact(c flamego.Context) {
+func DeleteContact(c flamego.Context, s session.Session) {
 	contactID := c.Param("id")
 
 	if contactID == "" {
@@ -486,6 +529,9 @@ func DeleteContact(c flamego.Context) {
 	err := db.DeleteContact(c.Request().Context(), contactID)
 	if err != nil {
 		log.Printf("Error deleting contact: %v", err)
+		SetErrorFlash(s, "Failed to delete contact")
+	} else {
+		SetSuccessFlash(s, "Contact deleted successfully")
 	}
 
 	c.Redirect("/", http.StatusSeeOther)
@@ -816,5 +862,9 @@ func ListServiceContacts(c flamego.Context, t template.Template, data template.D
 	}
 
 	data["IsServiceContacts"] = true
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "Contacts", URL: "/contacts", IsCurrent: false},
+		{Name: "Service Contacts", URL: "", IsCurrent: true},
+	}
 	t.HTML(http.StatusOK, "service_contacts")
 }

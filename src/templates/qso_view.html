@@ -1,4 +1,18 @@
 {{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
 {{ with .QSO }}
 <h2>{{ .Call }}{{ if .HasContact }} - <a href="/contact/{{ .GetContactID }}">View Contact</a>{{ end }}</h2>
 
@@ -139,7 +153,7 @@
 {{ range .AllQSOs }}
   <div class="entry">
     {{ if eq .ID $.QSO.ID.String }}
-    <span style="color: #666; text-decoration: none;">
+    <span class="qso-current">
       {{ .FormatDate }} at {{ .FormatTime }} UTC (current)
     </span>
     {{ else }}

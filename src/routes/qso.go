@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/flamego/flamego"
+	"github.com/flamego/session"
 	"github.com/flamego/template"
 
 	"github.com/humaidq/groundwave/db"
@@ -32,6 +33,9 @@ func QSL(c flamego.Context, t template.Template, data template.Data) {
 	}
 
 	data["IsQSL"] = true
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "QSL", URL: "/qsl", IsCurrent: true},
+	}
 	t.HTML(http.StatusOK, "qsl")
 }
 
@@ -75,6 +79,10 @@ func ViewQSO(c flamego.Context, t template.Template, data template.Data) {
 	data["QSO"] = qso
 	data["MapURL"] = mapURL
 	data["IsQSOView"] = true
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "QSL", URL: "/qsl", IsCurrent: false},
+		{Name: qso.Call, URL: "", IsCurrent: true},
+	}
 	t.HTML(http.StatusOK, "qso_view")
 }
 
@@ -101,7 +109,7 @@ func generateMapIfNeeded(fileName, myGrid, theirGrid string) {
 }
 
 // ImportADIF handles ADIF file upload and import
-func ImportADIF(c flamego.Context, t template.Template, data template.Data) {
+func ImportADIF(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	// Parse multipart form (max 10MB)
 	err := c.Request().ParseMultipartForm(10 << 20)
 	if err != nil {
@@ -167,6 +175,11 @@ func ImportADIF(c flamego.Context, t template.Template, data template.Data) {
 	skipped := len(parser.QSOs) - processed
 	log.Printf("Successfully processed %d QSOs from ADIF file (skipped %d with invalid timestamps)", processed, skipped)
 
-	// Redirect to QSL page
+	// Redirect to QSL page with success message
+	if skipped > 0 {
+		SetSuccessFlash(s, fmt.Sprintf("Successfully imported %d QSOs (%d skipped)", processed, skipped))
+	} else {
+		SetSuccessFlash(s, fmt.Sprintf("Successfully imported %d QSOs", processed))
+	}
 	c.Redirect("/qsl", http.StatusSeeOther)
 }

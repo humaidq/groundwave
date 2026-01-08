@@ -1,5 +1,18 @@
 {{ template "head" . }}
 
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
 <div class="page-header">
   <h2>Edit {{ .Item.InventoryID }}</h2>
 </div>
@@ -14,19 +27,19 @@
   <div class="form-section">
     <h3>Item Information</h3>
 
-    <div class="form-field">
-      <label class="form-label">Inventory ID</label>
+    <div class="form-group">
+      <label class="item-title">Inventory ID</label>
       <input type="text" class="form-item" value="{{ .Item.InventoryID }}" disabled>
       <p class="help-text">Auto-generated and cannot be changed.</p>
     </div>
 
-    <div class="form-field">
-      <label for="name" class="form-label">Name <span class="required">*</span></label>
+    <div class="form-group">
+      <label for="name" class="item-title">Name <span class="required">*</span></label>
       <input type="text" name="name" id="name" class="form-item" required value="{{ .Item.Name }}">
     </div>
 
-    <div class="form-field">
-      <label for="location" class="form-label">Location</label>
+    <div class="form-group">
+      <label for="location" class="item-title">Location</label>
       <input type="text" name="location" id="location" class="form-item" list="location-suggestions"
              value="{{ if .Item.Location }}{{ .Item.Location }}{{ end }}">
       <datalist id="location-suggestions">
@@ -36,15 +49,25 @@
       </datalist>
     </div>
 
-    <div class="form-field">
-      <label for="description" class="form-label">Description</label>
+    <div class="form-group">
+      <label for="description" class="item-title">Description</label>
       <textarea name="description" id="description" class="form-item" rows="4">{{ if .Item.Description }}{{ .Item.Description }}{{ end }}</textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="status" class="item-title">Status</label>
+      <select name="status" id="status" class="form-item">
+        {{ $currentStatus := .Item.Status }}
+        {{ range .StatusOptions }}
+        <option value="{{ .Value }}"{{ if eq .Value $currentStatus }} selected{{ end }}>{{ .Label }}</option>
+        {{ end }}
+      </select>
     </div>
   </div>
 
   <div class="form-actions">
     <button type="submit" class="btn">Update Item</button>
-    <a href="/inventory/{{ .Item.InventoryID }}" class="btn btn-secondary">Cancel</a>
+    <a href="/inventory/{{ .Item.InventoryID }}" class="btn">Cancel</a>
   </div>
 </form>
 

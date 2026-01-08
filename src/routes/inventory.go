@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/flamego/flamego"
+	"github.com/flamego/session"
 	"github.com/flamego/template"
 	"github.com/google/uuid"
 
@@ -18,29 +19,43 @@ import (
 )
 
 // InventoryList renders the inventory list page
-func InventoryList(c flamego.Context, t template.Template, data template.Data) {
+func InventoryList(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	ctx := c.Request().Context()
 
-	// Fetch all inventory items
-	items, err := db.ListInventoryItems(ctx)
+	// Get status filter from query parameter
+	statusFilter := c.Query("status")
+	var items []db.InventoryItem
+	var err error
+
+	if statusFilter != "" {
+		items, err = db.ListInventoryItems(ctx, db.InventoryStatus(statusFilter))
+	} else {
+		items, err = db.ListInventoryItems(ctx)
+	}
+
 	if err != nil {
 		log.Printf("Error fetching inventory items: %v", err)
-		data["Error"] = "Failed to load inventory items"
-		t.HTML(http.StatusInternalServerError, "error")
+		SetErrorFlash(s, "Failed to load inventory items")
+		c.Redirect("/", http.StatusSeeOther)
 		return
 	}
 
 	data["Items"] = items
 	data["IsInventory"] = true
+	data["StatusFilter"] = statusFilter
+	data["StatusOptions"] = getInventoryStatusOptions()
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "Inventory", URL: "/inventory", IsCurrent: true},
+	}
 	t.HTML(http.StatusOK, "inventory")
 }
 
 // ViewInventoryItem renders a single inventory item with comments and files
-func ViewInventoryItem(c flamego.Context, t template.Template, data template.Data) {
+func ViewInventoryItem(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	inventoryID := c.Param("id")
 	if inventoryID == "" {
-		data["Error"] = "Inventory ID is required"
-		t.HTML(http.StatusBadRequest, "error")
+		SetErrorFlash(s, "Inventory ID is required")
+		c.Redirect("/inventory", http.StatusSeeOther)
 		return
 	}
 
@@ -50,8 +65,8 @@ func ViewInventoryItem(c flamego.Context, t template.Template, data template.Dat
 	item, err := db.GetInventoryItem(ctx, inventoryID)
 	if err != nil {
 		log.Printf("Error fetching inventory item %s: %v", inventoryID, err)
-		data["Error"] = "Inventory item not found"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "Inventory item not found")
+		c.Redirect("/inventory", http.StatusSeeOther)
 		return
 	}
 
@@ -77,7 +92,29 @@ func ViewInventoryItem(c flamego.Context, t template.Template, data template.Dat
 	data["Comments"] = comments
 	data["Files"] = files
 	data["IsInventory"] = true
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "Inventory", URL: "/inventory", IsCurrent: false},
+		{Name: item.Name, URL: "", IsCurrent: true},
+	}
 	t.HTML(http.StatusOK, "inventory_view")
+}
+
+// InventoryStatusOption represents a status option for templates
+type InventoryStatusOption struct {
+	Value string
+	Label string
+}
+
+// getInventoryStatusOptions returns all available inventory status options
+func getInventoryStatusOptions() []InventoryStatusOption {
+	return []InventoryStatusOption{
+		{Value: string(db.InventoryStatusActive), Label: "Active"},
+		{Value: string(db.InventoryStatusStored), Label: "Stored"},
+		{Value: string(db.InventoryStatusDamaged), Label: "Damaged"},
+		{Value: string(db.InventoryStatusGiven), Label: "Given"},
+		{Value: string(db.InventoryStatusDisposed), Label: "Disposed"},
+		{Value: string(db.InventoryStatusLost), Label: "Lost"},
+	}
 }
 
 // NewInventoryItemForm renders the create inventory item form
@@ -92,16 +129,21 @@ func NewInventoryItemForm(c flamego.Context, t template.Template, data template.
 	}
 
 	data["Locations"] = locations
+	data["StatusOptions"] = getInventoryStatusOptions()
 	data["IsInventory"] = true
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "Inventory", URL: "/inventory", IsCurrent: false},
+		{Name: "New Item", URL: "", IsCurrent: true},
+	}
 	t.HTML(http.StatusOK, "inventory_new")
 }
 
 // CreateInventoryItem handles inventory item creation
-func CreateInventoryItem(c flamego.Context, t template.Template, data template.Data) {
+func CreateInventoryItem(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	if err := c.Request().ParseForm(); err != nil {
 		log.Printf("Error parsing form: %v", err)
-		data["Error"] = "Failed to parse form data"
-		t.HTML(http.StatusBadRequest, "inventory_new")
+		SetErrorFlash(s, "Failed to parse form data")
+		c.Redirect("/inventory/new", http.StatusSeeOther)
 		return
 	}
 
@@ -109,50 +151,44 @@ func CreateInventoryItem(c flamego.Context, t template.Template, data template.D
 
 	name := strings.TrimSpace(form.Get("name"))
 	if name == "" {
-		data["Error"] = "Name is required"
-		data["FormData"] = form
-		// Re-fetch locations for the form
-		ctx := c.Request().Context()
-		locations, _ := db.GetDistinctLocations(ctx)
-		data["Locations"] = locations
-		data["IsInventory"] = true
-		t.HTML(http.StatusBadRequest, "inventory_new")
+		SetErrorFlash(s, "Name is required")
+		c.Redirect("/inventory/new", http.StatusSeeOther)
 		return
 	}
 
 	location := getOptionalString(form.Get("location"))
 	description := getOptionalString(form.Get("description"))
+	status := db.InventoryStatus(form.Get("status"))
+	if status == "" {
+		status = db.InventoryStatusActive
+	}
 
 	ctx := c.Request().Context()
 
 	// Create item
-	inventoryID, err := db.CreateInventoryItem(ctx, name, location, description)
+	inventoryID, err := db.CreateInventoryItem(ctx, name, location, description, status)
 	if err != nil {
 		log.Printf("Error creating inventory item: %v", err)
-		data["Error"] = "Failed to create inventory item"
-		data["FormData"] = form
-		// Re-fetch locations for the form
-		locations, _ := db.GetDistinctLocations(ctx)
-		data["Locations"] = locations
-		data["IsInventory"] = true
-		t.HTML(http.StatusInternalServerError, "inventory_new")
+		SetErrorFlash(s, "Failed to create inventory item")
+		c.Redirect("/inventory/new", http.StatusSeeOther)
 		return
 	}
 
-	// Redirect to view page
+	// Redirect to view page with success message
+	SetSuccessFlash(s, "Inventory item created successfully")
 	c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
 }
 
 // EditInventoryItemForm renders the edit form
-func EditInventoryItemForm(c flamego.Context, t template.Template, data template.Data) {
+func EditInventoryItemForm(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	inventoryID := c.Param("id")
 	ctx := c.Request().Context()
 
 	item, err := db.GetInventoryItem(ctx, inventoryID)
 	if err != nil {
 		log.Printf("Error fetching inventory item: %v", err)
-		data["Error"] = "Inventory item not found"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "Inventory item not found")
+		c.Redirect("/inventory", http.StatusSeeOther)
 		return
 	}
 
@@ -165,17 +201,24 @@ func EditInventoryItemForm(c flamego.Context, t template.Template, data template
 
 	data["Item"] = item
 	data["Locations"] = locations
+	data["StatusOptions"] = getInventoryStatusOptions()
 	data["IsInventory"] = true
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "Inventory", URL: "/inventory", IsCurrent: false},
+		{Name: item.Name, URL: "/inventory/" + inventoryID, IsCurrent: false},
+		{Name: "Edit", URL: "", IsCurrent: true},
+	}
 	t.HTML(http.StatusOK, "inventory_edit")
 }
 
 // UpdateInventoryItem handles inventory item updates
-func UpdateInventoryItem(c flamego.Context, t template.Template, data template.Data) {
+func UpdateInventoryItem(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	inventoryID := c.Param("id")
 
 	if err := c.Request().ParseForm(); err != nil {
 		log.Printf("Error parsing form: %v", err)
-		c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
+		SetErrorFlash(s, "Failed to parse form")
+		c.Redirect("/inventory/"+inventoryID+"/edit", http.StatusSeeOther)
 		return
 	}
 
@@ -183,43 +226,46 @@ func UpdateInventoryItem(c flamego.Context, t template.Template, data template.D
 
 	name := strings.TrimSpace(form.Get("name"))
 	if name == "" {
-		data["Error"] = "Name is required"
+		SetErrorFlash(s, "Name is required")
 		c.Redirect("/inventory/"+inventoryID+"/edit", http.StatusSeeOther)
 		return
 	}
 
 	location := getOptionalString(form.Get("location"))
 	description := getOptionalString(form.Get("description"))
+	status := db.InventoryStatus(form.Get("status"))
 
 	ctx := c.Request().Context()
 
-	if err := db.UpdateInventoryItem(ctx, inventoryID, name, location, description); err != nil {
+	if err := db.UpdateInventoryItem(ctx, inventoryID, name, location, description, status); err != nil {
 		log.Printf("Error updating inventory item: %v", err)
-		data["Error"] = "Failed to update inventory item"
+		SetErrorFlash(s, "Failed to update inventory item")
 		c.Redirect("/inventory/"+inventoryID+"/edit", http.StatusSeeOther)
 		return
 	}
 
+	SetSuccessFlash(s, "Inventory item updated successfully")
 	c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
 }
 
 // DeleteInventoryItem handles inventory item deletion
-func DeleteInventoryItem(c flamego.Context, t template.Template, data template.Data) {
+func DeleteInventoryItem(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	inventoryID := c.Param("id")
 	ctx := c.Request().Context()
 
 	if err := db.DeleteInventoryItem(ctx, inventoryID); err != nil {
 		log.Printf("Error deleting inventory item: %v", err)
-		data["Error"] = "Failed to delete inventory item"
-		t.HTML(http.StatusInternalServerError, "error")
+		SetErrorFlash(s, "Failed to delete inventory item")
+		c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
 		return
 	}
 
+	SetSuccessFlash(s, "Inventory item deleted successfully")
 	c.Redirect("/inventory", http.StatusSeeOther)
 }
 
 // AddInventoryComment handles adding a comment
-func AddInventoryComment(c flamego.Context, t template.Template, data template.Data) {
+func AddInventoryComment(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	inventoryID := c.Param("id")
 	ctx := c.Request().Context()
 
@@ -227,7 +273,8 @@ func AddInventoryComment(c flamego.Context, t template.Template, data template.D
 	item, err := db.GetInventoryItem(ctx, inventoryID)
 	if err != nil {
 		log.Printf("Error fetching inventory item: %v", err)
-		c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
+		SetErrorFlash(s, "Inventory item not found")
+		c.Redirect("/inventory", http.StatusSeeOther)
 		return
 	}
 
@@ -245,22 +292,24 @@ func AddInventoryComment(c flamego.Context, t template.Template, data template.D
 
 	if err := db.CreateInventoryComment(ctx, item.ID, content); err != nil {
 		log.Printf("Error creating comment: %v", err)
-		data["Error"] = "Failed to add comment"
-		t.HTML(http.StatusInternalServerError, "error")
+		SetErrorFlash(s, "Failed to add comment")
+		c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
 		return
 	}
 
+	SetSuccessFlash(s, "Comment added successfully")
 	c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
 }
 
 // DeleteInventoryComment handles comment deletion
-func DeleteInventoryComment(c flamego.Context, t template.Template, data template.Data) {
+func DeleteInventoryComment(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	inventoryID := c.Param("id")
 	commentIDStr := c.Param("comment_id")
 
 	commentID, err := uuid.Parse(commentIDStr)
 	if err != nil {
 		log.Printf("Invalid comment ID: %v", err)
+		SetErrorFlash(s, "Invalid comment ID")
 		c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
 		return
 	}
@@ -269,16 +318,17 @@ func DeleteInventoryComment(c flamego.Context, t template.Template, data templat
 
 	if err := db.DeleteInventoryComment(ctx, commentID); err != nil {
 		log.Printf("Error deleting comment: %v", err)
-		data["Error"] = "Failed to delete comment"
-		t.HTML(http.StatusInternalServerError, "error")
+		SetErrorFlash(s, "Failed to delete comment")
+		c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
 		return
 	}
 
+	SetSuccessFlash(s, "Comment deleted successfully")
 	c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
 }
 
 // DownloadInventoryFile proxies a file download from WebDAV
-func DownloadInventoryFile(c flamego.Context, t template.Template, data template.Data) {
+func DownloadInventoryFile(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	inventoryID := c.Param("id")
 	filename := c.Param("filename")
 
@@ -288,8 +338,8 @@ func DownloadInventoryFile(c flamego.Context, t template.Template, data template
 	fileData, contentType, err := db.FetchInventoryFile(ctx, inventoryID, filename)
 	if err != nil {
 		log.Printf("Error fetching file: %v", err)
-		data["Error"] = "File not found"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "File not found")
+		c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
 		return
 	}
 

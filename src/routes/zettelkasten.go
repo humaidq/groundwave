@@ -5,27 +5,100 @@
 package routes
 
 import (
+	"encoding/gob"
 	"log"
 	"net/http"
 	"strings"
 
 	"github.com/flamego/flamego"
+	"github.com/flamego/session"
 	"github.com/flamego/template"
 	"github.com/google/uuid"
 
 	"github.com/humaidq/groundwave/db"
 )
 
+// ZKHistoryItem represents a visited zettelkasten note in navigation history
+type ZKHistoryItem struct {
+	ID        string
+	Title     string
+	IsCurrent bool
+}
+
+const zkHistoryKey = "zk_history"
+const zkHistoryMaxItems = 4
+
+func init() {
+	// Register ZKHistoryItem slice for session serialization
+	gob.Register([]ZKHistoryItem{})
+}
+
+// getZKHistory retrieves the navigation history from session
+func getZKHistory(s session.Session) []ZKHistoryItem {
+	val := s.Get(zkHistoryKey)
+	if val == nil {
+		return []ZKHistoryItem{}
+	}
+	history, ok := val.([]ZKHistoryItem)
+	if !ok {
+		return []ZKHistoryItem{}
+	}
+	return history
+}
+
+// updateZKHistory adds a new item to the history (FIFO, max 4 items)
+func updateZKHistory(s session.Session, noteID, noteTitle string) []ZKHistoryItem {
+	history := getZKHistory(s)
+
+	// Remove any existing entry for this note (avoid duplicates)
+	filtered := make([]ZKHistoryItem, 0, len(history))
+	for _, item := range history {
+		if item.ID != noteID {
+			filtered = append(filtered, item)
+		}
+	}
+	history = filtered
+
+	// Add new item at the end
+	history = append(history, ZKHistoryItem{
+		ID:    noteID,
+		Title: noteTitle,
+	})
+
+	// Keep only the last N items (FIFO)
+	if len(history) > zkHistoryMaxItems {
+		history = history[len(history)-zkHistoryMaxItems:]
+	}
+
+	// Save to session
+	s.Set(zkHistoryKey, history)
+
+	return history
+}
+
+// prepareZKHistoryForTemplate marks the current item and returns the history
+func prepareZKHistoryForTemplate(history []ZKHistoryItem, currentID string) []ZKHistoryItem {
+	result := make([]ZKHistoryItem, len(history))
+	for i, item := range history {
+		result[i] = ZKHistoryItem{
+			ID:        item.ID,
+			Title:     item.Title,
+			IsCurrent: item.ID == currentID,
+		}
+	}
+	return result
+}
+
 // ZettelkastenIndex renders the zettelkasten index page
-func ZettelkastenIndex(c flamego.Context, t template.Template, data template.Data) {
+func ZettelkastenIndex(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	ctx := c.Request().Context()
 
 	// Fetch the index note
 	note, err := db.GetIndexNote(ctx)
 	if err != nil {
 		log.Printf("Error fetching zettelkasten index: %v", err)
-		data["Error"] = "Failed to load zettelkasten. Please check your WEBDAV_ZK_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables."
-		t.HTML(http.StatusInternalServerError, "error")
+		SetErrorFlash(s, "Failed to load zettelkasten. Please check your WEBDAV_ZK_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables.")
+		c.Redirect("/", http.StatusSeeOther)
 		return
 	}
 
@@ -40,21 +113,29 @@ func ZettelkastenIndex(c flamego.Context, t template.Template, data template.Dat
 		}
 	}
 
+	// Update navigation history
+	var history []ZKHistoryItem
+	if note.ID != "" {
+		history = updateZKHistory(s, note.ID, note.Title)
+		history = prepareZKHistoryForTemplate(history, note.ID)
+	}
+
 	// Set template data
 	data["Note"] = note
 	data["Comments"] = comments
 	data["NoteID"] = note.ID // Pass note ID explicitly
 	data["IsZettelkasten"] = true
+	data["ZKHistory"] = history
 
 	t.HTML(http.StatusOK, "zettelkasten")
 }
 
 // ViewZKNote renders a specific note by ID
-func ViewZKNote(c flamego.Context, t template.Template, data template.Data) {
+func ViewZKNote(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	noteID := c.Param("id")
 	if noteID == "" {
-		data["Error"] = "Note ID is required"
-		t.HTML(http.StatusBadRequest, "error")
+		SetErrorFlash(s, "Note ID is required")
+		c.Redirect("/zk", http.StatusSeeOther)
 		return
 	}
 
@@ -67,9 +148,8 @@ func ViewZKNote(c flamego.Context, t template.Template, data template.Data) {
 	note, err := db.GetNoteByID(ctx, noteID)
 	if err != nil {
 		log.Printf("Error fetching note %s: %v", noteID, err)
-		data["Error"] = "Note not found: " + noteID
-		data["BackLink"] = "/zk"
-		t.HTML(http.StatusNotFound, "error")
+		SetErrorFlash(s, "Note not found: "+noteID)
+		c.Redirect("/zk", http.StatusSeeOther)
 		return
 	}
 
@@ -106,6 +186,10 @@ func ViewZKNote(c flamego.Context, t template.Template, data template.Data) {
 	// Get last cache build time
 	lastCacheUpdate := db.GetLastCacheBuildTime()
 
+	// Update navigation history
+	history := updateZKHistory(s, noteID, note.Title)
+	history = prepareZKHistoryForTemplate(history, noteID)
+
 	// Set template data
 	data["Note"] = note
 	data["Comments"] = comments
@@ -113,16 +197,17 @@ func ViewZKNote(c flamego.Context, t template.Template, data template.Data) {
 	data["Backlinks"] = backlinks
 	data["LastCacheUpdate"] = lastCacheUpdate
 	data["IsZettelkasten"] = true
+	data["ZKHistory"] = history
 
 	t.HTML(http.StatusOK, "zettelkasten")
 }
 
 // AddZettelComment handles posting a comment to a zettel
-func AddZettelComment(c flamego.Context, t template.Template, data template.Data) {
+func AddZettelComment(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	zettelID := c.Param("id")
 	if zettelID == "" {
-		data["Error"] = "Zettel ID is required"
-		t.HTML(http.StatusBadRequest, "error")
+		SetErrorFlash(s, "Zettel ID is required")
+		c.Redirect("/zk", http.StatusSeeOther)
 		return
 	}
 
@@ -132,13 +217,13 @@ func AddZettelComment(c flamego.Context, t template.Template, data template.Data
 	// Parse form
 	if err := c.Request().ParseForm(); err != nil {
 		log.Printf("Error parsing form: %v", err)
-		c.Redirect("/zk/" + zettelID)
+		c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
 		return
 	}
 
 	content := strings.TrimSpace(c.Request().Form.Get("content"))
 	if content == "" {
-		c.Redirect("/zk/" + zettelID)
+		c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
 		return
 	}
 
@@ -147,23 +232,24 @@ func AddZettelComment(c flamego.Context, t template.Template, data template.Data
 	// Create comment
 	if err := db.CreateZettelComment(ctx, zettelID, content); err != nil {
 		log.Printf("Error creating zettel comment: %v", err)
-		data["Error"] = "Failed to add comment"
-		t.HTML(http.StatusInternalServerError, "error")
+		SetErrorFlash(s, "Failed to add comment")
+		c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
 		return
 	}
 
-	// Redirect back to the zettel
-	c.Redirect("/zk/" + zettelID)
+	// Redirect back to the zettel with success message
+	SetSuccessFlash(s, "Comment added successfully")
+	c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
 }
 
 // DeleteZettelComment handles deleting a comment
-func DeleteZettelComment(c flamego.Context, t template.Template, data template.Data) {
+func DeleteZettelComment(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	zettelID := c.Param("id")
 	commentIDStr := c.Param("comment_id")
 
 	if zettelID == "" || commentIDStr == "" {
-		data["Error"] = "Invalid request"
-		t.HTML(http.StatusBadRequest, "error")
+		SetErrorFlash(s, "Invalid request")
+		c.Redirect("/zk", http.StatusSeeOther)
 		return
 	}
 
@@ -171,8 +257,8 @@ func DeleteZettelComment(c flamego.Context, t template.Template, data template.D
 	commentID, err := uuid.Parse(commentIDStr)
 	if err != nil {
 		log.Printf("Invalid comment ID: %v", err)
-		data["Error"] = "Invalid comment ID"
-		t.HTML(http.StatusBadRequest, "error")
+		SetErrorFlash(s, "Invalid comment ID")
+		c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
 		return
 	}
 
@@ -181,40 +267,43 @@ func DeleteZettelComment(c flamego.Context, t template.Template, data template.D
 	// Delete comment
 	if err := db.DeleteZettelComment(ctx, commentID); err != nil {
 		log.Printf("Error deleting zettel comment: %v", err)
-		data["Error"] = "Failed to delete comment"
-		t.HTML(http.StatusInternalServerError, "error")
+		SetErrorFlash(s, "Failed to delete comment")
+		c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
 		return
 	}
 
-	// Redirect back to the zettel
-	c.Redirect("/zk/" + zettelID)
+	// Redirect back to the zettel with success message
+	SetSuccessFlash(s, "Comment deleted successfully")
+	c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
 }
 
 // RefreshBacklinks manually triggers a backlink cache rebuild
-func RefreshBacklinks(c flamego.Context) {
-	ctx := c.Request().Context()
+func RefreshBacklinks(c flamego.Context, s session.Session) {
+	// Trigger cache rebuild asynchronously to avoid blocking the HTTP request
+	go func() {
+		if err := db.BuildBacklinkCache(c.Request().Context()); err != nil {
+			log.Printf("[ERROR] Manual backlink cache refresh failed: %v", err)
+		} else {
+			log.Println("[INFO] Manual backlink cache refresh completed successfully")
+		}
+	}()
 
-	// Trigger cache rebuild
-	if err := db.BuildBacklinkCache(ctx); err != nil {
-		log.Printf("Error refreshing backlink cache: %v", err)
-		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	// Redirect back to the zettelkasten index
-	c.Redirect("/zk")
+	// Immediately redirect back to the zettelkasten index with info message
+	// Cache will be rebuilt in the background
+	SetInfoFlash(s, "Backlink cache refresh started in background")
+	c.Redirect("/zk", http.StatusSeeOther)
 }
 
 // ZettelCommentsInbox renders the unified inbox of all zettel comments
-func ZettelCommentsInbox(c flamego.Context, t template.Template, data template.Data) {
+func ZettelCommentsInbox(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	ctx := c.Request().Context()
 
 	// Fetch all comments with zettel metadata
 	comments, err := db.GetAllZettelComments(ctx)
 	if err != nil {
 		log.Printf("Error fetching zettel comments: %v", err)
-		data["Error"] = "Failed to load comments inbox"
-		t.HTML(http.StatusInternalServerError, "error")
+		SetErrorFlash(s, "Failed to load comments inbox")
+		c.Redirect("/zk", http.StatusSeeOther)
 		return
 	}
 
@@ -259,6 +348,10 @@ func ZettelCommentsInbox(c flamego.Context, t template.Template, data template.D
 	data["Groups"] = groups
 	data["CommentCount"] = len(comments)
 	data["IsZettelkasten"] = true
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "Zettelkasten", URL: "/zk", IsCurrent: false},
+		{Name: "Comments Inbox", URL: "", IsCurrent: true},
+	}
 
 	t.HTML(http.StatusOK, "zettel_inbox")
 }

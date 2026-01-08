@@ -22,6 +22,7 @@ import (
 	"github.com/humaidq/groundwave/routes"
 	"github.com/humaidq/groundwave/static"
 	"github.com/humaidq/groundwave/templates"
+	"github.com/humaidq/groundwave/whatsapp"
 )
 
 var CmdStart = &cli.Command{
@@ -82,6 +83,15 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		// Don't fail startup, just log the error
 	}
 
+	// Initialize WhatsApp client (optional feature)
+	log.Println("Initializing WhatsApp client...")
+	if err := whatsapp.Initialize(ctx, databaseURL, handleWhatsAppMessage); err != nil {
+		log.Printf("Warning: WhatsApp initialization failed: %v", err)
+		// Don't fail startup, WhatsApp is optional
+	} else {
+		log.Println("WhatsApp client initialized successfully")
+	}
+
 	// Create maps directory if it doesn't exist
 	if err := os.MkdirAll("maps", 0755); err != nil {
 		return fmt.Errorf("failed to create maps directory: %w", err)
@@ -111,6 +121,12 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	f.Use(template.Templater(template.Options{
 		FileSystem: fs,
 	}))
+	// Flash message middleware - retrieve flash from session and pass to templates
+	f.Use(func(data template.Data, flash session.Flash) {
+		if msg, ok := flash.(routes.FlashMessage); ok {
+			data["Flash"] = msg
+		}
+	})
 	f.Use(flamego.Static(flamego.StaticOptions{
 		FileSystem: http.FS(static.Static),
 	}))
@@ -219,10 +235,17 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Get("/health/{profile_id}/followup/{id}/edit", routes.EditFollowupForm)
 		f.Post("/health/{profile_id}/followup/{id}/edit", routes.UpdateFollowup)
 		f.Post("/health/{profile_id}/followup/{id}/delete", routes.DeleteFollowup)
+		f.Post("/health/{profile_id}/followup/{id}/ai-summary", routes.GenerateAISummary)
 		f.Post("/health/{profile_id}/followup/{followup_id}/result", routes.AddLabResult)
 		f.Get("/health/{profile_id}/followup/{followup_id}/result/{id}/edit", routes.EditLabResultForm)
 		f.Post("/health/{profile_id}/followup/{followup_id}/result/{id}/edit", routes.UpdateLabResult)
 		f.Post("/health/{profile_id}/followup/{followup_id}/result/{id}/delete", routes.DeleteLabResult)
+
+		// WhatsApp routes
+		f.Get("/whatsapp", routes.WhatsAppPairing)
+		f.Post("/whatsapp/connect", routes.WhatsAppConnect)
+		f.Post("/whatsapp/disconnect", routes.WhatsAppDisconnect)
+		f.Get("/whatsapp/status", routes.WhatsAppStatusAPI)
 	}, routes.RequireAuth)
 
 	port := cmd.String("port")
@@ -238,4 +261,38 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	log.Fatal(srv.ListenAndServe())
 
 	return nil
+}
+
+// handleWhatsAppMessage is called when a WhatsApp message is sent or received.
+// It updates the last_auto_contact timestamp for matching contacts.
+func handleWhatsAppMessage(jid string, timestamp time.Time, isOutgoing bool) {
+	ctx := context.Background()
+
+	// Extract phone number from JID
+	phone := whatsapp.JIDToPhone(jid)
+
+	// Find contact by phone number
+	contactID, err := db.FindContactByPhone(ctx, phone)
+	if err != nil {
+		log.Printf("Error finding contact by phone %s: %v", phone, err)
+		return
+	}
+
+	if contactID == nil {
+		// No matching contact found, ignore
+		return
+	}
+
+	// Update the contact's auto-contact timestamp
+	err = db.UpdateContactAutoTimestamp(ctx, *contactID, timestamp)
+	if err != nil {
+		log.Printf("Error updating auto contact timestamp for %s: %v", *contactID, err)
+		return
+	}
+
+	direction := "received"
+	if isOutgoing {
+		direction = "sent"
+	}
+	log.Printf("Updated last_auto_contact for contact %s (WhatsApp message %s)", *contactID, direction)
 }

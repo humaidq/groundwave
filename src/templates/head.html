@@ -3,10 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1a1a1a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <link rel="stylesheet" href="/normalize-8.0.1.min.css" />
     <link rel="stylesheet" href="/main.css" />
-    <title>Groundwave</title>
+    <link rel="manifest" href="/manifest.json" />
     <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon-128.png" />
+    <title>Groundwave</title>
     {{ if .IsZettelkasten }}
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.css" integrity="sha384-Pu5+C18nP5dwykLJOhd2U4Xen7rjScHN/qusop27hdd2drI+lL5KvX7YntvT8yew" crossorigin="anonymous">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.js" integrity="sha384-2B8pfmZZ6JlVoScJm/5hQfNS2TI/6hPqDZInzzPc8oHpN5SgeNOf4LzREO6p5YtZ" crossorigin="anonymous"></script>
@@ -15,14 +21,16 @@
     {{ end }}
   </head>
   <body>
-    <header>
-      <h1 class="title">Groundwave</h1>
-      <nav class="navbar">
-        <button class="nav-hamburger" aria-label="Toggle navigation menu" onclick="this.classList.toggle('active');this.nextElementSibling.classList.toggle('active')">
+    <header class="govuk-header">
+      <div class="header-container">
+        <a href="/" class="header-logo">Groundwave</a>
+        <button class="nav-hamburger" aria-label="Toggle navigation menu" onclick="this.classList.toggle('active');document.querySelector('.nav-menu').classList.toggle('active')">
           <span></span>
           <span></span>
           <span></span>
         </button>
+      </div>
+      <nav class="navbar">
         <div class="nav-menu">
           <a href="/"{{ if .IsWelcome }} class="nav-active"{{ end }}>Home</a>
           <a href="/contacts"{{ if and (not .ContactName) (not .IsNewContact) (not .IsQSOView) (not .IsInventory) (not .IsZettelkasten) (not .IsQSL) (not .IsWelcome) (not .IsHealth) }} class="nav-active"{{ end }}>Contacts</a>
@@ -41,3 +49,27 @@
       </nav>
     </header>
     <main>
+      {{ if .Flash }}
+        {{ $flash := .Flash }}
+        {{ if eq $flash.Type "error" }}
+          <div class="alert alert-red">
+            <h5 class="alert-title">Error</h5>
+            <p>{{ $flash.Message }}</p>
+          </div>
+        {{ else if eq $flash.Type "success" }}
+          <div class="alert alert-green">
+            <h5 class="alert-title">Success</h5>
+            <p>{{ $flash.Message }}</p>
+          </div>
+        {{ else if eq $flash.Type "warning" }}
+          <div class="alert alert-yellow">
+            <h5 class="alert-title">Warning</h5>
+            <p>{{ $flash.Message }}</p>
+          </div>
+        {{ else if eq $flash.Type "info" }}
+          <div class="alert alert-grey">
+            <h5 class="alert-title">Info</h5>
+            <p>{{ $flash.Message }}</p>
+          </div>
+        {{ end }}
+      {{ end }}

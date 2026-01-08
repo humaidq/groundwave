@@ -244,7 +244,8 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 			id, name_given, name_additional, name_family,
 			name_display, nickname, organization, title, role, birthday, anniversary,
 			gender, timezone, geo_lat, geo_lon, language, photo_url,
-			tier, call_sign, is_service, carddav_uuid, created_at, updated_at
+			tier, call_sign, is_service, carddav_uuid, created_at, updated_at,
+			last_auto_contact
 		FROM contacts
 		WHERE id = $1
 	`
@@ -272,6 +273,7 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 		&contact.CardDAVUUID,
 		&contact.CreatedAt,
 		&contact.UpdatedAt,
+		&contact.LastAutoContact,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query contact: %w", err)
@@ -778,10 +780,12 @@ func GetOverdueContacts(ctx context.Context) ([]OverdueContactItem, error) {
 		),
 		last_contacts AS (
 			SELECT
-				contact_id,
-				MAX(logged_at) as last_contact_date
-			FROM contact_logs
-			GROUP BY contact_id
+				c.id as contact_id,
+				GREATEST(
+					(SELECT MAX(logged_at) FROM contact_logs WHERE contact_id = c.id),
+					c.last_auto_contact
+				) as last_contact_date
+			FROM contacts c
 		)
 		SELECT
 			c.id,

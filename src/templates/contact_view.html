@@ -1,5 +1,18 @@
 {{ template "head" . }}
 
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
 {{ if .Error }}
 <div class="alert alert-red">
   {{ .Error }}
@@ -12,10 +25,10 @@
     <a href="/contact/{{ .Contact.ID }}/edit" class="btn">Edit Contact</a>
     {{ if .CardDAVContact }}
     <form method="POST" action="/contact/{{ .Contact.ID }}/carddav/unlink" class="inline-form" onsubmit="return confirm('Unlink this contact from CardDAV? The local contact data will remain.');">
-      <button type="submit" class="btn btn-secondary">Unlink CardDAV</button>
+      <button type="submit" class="btn">Unlink CardDAV</button>
     </form>
     {{ else }}
-    <button type="button" class="btn btn-secondary" onclick="openCardDAVLinkDialog()">Link CardDAV</button>
+    <button type="button" class="btn" onclick="openCardDAVLinkDialog()">Link CardDAV</button>
     {{ end }}
     <form method="POST" action="/contact/{{ .Contact.ID }}/delete" class="inline-form" onsubmit="return confirm('Are you sure you want to delete this contact? This action cannot be undone.');">
       <button type="submit" class="btn btn-danger">Delete Contact</button>
@@ -46,6 +59,15 @@
       <span class="detail-label">Title:</span>
       <span class="detail-value">{{ . }}</span>
     </div>
+    {{ end }}
+
+    {{ if not .Contact.IsService }}
+    {{ with .Contact.LastAutoContact }}
+    <div class="detail-item">
+      <span class="detail-label">Last WhatsApp:</span>
+      <span class="detail-value">{{ .Format "Jan 2, 2006 3:04 PM" }}</span>
+    </div>
+    {{ end }}
     {{ end }}
   </div>
 
