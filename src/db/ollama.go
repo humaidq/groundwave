@@ -5,6 +5,7 @@
 package db
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -31,10 +32,12 @@ type chatMessage struct {
 type chatRequest struct {
 	Model    string        `json:"model"`
 	Messages []chatMessage `json:"messages"`
+	Stream   bool          `json:"stream,omitempty"`
 }
 
 type chatChoice struct {
 	Message chatMessage `json:"message"`
+	Delta   chatMessage `json:"delta,omitempty"` // For streaming responses
 }
 
 type chatResponse struct {
@@ -195,4 +198,112 @@ func buildLabSummaryPrompt(profile *HealthProfile, followup *HealthFollowup, res
 	sb.WriteString("3. General health observations based on these results\n")
 
 	return sb.String()
+}
+
+// StreamLabSummary calls Ollama to generate a summary of lab results with streaming response.
+// The onChunk callback is called for each chunk of text received.
+// Returns an error if the request fails.
+func StreamLabSummary(ctx context.Context, profile *HealthProfile, followup *HealthFollowup, results []LabResultSummary, onChunk func(string) error) error {
+	config, err := GetOllamaConfig()
+	if err != nil {
+		return err
+	}
+
+	// Build the prompt
+	prompt := buildLabSummaryPrompt(profile, followup, results)
+
+	// Create the streaming request
+	reqBody := chatRequest{
+		Model:  config.Model,
+		Stream: true,
+		Messages: []chatMessage{
+			{
+				Role:    "system",
+				Content: "You are a helpful medical assistant. Provide concise, clear summaries of lab results. Highlight any abnormal values and their potential significance. Be informative but not alarmist. Always recommend consulting with a healthcare provider for medical advice.",
+			},
+			{
+				Role:    "user",
+				Content: prompt,
+			},
+		},
+	}
+
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Make the request to Ollama's OpenAI-compatible endpoint
+	endpoint := strings.TrimSuffix(config.URL, "/") + "/v1/chat/completions"
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{
+		Timeout: 300 * time.Second, // 5 minutes for streaming
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to call Ollama: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("Ollama returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Read streaming response line by line
+	reader := bufio.NewReader(resp.Body)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("failed to read stream: %w", err)
+		}
+
+		// Skip empty lines
+		lineStr := strings.TrimSpace(string(line))
+		if lineStr == "" {
+			continue
+		}
+
+		// SSE format: "data: {...}"
+		if !strings.HasPrefix(lineStr, "data: ") {
+			continue
+		}
+
+		data := strings.TrimPrefix(lineStr, "data: ")
+
+		// Check for stream end
+		if data == "[DONE]" {
+			break
+		}
+
+		var chatResp chatResponse
+		if err := json.Unmarshal([]byte(data), &chatResp); err != nil {
+			// Skip malformed chunks
+			continue
+		}
+
+		if chatResp.Error != nil {
+			return fmt.Errorf("Ollama error: %s", chatResp.Error.Message)
+		}
+
+		if len(chatResp.Choices) > 0 {
+			content := chatResp.Choices[0].Delta.Content
+			if content != "" {
+				if err := onChunk(content); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
 }

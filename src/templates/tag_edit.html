@@ -22,6 +22,7 @@
 {{ end }}
 
 <form method="POST" action="/tags/{{ .Tag.ID }}/edit">
+  <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
   <div class="form-group">
     <label for="name">Tag Name</label>
     <input type="text" name="name" id="name" value="{{ .Tag.Name }}" required class="form-item">

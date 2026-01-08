@@ -9,7 +9,6 @@
     <link rel="stylesheet" href="/normalize-8.0.1.min.css" />
     <link rel="stylesheet" href="/main.css" />
     <link rel="manifest" href="/manifest.json" />
-    <link rel="icon" href="/favicon.ico" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon-128.png" />
     <title>Groundwave</title>
@@ -28,8 +27,8 @@
           if (bar) bar.classList.toggle('show', offline);
         }
         function checkOnline() {
-          fetch('/favicon.ico', { method: 'HEAD', cache: 'no-store' })
-            .then(function() { setOffline(false); })
+          fetch('/connectivity', { cache: 'no-store' })
+            .then(function(r) { setOffline(!r.ok); })
             .catch(function() { setOffline(true); });
         }
         document.addEventListener('DOMContentLoaded', checkOnline);

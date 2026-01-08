@@ -20,10 +20,11 @@
 {{ end }}
 
 <div class="page-header">
-  <h2>{{ .Item.InventoryID }} - {{ .Item.Name }}</h2>
+  <h2>{{ .Item.InventoryID }} - {{ .Item.Name }} <span class="status-badge status-{{ .Item.Status }}">{{ .Item.Status }}</span></h2>
   <div class="page-header-actions">
     <a href="/inventory/{{ .Item.InventoryID }}/edit" class="btn">Edit</a>
     <form method="POST" action="/inventory/{{ .Item.InventoryID }}/delete" class="inline-form" onsubmit="return confirm('Delete this inventory item? This cannot be undone.');">
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
       <button type="submit" class="btn btn-danger">Delete</button>
     </form>
   </div>
@@ -32,24 +33,9 @@
 <div class="contact-detail">
   <!-- Item Details -->
   <div class="contact-section">
-    <h3>Details</h3>
-    <div class="detail-item">
-      <span class="detail-label">Inventory ID:</span>
-      <span class="detail-value">{{ .Item.InventoryID }}</span>
-    </div>
-    <div class="detail-item">
-      <span class="detail-label">Status:</span>
-      <span class="detail-value status-{{ .Item.Status }}">{{ .Item.Status }}</span>
-    </div>
     {{ with .Item.Location }}
     <div class="detail-item">
       <span class="detail-label">Location:</span>
-      <span class="detail-value">{{ . }}</span>
-    </div>
-    {{ end }}
-    {{ with .Item.Description }}
-    <div class="detail-item">
-      <span class="detail-label">Description:</span>
       <span class="detail-value">{{ . }}</span>
     </div>
     {{ end }}
@@ -58,6 +44,14 @@
       <span class="detail-value">{{ .Item.CreatedAt.Format "Jan 2, 2006 3:04 PM" }}</span>
     </div>
   </div>
+
+  {{ with .Item.Description }}
+  <!-- Description Section -->
+  <div class="contact-section">
+    <h3>Description</h3>
+    <div class="pre-line">{{ . }}</div>
+  </div>
+  {{ end }}
 
   <!-- Files Section -->
   <div class="contact-section">
@@ -89,6 +83,7 @@
           <span class="log-type log-type-note">comment</span>
           <span class="log-date">{{ .CreatedAt.Format "Jan 2, 2006 3:04 PM" }}</span>
           <form method="POST" action="/inventory/{{ $.Item.InventoryID }}/comment/{{ .ID }}/delete" class="log-delete-form" onsubmit="return confirm('Delete this comment?');">
+            <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
             <button type="submit" class="btn-delete" title="Delete">×</button>
           </form>
         </div>
@@ -104,6 +99,7 @@
     <details class="add-item-details" open>
       <summary class="add-item-summary">+ Add Comment</summary>
       <form method="POST" action="/inventory/{{ .Item.InventoryID }}/comment" class="add-item-form">
+        <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
         <div class="add-item-field">
           <textarea name="content" placeholder="Add a comment..." required class="form-item" rows="4"></textarea>
         </div>

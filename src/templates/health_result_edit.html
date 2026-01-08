@@ -24,6 +24,7 @@
 </div>
 
 <form method="POST" action="/health/{{ .Profile.ID }}/followup/{{ .Followup.ID }}/result/{{ .Result.ID }}/edit">
+  <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
   <div class="form-group">
     <label class="item-title">Test Name</label>
     <div class="detail-value">{{ .Result.TestName }}</div>

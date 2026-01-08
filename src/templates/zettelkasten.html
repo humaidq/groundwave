@@ -55,7 +55,7 @@
       <small>Links last updated: {{ .LastCacheUpdate.Format "Jan 2, 2006 3:04 PM" }}</small>
       {{ end }}
       <form method="POST" action="/zk/refresh-links" class="inline-form" onsubmit="return confirm('This will scan all notes and may take a minute. Continue?');">
-        {{ .CSRFToken }}
+        <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
         <button type="submit" class="btn-small">Refresh Now</button>
       </form>
     </div>
@@ -72,6 +72,7 @@
             <span class="log-type log-type-note">comment</span>
             <span class="log-date">{{ .CreatedAt.Format "Jan 2, 2006 3:04 PM" }}</span>
             <form method="POST" action="/zk/{{ $.NoteID }}/comment/{{ .ID }}/delete" class="log-delete-form" onsubmit="return confirm('Delete this comment?');">
+              <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
               <button type="submit" class="btn-delete" title="Delete">×</button>
             </form>
           </div>
@@ -87,6 +88,7 @@
       <div class="zk-comment-form">
         <h4>Add Comment</h4>
         <form method="POST" action="/zk/{{ .NoteID }}/comment" class="comment-form">
+          <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
           <div class="form-field">
             <textarea name="content" id="comment_content" class="form-item" rows="4" placeholder="Add a temporary comment..." required></textarea>
           </div>

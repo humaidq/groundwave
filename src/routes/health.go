@@ -6,7 +6,6 @@ package routes
 
 import (
 	"bytes"
-	"encoding/json"
 	htmltemplate "html/template"
 	"log"
 	"net/http"
@@ -1078,26 +1077,44 @@ func DeleteLabResult(c flamego.Context, s session.Session) {
 
 // ========== AI Summary Handler ==========
 
-// GenerateAISummary handles AI-powered lab result summarization
+// GenerateAISummary handles AI-powered lab result summarization using Server-Sent Events (SSE).
+// SSE keeps data flowing, preventing reverse proxy timeouts during long AI generation.
 func GenerateAISummary(c flamego.Context) {
 	profileID := c.Param("profile_id")
 	followupID := c.Param("id")
 	ctx := c.Request().Context()
 
-	// Set JSON content type
-	c.ResponseWriter().Header().Set("Content-Type", "application/json")
+	w := c.ResponseWriter()
 
-	// Helper to write JSON error response
-	writeError := func(message string, status int) {
-		c.ResponseWriter().WriteHeader(status)
-		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": message})
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering
+
+	// Helper to send SSE event
+	sendEvent := func(event, data string) {
+		if event != "" {
+			w.Write([]byte("event: " + event + "\n"))
+		}
+		// Escape newlines in data for SSE format
+		escapedData := strings.ReplaceAll(data, "\n", "\ndata: ")
+		w.Write([]byte("data: " + escapedData + "\n\n"))
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+	}
+
+	// Helper to send error
+	sendError := func(message string) {
+		sendEvent("error", message)
 	}
 
 	// Get profile
 	profile, err := db.GetHealthProfile(ctx, profileID)
 	if err != nil {
 		log.Printf("Error fetching health profile %s: %v", profileID, err)
-		writeError("Profile not found", http.StatusNotFound)
+		sendError("Profile not found")
 		return
 	}
 
@@ -1105,7 +1122,7 @@ func GenerateAISummary(c flamego.Context) {
 	followup, err := db.GetFollowup(ctx, followupID)
 	if err != nil {
 		log.Printf("Error fetching follow-up %s: %v", followupID, err)
-		writeError("Follow-up not found", http.StatusNotFound)
+		sendError("Follow-up not found")
 		return
 	}
 
@@ -1113,7 +1130,7 @@ func GenerateAISummary(c flamego.Context) {
 	results, err := db.GetLabResultsByFollowupWithCalculated(ctx, followupID)
 	if err != nil {
 		log.Printf("Error fetching lab results for follow-up %s: %v", followupID, err)
-		writeError("Failed to load lab results", http.StatusInternalServerError)
+		sendError("Failed to load lab results")
 		return
 	}
 
@@ -1161,18 +1178,22 @@ func GenerateAISummary(c flamego.Context) {
 	}
 
 	if len(labSummaries) == 0 {
-		writeError("No lab results to summarize", http.StatusBadRequest)
+		sendError("No lab results to summarize")
 		return
 	}
 
-	// Generate summary using Ollama
-	summary, err := db.GenerateLabSummary(ctx, profile, followup, labSummaries)
+	// Stream the summary using Ollama
+	err = db.StreamLabSummary(ctx, profile, followup, labSummaries, func(chunk string) error {
+		sendEvent("chunk", chunk)
+		return nil
+	})
+
 	if err != nil {
 		log.Printf("Error generating AI summary: %v", err)
-		writeError("Failed to generate summary: "+err.Error(), http.StatusInternalServerError)
+		sendError("Failed to generate summary: " + err.Error())
 		return
 	}
 
-	// Return success response
-	json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"summary": summary})
+	// Signal completion
+	sendEvent("done", "")
 }

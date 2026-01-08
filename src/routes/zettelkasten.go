@@ -113,6 +113,33 @@ func ZettelkastenIndex(c flamego.Context, s session.Session, t template.Template
 		}
 	}
 
+	// Fetch backlinks for this zettel
+	var backlinkIDs []string
+	if note.ID != "" {
+		backlinkIDs = db.GetBacklinksFromCache(note.ID)
+	}
+
+	// Enrich backlinks with note titles
+	type Backlink struct {
+		ID    string
+		Title string
+	}
+	backlinks := make([]Backlink, 0, len(backlinkIDs))
+	for _, backlinkID := range backlinkIDs {
+		backlinkNote, err := db.GetNoteByID(ctx, backlinkID)
+		if err != nil {
+			log.Printf("Error fetching backlink note %s: %v", backlinkID, err)
+			continue
+		}
+		backlinks = append(backlinks, Backlink{
+			ID:    backlinkID,
+			Title: backlinkNote.Title,
+		})
+	}
+
+	// Get last cache build time
+	lastCacheUpdate := db.GetLastCacheBuildTime()
+
 	// Update navigation history
 	var history []ZKHistoryItem
 	if note.ID != "" {
@@ -124,6 +151,8 @@ func ZettelkastenIndex(c flamego.Context, s session.Session, t template.Template
 	data["Note"] = note
 	data["Comments"] = comments
 	data["NoteID"] = note.ID // Pass note ID explicitly
+	data["Backlinks"] = backlinks
+	data["LastCacheUpdate"] = lastCacheUpdate
 	data["IsZettelkasten"] = true
 	data["ZKHistory"] = history
 

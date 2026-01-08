@@ -24,6 +24,7 @@
 </div>
 
 <form method="POST" action="/health/{{ .Profile.ID }}/followup/new">
+  <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
   <div class="form-group">
     <label for="followup_date" class="item-title">Date <span class="required">*</span></label>
     <input type="date" id="followup_date" name="followup_date" class="form-item" required

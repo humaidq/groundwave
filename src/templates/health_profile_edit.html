@@ -24,6 +24,7 @@
 </div>
 
 <form method="POST" action="/health/{{ .Profile.ID }}/edit">
+  <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
   <div class="form-group">
     <label for="name" class="item-title">Name <span class="required">*</span></label>
     <input type="text" id="name" name="name" class="form-item" required

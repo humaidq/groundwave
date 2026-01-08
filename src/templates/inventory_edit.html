@@ -24,6 +24,7 @@
 {{ end }}
 
 <form method="POST" action="/inventory/{{ .Item.InventoryID }}/edit" class="form">
+  <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
   <div class="form-section">
     <h3>Item Information</h3>
 

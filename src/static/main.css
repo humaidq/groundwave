@@ -178,6 +178,10 @@ code, pre {
   display: inline;
 }
 
+.pre-line {
+  white-space: pre-line;
+}
+
 /* Alert */
 .alert {
   margin: 15px 0;

@@ -17,6 +17,7 @@
   <h2>QSL Contacts</h2>
   <div class="page-header-actions">
     <form method="POST" action="/qsl/import" enctype="multipart/form-data" id="adif-import-form" class="inline-form">
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
       <input type="file" name="adif_file" id="adif_file" accept=".adi,.adif" class="hidden-file-input" onchange="this.form.submit()">
       <button type="button" class="btn" onclick="document.getElementById('adif_file').click()">Import ADIF</button>
     </form>

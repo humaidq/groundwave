@@ -159,6 +159,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	// Public routes (no authentication required)
 	f.Get("/login", routes.LoginForm)
 	f.Post("/login", routes.Login)
+	f.Get("/connectivity", func(c flamego.Context) { c.ResponseWriter().Write([]byte("1")) })
 
 	// Protected routes (require authentication)
 	f.Group("", func() {
@@ -254,8 +255,8 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	srv := &http.Server{
 		Addr:         fmt.Sprintf("0.0.0.0:%s", port),
 		Handler:      f,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 5 * time.Minute, // Extended for SSE streaming (AI summary)
 	}
 
 	log.Fatal(srv.ListenAndServe())

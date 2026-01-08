@@ -24,6 +24,7 @@
   <div class="page-header-actions">
     <a href="/health/{{ .Profile.ID }}/followup/{{ .Followup.ID }}/edit" class="btn">Edit</a>
     <form method="POST" action="/health/{{ .Profile.ID }}/followup/{{ .Followup.ID }}/delete" class="inline-form" onsubmit="return confirm('Delete this follow-up and all test results? This cannot be undone.');">
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
       <button type="submit" class="btn btn-danger">Delete</button>
     </form>
   </div>
@@ -68,6 +69,7 @@
     <details class="add-item-details">
       <summary class="add-item-summary">+ Add Lab Result</summary>
       <form method="POST" action="/health/{{ .Profile.ID }}/followup/{{ .Followup.ID }}/result" class="add-item-form">
+        <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
         <div class="form-group">
           <label for="test_name" class="item-title">Test <span class="required">*</span></label>
           <select id="test_name" name="test_name" class="form-item" required onchange="updateUnit()">
@@ -184,6 +186,7 @@
             <div class="contact-item-actions">
               <a href="/health/{{ $.Profile.ID }}/followup/{{ $.Followup.ID }}/result/{{ .ID }}/edit" class="btn-edit" title="Edit">✎</a>
               <form method="POST" action="/health/{{ $.Profile.ID }}/followup/{{ $.Followup.ID }}/result/{{ .ID }}/delete" class="item-delete-form" onsubmit="return confirm('Delete this test result?');">
+                <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
                 <button type="submit" class="btn-delete" title="Delete">×</button>
               </form>
             </div>
@@ -217,7 +220,7 @@ function updateUnit() {
     btn.addEventListener('click', async function() {
       btn.disabled = true;
       btn.textContent = 'Generating...';
-      output.textContent = 'Loading...';
+      output.textContent = '';
       output.style.display = 'block';
 
       try {
@@ -228,11 +231,44 @@ function updateUnit() {
             'X-CSRF-Token': csrfToken.value
           }
         });
-        const data = await response.json();
-        if (data.error) {
-          output.textContent = 'Error: ' + data.error;
-        } else {
-          output.textContent = data.summary;
+
+        if (!response.ok) {
+          throw new Error('Server returned ' + response.status);
+        }
+
+        // Read SSE stream
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // Process complete SSE messages
+          const lines = buffer.split('\n');
+          buffer = lines.pop(); // Keep incomplete line in buffer
+
+          let currentEvent = '';
+          for (const line of lines) {
+            if (line.startsWith('event: ')) {
+              currentEvent = line.substring(7);
+            } else if (line.startsWith('data: ')) {
+              const data = line.substring(6);
+
+              if (currentEvent === 'error') {
+                output.textContent = 'Error: ' + data;
+                return;
+              } else if (currentEvent === 'chunk') {
+                output.textContent += data;
+              } else if (currentEvent === 'done') {
+                // Generation complete
+                return;
+              }
+            }
+          }
         }
       } catch (err) {
         output.textContent = 'Error: ' + err.message;

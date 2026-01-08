@@ -13,9 +13,8 @@
 </nav>
 {{ end }}
 
-<div class="page-header">
+  <div class="page-header">
     <h2>Zettelkasten Comments Inbox</h2>
-    <p class="page-subtitle">Temporary annotations waiting to be filed into org-roam</p>
   </div>
 
   {{ if .Error }}
@@ -26,7 +25,7 @@
 
   {{ if eq .CommentCount 0 }}
   <div class="empty-state">
-    <p>No comments yet. Add comments to your zettelkasten notes to use this as a processing inbox.</p>
+    <p>No comments yet.</p>
     <a href="/zk" class="btn">Browse Zettelkasten</a>
   </div>
   {{ else }}
@@ -67,6 +66,7 @@
           <span class="log-type log-type-note">comment</span>
           <span class="log-date">{{ .CreatedAt.Format "Jan 2, 2006 3:04 PM" }}</span>
           <form method="POST" action="/zk/{{ $zettelID }}/comment/{{ .ID }}/delete" class="log-delete-form" onsubmit="return confirm('Delete this comment?');">
+            <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
             <button type="submit" class="btn-delete" title="Delete">×</button>
           </form>
         </div>
