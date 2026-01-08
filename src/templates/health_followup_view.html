@@ -202,7 +202,9 @@
   </div>
 </div>
 
-<script>
+<script type="module">
+import { marked } from 'https://cdnjs.cloudflare.com/ajax/libs/marked/16.3.0/lib/marked.esm.js';
+
 function updateUnit() {
   const select = document.getElementById('test_name');
   const unitInput = document.getElementById('test_unit');
@@ -210,6 +212,7 @@ function updateUnit() {
   const unit = selectedOption.getAttribute('data-unit');
   unitInput.value = unit || '';
 }
+window.updateUnit = updateUnit;
 
 (function() {
   const btn = document.getElementById('ai-summary-btn');
@@ -220,8 +223,10 @@ function updateUnit() {
     btn.addEventListener('click', async function() {
       btn.disabled = true;
       btn.textContent = 'Generating...';
-      output.textContent = '';
+      output.innerHTML = '';
       output.style.display = 'block';
+
+      let fullText = '';
 
       try {
         const response = await fetch(window.location.pathname + '/ai-summary', {
@@ -262,7 +267,8 @@ function updateUnit() {
                 output.textContent = 'Error: ' + data;
                 return;
               } else if (currentEvent === 'chunk') {
-                output.textContent += data;
+                fullText += data;
+                output.innerHTML = marked.parse(fullText);
               } else if (currentEvent === 'done') {
                 // Generation complete
                 return;

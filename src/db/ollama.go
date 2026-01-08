@@ -72,79 +72,6 @@ type LabResultSummary struct {
 	RangeStatus string // "normal", "out_of_reference", "out_of_optimal"
 }
 
-// GenerateLabSummary calls Ollama to generate a summary of lab results
-func GenerateLabSummary(ctx context.Context, profile *HealthProfile, followup *HealthFollowup, results []LabResultSummary) (string, error) {
-	config, err := GetOllamaConfig()
-	if err != nil {
-		return "", err
-	}
-
-	// Build the prompt
-	prompt := buildLabSummaryPrompt(profile, followup, results)
-
-	// Create the request
-	reqBody := chatRequest{
-		Model: config.Model,
-		Messages: []chatMessage{
-			{
-				Role:    "system",
-				Content: "You are a helpful medical assistant. Provide concise, clear summaries of lab results. Highlight any abnormal values and their potential significance. Be informative but not alarmist. Always recommend consulting with a healthcare provider for medical advice.",
-			},
-			{
-				Role:    "user",
-				Content: prompt,
-			},
-		},
-	}
-
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	// Make the request to Ollama's OpenAI-compatible endpoint
-	endpoint := strings.TrimSuffix(config.URL, "/") + "/v1/chat/completions"
-	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(jsonBody))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{
-		Timeout: 120 * time.Second, // LLM responses can take a while
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to call Ollama: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Ollama returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var chatResp chatResponse
-	if err := json.Unmarshal(body, &chatResp); err != nil {
-		return "", fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	if chatResp.Error != nil {
-		return "", fmt.Errorf("Ollama error: %s", chatResp.Error.Message)
-	}
-
-	if len(chatResp.Choices) == 0 {
-		return "", fmt.Errorf("no response from Ollama")
-	}
-
-	return chatResp.Choices[0].Message.Content, nil
-}
-
 // buildLabSummaryPrompt creates the prompt for lab result summarization
 func buildLabSummaryPrompt(profile *HealthProfile, followup *HealthFollowup, results []LabResultSummary) string {
 	var sb strings.Builder
@@ -219,7 +146,7 @@ func StreamLabSummary(ctx context.Context, profile *HealthProfile, followup *Hea
 		Messages: []chatMessage{
 			{
 				Role:    "system",
-				Content: "You are a helpful medical assistant. Provide concise, clear summaries of lab results. Highlight any abnormal values and their potential significance. Be informative but not alarmist. Always recommend consulting with a healthcare provider for medical advice.",
+				Content: "You are a helpful medical assistant. Provide concise, clear summaries of lab results. Highlight any abnormal values and their potential significance. Be informative but not alarmist. Never mention consult a healthcare professional, this is shown separately in UI. Use basic markdown (italic, bold, etc), but don't use headings in your response.",
 			},
 			{
 				Role:    "user",
