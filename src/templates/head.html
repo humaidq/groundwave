@@ -21,7 +21,25 @@
     {{ end }}
   </head>
   <body>
-    <header class="govuk-header">
+    <script>
+      (function() {
+        function setOffline(offline) {
+          var bar = document.getElementById('offline-bar');
+          if (bar) bar.classList.toggle('show', offline);
+        }
+        function checkOnline() {
+          fetch('/favicon.ico', { method: 'HEAD', cache: 'no-store' })
+            .then(function() { setOffline(false); })
+            .catch(function() { setOffline(true); });
+        }
+        document.addEventListener('DOMContentLoaded', checkOnline);
+        setInterval(checkOnline, 5000);
+        window.addEventListener('online', checkOnline);
+        window.addEventListener('offline', function() { setOffline(true); });
+      })();
+    </script>
+    <header class="groundwave-header">
+      <div id="offline-bar" class="offline-bar">You are offline</div>
       <div class="header-container">
         <a href="/" class="header-logo">Groundwave</a>
         <button class="nav-hamburger" aria-label="Toggle navigation menu" onclick="this.classList.toggle('active');document.querySelector('.nav-menu').classList.toggle('active')">

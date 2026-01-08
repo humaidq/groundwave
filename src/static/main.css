@@ -1816,10 +1816,30 @@ code:not(pre code) {
   display: none;
 }
 
+/* Offline Bar */
+.offline-bar {
+  display: none;
+  background-color: #161718;
+  color: white;
+  text-align: center;
+  padding: 0.15rem;
+  font-size: 0.75rem;
+}
+
+.offline-bar.show {
+  display: block;
+}
+
 /* Header */
-.govuk-header {
+.groundwave-header {
   background-color: #134dae;
   margin-top: 1rem;
+}
+
+@media only screen and (max-width: 780px) {
+  .groundwave-header {
+    margin-top: 0;
+  }
 }
 
 .header-container {
@@ -1976,7 +1996,7 @@ code:not(pre code) {
 
 /* Dark mode */
 @media (prefers-color-scheme: dark) {
-  .govuk-header {
+  .groundwave-header {
     background-color: #1a1a1a;
   }
 

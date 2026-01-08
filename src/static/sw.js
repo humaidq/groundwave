@@ -1,4 +1,4 @@
-const CACHE_NAME = 'groundwave-v1';
+const CACHE_NAME = 'groundwave-v3';
 const STATIC_ASSETS = [
   '/main.css',
   '/normalize-8.0.1.min.css',
@@ -26,12 +26,24 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        return response;
-      })
-      .catch(() => caches.match(event.request))
+    caches.match(event.request).then((cached) =>
+      fetch(event.request)
+        .then((response) => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          return response;
+        })
+        .catch(() => {
+          if (cached) return cached;
+          // Only for uncached navigation requests, return minimal offline page
+          if (event.request.mode === 'navigate') {
+            return new Response('<!DOCTYPE html><html><body><p>Page not available offline</p></body></html>', {
+              status: 503,
+              headers: { 'Content-Type': 'text/html' }
+            });
+          }
+          return new Response('', { status: 503 });
+        })
+    )
   );
 });

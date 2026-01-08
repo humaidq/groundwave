@@ -59,6 +59,7 @@
 
     <!-- AI Summary -->
     <div class="ai-summary-section">
+      <input type="hidden" id="csrf-token" value="{{ .CSRFToken }}" />
       <button type="button" id="ai-summary-btn" class="btn">✨ AI Summary</button>
       <div id="ai-summary-output" class="ai-summary-output"></div>
     </div>
@@ -210,8 +211,9 @@ function updateUnit() {
 (function() {
   const btn = document.getElementById('ai-summary-btn');
   const output = document.getElementById('ai-summary-output');
+  const csrfToken = document.getElementById('csrf-token');
 
-  if (btn && output) {
+  if (btn && output && csrfToken) {
     btn.addEventListener('click', async function() {
       btn.disabled = true;
       btn.textContent = 'Generating...';
@@ -221,7 +223,10 @@ function updateUnit() {
       try {
         const response = await fetch(window.location.pathname + '/ai-summary', {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'}
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken.value
+          }
         });
         const data = await response.json();
         if (data.error) {
