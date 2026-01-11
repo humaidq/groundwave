@@ -57,10 +57,10 @@
     <rect
        style="fill:#134dae;stroke-width:0.264583;fill-opacity:1"
        id="rect1"
-       width="623.56628"
-       height="574.87128"
-       x="-48.694981"
-       y="-32.463318" />
+       width="512"
+       height="512"
+       x="0"
+       y="0" />
     <text
        xml:space="preserve"
        transform="scale(0.26458333)"
