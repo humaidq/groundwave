@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/flamego/flamego"
+	"github.com/flamego/session"
 	"github.com/flamego/template"
 
 	"github.com/humaidq/groundwave/db"
@@ -90,22 +91,42 @@ func Welcome(c flamego.Context, t template.Template, data template.Data) {
 }
 
 // Home renders the contacts list
-func Home(c flamego.Context, t template.Template, data template.Data) {
+func Home(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	ctx := c.Request().Context()
+
+	// Check private mode from session
+	privateMode := false
+	if pm := s.Get("private_mode"); pm != nil {
+		privateMode = pm.(bool)
+	}
+	data["PrivateMode"] = privateMode
 
 	// Get tag filter from URL query
 	tagIDs := c.QueryStrings("tag")
 
+	// Get data filters from URL query
+	filterStrs := c.QueryStrings("filter")
+	var filters []db.ContactFilter
+	var activeFilters []string
+	for _, f := range filterStrs {
+		filter := db.ContactFilter(f)
+		if db.ValidContactFilters[filter] {
+			filters = append(filters, filter)
+			activeFilters = append(activeFilters, f)
+		}
+	}
+
 	var contacts []db.ContactListItem
 	var err error
 
-	if len(tagIDs) == 0 {
-		// No filter - list all contacts
-		contacts, err = db.ListContacts(ctx)
-	} else {
-		// Filter by tags
-		contacts, err = db.GetContactsByTags(ctx, tagIDs)
+	// Use ListContactsWithFilters to handle private mode sorting
+	opts := db.ContactListOptions{
+		Filters:        filters,
+		TagIDs:         tagIDs,
+		IsService:      false,
+		AlphabeticSort: privateMode, // Sort alphabetically in private mode
 	}
+	contacts, err = db.ListContactsWithFilters(ctx, opts)
 
 	if err != nil {
 		log.Printf("Error fetching contacts: %v", err)
@@ -122,6 +143,9 @@ func Home(c flamego.Context, t template.Template, data template.Data) {
 		data["AllTags"] = allTags
 		data["SelectedTags"] = tagIDs
 	}
+
+	// Pass active filters to template
+	data["ActiveFilters"] = activeFilters
 
 	// Get overdue contacts count for the button
 	overdueContacts, err := db.GetOverdueContacts(ctx)

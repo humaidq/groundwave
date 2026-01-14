@@ -124,6 +124,18 @@
   </div>
 
   <div class="form-group">
+    <label for="tag" class="item-title">Tag</label>
+    <div class="autocomplete-container">
+      <input type="text" id="tag" name="tag" class="form-item" autocomplete="off"
+             value="{{ if .FormData }}{{ index .FormData "tag" }}{{ end }}"
+             placeholder="e.g., event:conference-2025" pattern="[a-z0-9._:-]*"
+             title="Lowercase letters, numbers, and ._:- characters only">
+      <div class="autocomplete-dropdown" id="tag-dropdown"></div>
+    </div>
+    <small class="muted-text">Optional. Add a tag to categorize this contact.</small>
+  </div>
+
+  <div class="form-group">
     <button type="submit" class="btn">Add Contact</button>
     <a href="/" class="btn">Cancel</a>
   </div>
@@ -175,6 +187,14 @@ window.addEventListener('message', function(event) {
     form.appendChild(input);
     document.body.appendChild(form);
     form.submit();
+  }
+});
+
+// Initialize tag autocomplete
+document.addEventListener('DOMContentLoaded', function() {
+  var tagNames = [{{ range $i, $t := .AllTags }}{{ if $i }}, {{ end }}"{{ $t.Name }}"{{ end }}];
+  if (tagNames.length > 0) {
+    initAutocomplete('#tag', tagNames);
   }
 });
 </script>

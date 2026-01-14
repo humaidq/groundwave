@@ -35,6 +35,7 @@ groundwave
 *.adi
 *.adif
 CLAUDE.md
+.claude/
 
 # Generated map images
 src/maps/

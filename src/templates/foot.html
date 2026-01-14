@@ -1,8 +1,8 @@
     </main>
-    <footer>
+<!--    <footer>
       <p>Groundwave is released under Apache 2.0 license.</p>
       <p><a href="https://huma.id/groundwave">View source</a></p>
-    </footer>
+    </footer>-->
     {{ if .IsZettelkasten }}
     <script>
         document.addEventListener("DOMContentLoaded", function() {
@@ -21,6 +21,127 @@
     <script>
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js');
+      }
+    </script>
+    <script>
+      // Reusable Autocomplete Component
+      function initAutocomplete(inputSelector, items) {
+        const inputs = document.querySelectorAll(inputSelector);
+
+        inputs.forEach(function(input) {
+          const container = input.closest('.autocomplete-container');
+          if (!container) return;
+
+          const dropdown = container.querySelector('.autocomplete-dropdown');
+          if (!dropdown) return;
+
+          let selectedIndex = -1;
+
+          function renderItems(filter) {
+            const query = (filter || '').toLowerCase();
+            const filtered = items.filter(function(item) {
+              return item.toLowerCase().includes(query);
+            });
+
+            if (filtered.length === 0) {
+              dropdown.innerHTML = '<div class="autocomplete-empty">No matches found</div>';
+              return;
+            }
+
+            dropdown.innerHTML = filtered.map(function(item, index) {
+              const highlighted = query ? item.replace(
+                new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'),
+                '<span class="autocomplete-item-highlight">$1</span>'
+              ) : item;
+              return '<div class="autocomplete-item" data-value="' + item + '" data-index="' + index + '">' + highlighted + '</div>';
+            }).join('');
+
+            selectedIndex = -1;
+          }
+
+          function showDropdown() {
+            renderItems(input.value);
+            dropdown.classList.add('show');
+          }
+
+          function hideDropdown() {
+            dropdown.classList.remove('show');
+            selectedIndex = -1;
+          }
+
+          function selectItem(value) {
+            input.value = value;
+            hideDropdown();
+            input.focus();
+          }
+
+          function updateSelection() {
+            const items = dropdown.querySelectorAll('.autocomplete-item');
+            items.forEach(function(item, index) {
+              item.classList.toggle('selected', index === selectedIndex);
+            });
+            if (selectedIndex >= 0 && items[selectedIndex]) {
+              items[selectedIndex].scrollIntoView({ block: 'nearest' });
+            }
+          }
+
+          input.addEventListener('focus', showDropdown);
+
+          input.addEventListener('input', function() {
+            renderItems(input.value);
+            if (!dropdown.classList.contains('show')) {
+              dropdown.classList.add('show');
+            }
+          });
+
+          input.addEventListener('keydown', function(e) {
+            // Only handle keys if dropdown is visible
+            if (!dropdown.classList.contains('show')) {
+              return; // Let default behavior happen
+            }
+
+            const items = dropdown.querySelectorAll('.autocomplete-item');
+
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+              updateSelection();
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              selectedIndex = Math.max(selectedIndex - 1, -1);
+              updateSelection();
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+              // If one result or item selected, auto-complete
+              if (items.length === 1) {
+                e.preventDefault();
+                selectItem(items[0].dataset.value);
+              } else if (selectedIndex >= 0 && items[selectedIndex]) {
+                e.preventDefault();
+                selectItem(items[selectedIndex].dataset.value);
+              }
+              // Otherwise let default behavior happen (Tab moves focus, Enter submits)
+            } else if (e.key === 'Escape') {
+              hideDropdown();
+            }
+          });
+
+          dropdown.addEventListener('mousedown', function(e) {
+            e.preventDefault(); // Prevent input blur
+          });
+
+          dropdown.addEventListener('click', function(e) {
+            const item = e.target.closest('.autocomplete-item');
+            if (item) {
+              selectItem(item.dataset.value);
+            }
+          });
+
+          document.addEventListener('click', function(e) {
+            if (!container.contains(e.target)) {
+              hideDropdown();
+            }
+          });
+        });
       }
     </script>
   </body>

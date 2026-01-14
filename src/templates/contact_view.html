@@ -42,7 +42,9 @@
   <div class="contact-section">
     <div class="contact-meta">
       {{ if not .Contact.IsService }}
+      {{ if not .PrivateMode }}
       <span class="contact-tier tier-{{ .TierLower }}">{{ .Contact.Tier }}</span>
+      {{ end }}
       {{ with .Contact.CallSign }}
       <span class="contact-callsign">{{ . }}</span>
       {{ end }}
@@ -73,6 +75,7 @@
     {{ end }}
   </div>
 
+  {{ if not .PrivateMode }}
   <div class="contact-section">
     <h3>Tags</h3>
     {{ if .Contact.Tags }}
@@ -96,15 +99,19 @@
       <form method="POST" action="/contact/{{ .Contact.ID }}/tag" class="add-item-form">
         <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
         <div class="add-item-field">
-          <input type="text" name="tag_name" placeholder="Tag name (e.g., event:something-2025, place:uni-x)" required class="form-item" pattern="[a-z0-9._:-]+" title="Lowercase letters, numbers, and ._:- characters only">
+          <div class="autocomplete-container">
+            <input type="text" name="tag_name" id="tag-autocomplete" placeholder="Tag name (e.g., event:something-2025, place:uni-x)" required class="form-item" pattern="[a-z0-9._:-]+" title="Lowercase letters, numbers, and ._:- characters only" autocomplete="off">
+            <div class="autocomplete-dropdown" id="tag-dropdown"></div>
+          </div>
           <p class="help-text">Use namespace:value format for categorization (e.g., event:something-2025)</p>
         </div>
         <button type="submit" class="btn">Add Tag</button>
       </form>
     </details>
   </div>
+  {{ end }}
 
-  {{ if not .Contact.IsService }}
+  {{ if and (not .Contact.IsService) (not .PrivateMode) }}
   <div class="contact-section">
     <h3>Activity Feed</h3>
 
@@ -515,6 +522,14 @@ window.addEventListener('message', function(event) {
     form.appendChild(input);
     document.body.appendChild(form);
     form.submit();
+  }
+});
+
+// Initialize tag autocomplete
+document.addEventListener('DOMContentLoaded', function() {
+  var tagNames = [{{ range $i, $t := .AllTags }}{{ if $i }}, {{ end }}"{{ $t.Name }}"{{ end }}];
+  if (tagNames.length > 0) {
+    initAutocomplete('#tag-autocomplete', tagNames);
   }
 });
 </script>

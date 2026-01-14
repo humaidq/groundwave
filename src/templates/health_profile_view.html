@@ -53,6 +53,12 @@
       <span class="detail-value">{{ .Profile.Gender }}</span>
     </div>
     {{ end }}
+    {{ if .Profile.Description }}
+    <div class="detail-item">
+      <span class="detail-label">Description:</span>
+      <span class="detail-value pre-line">{{ .Profile.Description }}</span>
+    </div>
+    {{ end }}
     <div class="detail-item">
       <span class="detail-label">Created:</span>
       <span class="detail-value">{{ .Profile.CreatedAt.Format "Jan 2, 2006" }}</span>

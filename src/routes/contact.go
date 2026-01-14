@@ -34,6 +34,15 @@ func NewContactForm(c flamego.Context, t template.Template, data template.Data) 
 			{Name: "New Contact", URL: "", IsCurrent: true},
 		}
 	}
+
+	// Fetch all tags for autocomplete
+	allTags, err := db.ListAllTags(c.Request().Context())
+	if err != nil {
+		log.Printf("Error fetching tags: %v", err)
+	} else {
+		data["AllTags"] = allTags
+	}
+
 	t.HTML(http.StatusOK, "contact_new")
 }
 
@@ -144,6 +153,16 @@ func CreateContact(c flamego.Context, s session.Session, t template.Template, da
 		return
 	}
 
+	// Add tag if provided
+	tagName := strings.TrimSpace(form.Get("tag"))
+	if tagName != "" {
+		err = db.AddTagToContact(c.Request().Context(), contactID, tagName)
+		if err != nil {
+			log.Printf("Error adding tag to contact: %v", err)
+			// Don't fail the whole operation, just log the error
+		}
+	}
+
 	// Redirect to contact view page on success
 	log.Printf("Successfully created contact: %s", contactID)
 	SetSuccessFlash(s, "Contact created successfully")
@@ -182,6 +201,13 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 		}
 	}
 
+	// Check private mode from session
+	privateMode := false
+	if pm := s.Get("private_mode"); pm != nil {
+		privateMode = pm.(bool)
+	}
+	data["PrivateMode"] = privateMode
+
 	data["Contact"] = contact
 	data["ContactName"] = contact.NameDisplay
 	data["TierLower"] = strings.ToLower(string(contact.Tier))
@@ -207,6 +233,14 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 		} else {
 			data["QSOs"] = qsos
 		}
+	}
+
+	// Fetch all tags for autocomplete
+	allTags, err := db.ListAllTags(c.Request().Context())
+	if err != nil {
+		log.Printf("Error fetching tags: %v", err)
+	} else {
+		data["AllTags"] = allTags
 	}
 
 	t.HTML(http.StatusOK, "contact_view")
@@ -853,12 +887,39 @@ func RemoveTag(c flamego.Context) {
 
 // ListServiceContacts renders the service contacts list page
 func ListServiceContacts(c flamego.Context, t template.Template, data template.Data) {
-	contacts, err := db.ListServiceContacts(c.Request().Context())
+	ctx := c.Request().Context()
+
+	// Get tag filter from URL query
+	tagIDs := c.QueryStrings("tag")
+
+	var contacts []db.ContactListItem
+	var err error
+
+	// Use ListContactsWithFilters if tags are specified
+	if len(tagIDs) > 0 {
+		opts := db.ContactListOptions{
+			TagIDs:    tagIDs,
+			IsService: true,
+		}
+		contacts, err = db.ListContactsWithFilters(ctx, opts)
+	} else {
+		contacts, err = db.ListServiceContacts(ctx)
+	}
+
 	if err != nil {
 		log.Printf("Error fetching service contacts: %v", err)
 		data["Error"] = "Failed to load service contacts"
 	} else {
 		data["ServiceContacts"] = contacts
+	}
+
+	// Fetch all tags for the filter UI
+	allTags, err := db.ListAllTags(ctx)
+	if err != nil {
+		log.Printf("Error fetching tags: %v", err)
+	} else {
+		data["AllTags"] = allTags
+		data["SelectedTags"] = tagIDs
 	}
 
 	data["IsServiceContacts"] = true
@@ -867,4 +928,23 @@ func ListServiceContacts(c flamego.Context, t template.Template, data template.D
 		{Name: "Service Contacts", URL: "", IsCurrent: true},
 	}
 	t.HTML(http.StatusOK, "service_contacts")
+}
+
+// TogglePrivateMode toggles the private mode session flag
+func TogglePrivateMode(c flamego.Context, s session.Session) {
+	// Get current state, default to false
+	privateMode := false
+	if pm := s.Get("private_mode"); pm != nil {
+		privateMode = pm.(bool)
+	}
+
+	// Toggle the state
+	s.Set("private_mode", !privateMode)
+
+	// Redirect back to the referring page, default to /contacts
+	referer := c.Request().Header.Get("Referer")
+	if referer == "" {
+		referer = "/contacts"
+	}
+	c.Redirect(referer, http.StatusSeeOther)
 }

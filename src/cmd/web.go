@@ -7,6 +7,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"os"
@@ -15,7 +16,7 @@ import (
 	"github.com/flamego/csrf"
 	"github.com/flamego/flamego"
 	"github.com/flamego/session"
-	"github.com/flamego/template"
+	flamegoTemplate "github.com/flamego/template"
 	"github.com/urfave/cli/v3"
 
 	"github.com/humaidq/groundwave/db"
@@ -100,9 +101,33 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	f := flamego.Classic()
 
 	// Setup flamego
-	fs, err := template.EmbedFS(templates.Templates, ".", []string{".html"})
+	fs, err := flamegoTemplate.EmbedFS(templates.Templates, ".", []string{".html"})
 	if err != nil {
 		panic(err)
+	}
+
+	// Custom template functions
+	funcMap := template.FuncMap{
+		"contains": func(slice []string, item string) bool {
+			for _, s := range slice {
+				if s == item {
+					return true
+				}
+			}
+			return false
+		},
+		"filterLabel": func(filter string) string {
+			labels := map[string]string{
+				"no_phone":    "No phone number",
+				"no_email":    "No email address",
+				"no_carddav":  "Not linked to CardDAV",
+				"no_linkedin": "No LinkedIn",
+			}
+			if label, ok := labels[filter]; ok {
+				return label
+			}
+			return filter
+		},
 	}
 	// Configure PostgreSQL session store with 30-day expiry
 	f.Use(session.Sessioner(session.Options{
@@ -118,11 +143,12 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		},
 	}))
 	f.Use(csrf.Csrfer())
-	f.Use(template.Templater(template.Options{
+	f.Use(flamegoTemplate.Templater(flamegoTemplate.Options{
 		FileSystem: fs,
+		FuncMaps:   []template.FuncMap{funcMap},
 	}))
 	// Flash message middleware - retrieve flash from session and pass to templates
-	f.Use(func(data template.Data, flash session.Flash) {
+	f.Use(func(data flamegoTemplate.Data, flash session.Flash) {
 		if msg, ok := flash.(routes.FlashMessage); ok {
 			data["Flash"] = msg
 		}
@@ -165,6 +191,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	f.Group("", func() {
 		f.Get("/", routes.Welcome)
 		f.Get("/logout", routes.Logout)
+		f.Post("/private-mode/toggle", routes.TogglePrivateMode)
 		f.Get("/contacts", routes.Home)
 		f.Get("/overdue", routes.Overdue)
 		f.Get("/qsl", routes.QSL)

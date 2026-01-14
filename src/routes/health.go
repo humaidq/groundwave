@@ -341,7 +341,14 @@ func CreateHealthProfile(c flamego.Context, s session.Session) {
 		gender = &g
 	}
 
-	profileID, err := db.CreateHealthProfile(ctx, name, dob, gender)
+	// Parse description (optional)
+	var description *string
+	descStr := strings.TrimSpace(c.Request().Form.Get("description"))
+	if descStr != "" {
+		description = &descStr
+	}
+
+	profileID, err := db.CreateHealthProfile(ctx, name, dob, gender, description)
 	if err != nil {
 		log.Printf("Error creating health profile: %v", err)
 		SetErrorFlash(s, "Failed to create health profile")
@@ -517,7 +524,14 @@ func UpdateHealthProfile(c flamego.Context, s session.Session) {
 		gender = &g
 	}
 
-	err := db.UpdateHealthProfile(ctx, profileID, name, dob, gender)
+	// Parse description (optional)
+	var description *string
+	descStr := strings.TrimSpace(c.Request().Form.Get("description"))
+	if descStr != "" {
+		description = &descStr
+	}
+
+	err := db.UpdateHealthProfile(ctx, profileID, name, dob, gender, description)
 	if err != nil {
 		log.Printf("Error updating health profile %s: %v", profileID, err)
 		c.Redirect("/health/"+profileID+"/edit", http.StatusSeeOther)

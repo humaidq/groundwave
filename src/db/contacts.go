@@ -27,6 +27,32 @@ type ContactListItem struct {
 	Tags         []Tag   // Tags associated with this contact
 }
 
+// ContactFilter represents a filter type for contact queries
+type ContactFilter string
+
+const (
+	FilterNoPhone    ContactFilter = "no_phone"
+	FilterNoEmail    ContactFilter = "no_email"
+	FilterNoCardDAV  ContactFilter = "no_carddav"
+	FilterNoLinkedIn ContactFilter = "no_linkedin"
+)
+
+// ValidContactFilters returns all valid filter values
+var ValidContactFilters = map[ContactFilter]bool{
+	FilterNoPhone:    true,
+	FilterNoEmail:    true,
+	FilterNoCardDAV:  true,
+	FilterNoLinkedIn: true,
+}
+
+// ContactListOptions holds filtering options for contact queries
+type ContactListOptions struct {
+	Filters        []ContactFilter
+	TagIDs         []string
+	IsService      bool
+	AlphabeticSort bool // When true, sort alphabetically instead of by tier
+}
+
 // ListContacts returns all contacts with their primary email and phone
 func ListContacts(ctx context.Context) ([]ContactListItem, error) {
 	if pool == nil {
@@ -66,6 +92,138 @@ func ListContacts(ctx context.Context) ([]ContactListItem, error) {
 	rows, err := pool.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query contacts: %w", err)
+	}
+	defer rows.Close()
+
+	var contacts []ContactListItem
+	for rows.Next() {
+		var contact ContactListItem
+		var tagsJSON []byte
+		err := rows.Scan(
+			&contact.ID,
+			&contact.NameDisplay,
+			&contact.Organization,
+			&contact.Title,
+			&contact.Tier,
+			&contact.CallSign,
+			&contact.IsService,
+			&contact.PrimaryEmail,
+			&contact.PrimaryPhone,
+			&tagsJSON,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan contact: %w", err)
+		}
+
+		// Unmarshal tags JSON
+		if len(tagsJSON) > 0 && string(tagsJSON) != "[]" {
+			if err := json.Unmarshal(tagsJSON, &contact.Tags); err != nil {
+				log.Printf("Warning: failed to unmarshal tags for contact %s: %v", contact.ID, err)
+				contact.Tags = []Tag{}
+			}
+		} else {
+			contact.Tags = []Tag{}
+		}
+
+		// Set lowercase tier for CSS classes
+		contact.TierLower = strings.ToLower(string(contact.Tier))
+		contacts = append(contacts, contact)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating contacts: %w", err)
+	}
+
+	return contacts, nil
+}
+
+// ListContactsWithFilters returns contacts matching the specified filter options
+func ListContactsWithFilters(ctx context.Context, opts ContactListOptions) ([]ContactListItem, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	var whereClauses []string
+	var args []interface{}
+	argNum := 1
+
+	// Base condition - filter by service status
+	whereClauses = append(whereClauses, fmt.Sprintf("c.is_service = $%d", argNum))
+	args = append(args, opts.IsService)
+	argNum++
+
+	// Apply data filters
+	for _, f := range opts.Filters {
+		switch f {
+		case FilterNoPhone:
+			whereClauses = append(whereClauses,
+				"NOT EXISTS (SELECT 1 FROM contact_phones WHERE contact_id = c.id)")
+		case FilterNoEmail:
+			whereClauses = append(whereClauses,
+				"NOT EXISTS (SELECT 1 FROM contact_emails WHERE contact_id = c.id)")
+		case FilterNoCardDAV:
+			whereClauses = append(whereClauses, "c.carddav_uuid IS NULL")
+		case FilterNoLinkedIn:
+			whereClauses = append(whereClauses,
+				"NOT EXISTS (SELECT 1 FROM contact_urls WHERE contact_id = c.id AND url_type = 'linkedin')")
+		}
+	}
+
+	// Apply tag filter (AND logic - must have ALL specified tags)
+	if len(opts.TagIDs) > 0 {
+		whereClauses = append(whereClauses, fmt.Sprintf(
+			`c.id IN (
+				SELECT contact_id FROM contact_tags
+				WHERE tag_id = ANY($%d::uuid[])
+				GROUP BY contact_id
+				HAVING COUNT(DISTINCT tag_id) = $%d
+			)`, argNum, argNum+1))
+		args = append(args, opts.TagIDs, len(opts.TagIDs))
+		argNum += 2
+	}
+
+	// Build ORDER BY based on service status and alphabetic sort option
+	orderBy := "c.tier ASC, c.name_display ASC"
+	if opts.AlphabeticSort {
+		orderBy = "c.name_display ASC"
+	} else if opts.IsService {
+		orderBy = "COALESCE(c.organization, c.name_display) ASC, c.name_display ASC"
+	}
+
+	// Build final query
+	query := fmt.Sprintf(`
+		SELECT
+			c.id,
+			c.name_display,
+			c.organization,
+			c.title,
+			c.tier,
+			c.call_sign,
+			c.is_service,
+			(SELECT email FROM contact_emails WHERE contact_id = c.id
+			 ORDER BY is_primary DESC, created_at LIMIT 1) AS primary_email,
+			(SELECT phone FROM contact_phones WHERE contact_id = c.id
+			 ORDER BY is_primary DESC, created_at LIMIT 1) AS primary_phone,
+			COALESCE(
+				(SELECT json_agg(json_build_object(
+					'id', t.id::text,
+					'name', t.name,
+					'description', t.description,
+					'created_at', t.created_at
+				) ORDER BY t.name)
+				 FROM tags t
+				 INNER JOIN contact_tags ct ON t.id = ct.tag_id
+				 WHERE ct.contact_id = c.id),
+				'[]'::json
+			) AS tags
+		FROM contacts c
+		WHERE %s
+		ORDER BY %s
+	`, strings.Join(whereClauses, " AND "), orderBy)
+
+	rows, err := pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query contacts with filters: %w", err)
 	}
 	defer rows.Close()
 

@@ -29,9 +29,15 @@
 </div>
 {{end}}
 
-{{ if .AllTags }}
 <div class="tag-filter-section">
+  <form method="POST" action="/private-mode/toggle" class="inline-form">
+    <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+    <button type="submit" class="btn{{ if .PrivateMode }} btn-active{{ end }}">
+      {{ if .PrivateMode }}Exit Private{{ else }}Private Mode{{ end }}
+    </button>
+  </form>
   <form method="GET" action="/contacts" class="tag-filter-form">
+    {{ if .AllTags }}
     <div class="tag-dropdown-container">
       <button type="button" class="btn tag-dropdown-toggle" id="tagDropdownToggle">
         <span class="dropdown-label">Filter by Tags</span>
@@ -61,36 +67,119 @@
         </div>
       </div>
     </div>
+    {{ end }}
+
+    <div class="tag-dropdown-container">
+      <button type="button" class="btn tag-dropdown-toggle" id="filterDropdownToggle">
+        <span class="dropdown-label">Data Filters</span>
+        {{ if .ActiveFilters }}
+        <span class="tag-count-badge">{{ len .ActiveFilters }}</span>
+        {{ end }}
+        <span class="dropdown-arrow">▼</span>
+      </button>
+
+      <div class="tag-dropdown-menu" id="filterDropdownMenu">
+        <div class="tag-dropdown-header">
+          <span class="dropdown-title">Filter by data</span>
+        </div>
+        <div class="tag-dropdown-list">
+          <label class="tag-checkbox-item">
+            <input type="checkbox" name="filter" value="no_phone"
+              {{ if contains .ActiveFilters "no_phone" }}checked{{ end }}>
+            <span class="tag-checkbox-label">No phone number</span>
+          </label>
+          <label class="tag-checkbox-item">
+            <input type="checkbox" name="filter" value="no_email"
+              {{ if contains .ActiveFilters "no_email" }}checked{{ end }}>
+            <span class="tag-checkbox-label">No email address</span>
+          </label>
+          <label class="tag-checkbox-item">
+            <input type="checkbox" name="filter" value="no_carddav"
+              {{ if contains .ActiveFilters "no_carddav" }}checked{{ end }}>
+            <span class="tag-checkbox-label">Not linked to CardDAV</span>
+          </label>
+          <label class="tag-checkbox-item">
+            <input type="checkbox" name="filter" value="no_linkedin"
+              {{ if contains .ActiveFilters "no_linkedin" }}checked{{ end }}>
+            <span class="tag-checkbox-label">No LinkedIn</span>
+          </label>
+        </div>
+        <div class="tag-dropdown-footer">
+          <button type="submit" class="btn">Apply</button>
+          <a href="/contacts" class="btn">Clear</a>
+        </div>
+      </div>
+    </div>
+
+    {{ if .AllTags }}
     <a href="/tags" class="btn ml-half">Manage Tags</a>
+    {{ end }}
   </form>
 </div>
 
 <script>
 (function() {
-  const toggle = document.getElementById('tagDropdownToggle');
-  const menu = document.getElementById('tagDropdownMenu');
+  // Tag dropdown toggle
+  const tagToggle = document.getElementById('tagDropdownToggle');
+  const tagMenu = document.getElementById('tagDropdownMenu');
 
-  if (toggle && menu) {
-    toggle.addEventListener('click', function(e) {
+  if (tagToggle && tagMenu) {
+    tagToggle.addEventListener('click', function(e) {
       e.preventDefault();
-      menu.classList.toggle('show');
-    });
-
-    // Close dropdown when clicking outside
-    document.addEventListener('click', function(e) {
-      if (!toggle.contains(e.target) && !menu.contains(e.target)) {
-        menu.classList.remove('show');
-      }
+      tagMenu.classList.toggle('show');
+      // Close filter menu when opening tag menu
+      const filterMenu = document.getElementById('filterDropdownMenu');
+      if (filterMenu) filterMenu.classList.remove('show');
     });
   }
+
+  // Filter dropdown toggle
+  const filterToggle = document.getElementById('filterDropdownToggle');
+  const filterMenu = document.getElementById('filterDropdownMenu');
+
+  if (filterToggle && filterMenu) {
+    filterToggle.addEventListener('click', function(e) {
+      e.preventDefault();
+      filterMenu.classList.toggle('show');
+      // Close tag menu when opening filter menu
+      if (tagMenu) tagMenu.classList.remove('show');
+    });
+  }
+
+  // Close dropdowns when clicking outside
+  document.addEventListener('click', function(e) {
+    if (tagToggle && tagMenu && !tagToggle.contains(e.target) && !tagMenu.contains(e.target)) {
+      tagMenu.classList.remove('show');
+    }
+    if (filterToggle && filterMenu && !filterToggle.contains(e.target) && !filterMenu.contains(e.target)) {
+      filterMenu.classList.remove('show');
+    }
+  });
 })();
 </script>
-{{ end }}
 
 <input type="text" id="contactSearch" placeholder="Search contacts..." class="search-input">
 
 {{ if .Contacts }}
 <div id="contactList">
+  {{ if .PrivateMode }}
+  {{/* Private mode: flat alphabetical list, no tiers or tags */}}
+  <div class="entry-list">
+  {{ range .Contacts }}
+    <div class="entry">
+      <a href="/contact/{{ .ID }}" class="entry-main-link">
+        <div class="entry-title">{{ .NameDisplay }}</div>
+        {{ if .Organization }}
+        <div class="entry-meta">
+          <span class="entry-org muted-text">{{ .Organization }}</span>
+        </div>
+        {{ end }}
+      </a>
+    </div>
+  {{ end }}
+  </div>
+  {{ else }}
+  {{/* Normal mode: grouped by tier with tags */}}
   {{ $prevTier := "" }}
   {{ range .Contacts }}
     {{ if ne .Tier $prevTier }}
@@ -123,6 +212,7 @@
     </div>
   {{ end }}
   </div>
+  {{ end }}
 </div>
 {{ else }}
 <p class="muted-text">No contacts found. <a href="/contact/new">Add your first contact</a>.</p>

@@ -21,7 +21,7 @@ func ListHealthProfiles(ctx context.Context) ([]HealthProfileSummary, error) {
 	}
 
 	query := `
-		SELECT id, name, date_of_birth, gender, created_at, updated_at, followup_count, last_followup_date
+		SELECT id, name, date_of_birth, gender, description, created_at, updated_at, followup_count, last_followup_date
 		FROM health_profiles_summary
 		ORDER BY name ASC
 	`
@@ -36,7 +36,7 @@ func ListHealthProfiles(ctx context.Context) ([]HealthProfileSummary, error) {
 	for rows.Next() {
 		var profile HealthProfileSummary
 		err := rows.Scan(
-			&profile.ID, &profile.Name, &profile.DateOfBirth, &profile.Gender,
+			&profile.ID, &profile.Name, &profile.DateOfBirth, &profile.Gender, &profile.Description,
 			&profile.CreatedAt, &profile.UpdatedAt,
 			&profile.FollowupCount, &profile.LastFollowupDate,
 		)
@@ -61,13 +61,13 @@ func GetHealthProfile(ctx context.Context, id string) (*HealthProfile, error) {
 
 	var profile HealthProfile
 	query := `
-		SELECT id, name, date_of_birth, gender, created_at, updated_at
+		SELECT id, name, date_of_birth, gender, description, created_at, updated_at
 		FROM health_profiles
 		WHERE id = $1
 	`
 
 	err := pool.QueryRow(ctx, query, id).Scan(
-		&profile.ID, &profile.Name, &profile.DateOfBirth, &profile.Gender,
+		&profile.ID, &profile.Name, &profile.DateOfBirth, &profile.Gender, &profile.Description,
 		&profile.CreatedAt, &profile.UpdatedAt,
 	)
 	if err != nil {
@@ -78,19 +78,19 @@ func GetHealthProfile(ctx context.Context, id string) (*HealthProfile, error) {
 }
 
 // CreateHealthProfile creates a new health profile
-func CreateHealthProfile(ctx context.Context, name string, dob *time.Time, gender *Gender) (string, error) {
+func CreateHealthProfile(ctx context.Context, name string, dob *time.Time, gender *Gender, description *string) (string, error) {
 	if pool == nil {
 		return "", fmt.Errorf("database connection not initialized")
 	}
 
 	var id string
 	query := `
-		INSERT INTO health_profiles (name, date_of_birth, gender)
-		VALUES ($1, $2, $3)
+		INSERT INTO health_profiles (name, date_of_birth, gender, description)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id
 	`
 
-	err := pool.QueryRow(ctx, query, name, dob, gender).Scan(&id)
+	err := pool.QueryRow(ctx, query, name, dob, gender, description).Scan(&id)
 	if err != nil {
 		return "", fmt.Errorf("failed to create health profile: %w", err)
 	}
@@ -98,19 +98,19 @@ func CreateHealthProfile(ctx context.Context, name string, dob *time.Time, gende
 	return id, nil
 }
 
-// UpdateHealthProfile updates a health profile's name
-func UpdateHealthProfile(ctx context.Context, id, name string, dob *time.Time, gender *Gender) error {
+// UpdateHealthProfile updates a health profile
+func UpdateHealthProfile(ctx context.Context, id, name string, dob *time.Time, gender *Gender, description *string) error {
 	if pool == nil {
 		return fmt.Errorf("database connection not initialized")
 	}
 
 	query := `
 		UPDATE health_profiles
-		SET name = $1, date_of_birth = $2, gender = $3
-		WHERE id = $4
+		SET name = $1, date_of_birth = $2, gender = $3, description = $4
+		WHERE id = $5
 	`
 
-	_, err := pool.Exec(ctx, query, name, dob, gender, id)
+	_, err := pool.Exec(ctx, query, name, dob, gender, description, id)
 	if err != nil {
 		return fmt.Errorf("failed to update health profile: %w", err)
 	}

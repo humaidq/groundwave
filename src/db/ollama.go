@@ -87,6 +87,9 @@ func buildLabSummaryPrompt(profile *HealthProfile, followup *HealthFollowup, res
 	if profile.Gender != nil {
 		sb.WriteString(fmt.Sprintf("Gender: %s\n", *profile.Gender))
 	}
+	if profile.Description != nil && *profile.Description != "" {
+		sb.WriteString(fmt.Sprintf("Patient Notes: %s\n", *profile.Description))
+	}
 	sb.WriteString(fmt.Sprintf("Visit Date: %s\n", followup.FollowupDate.Format("January 2, 2006")))
 	sb.WriteString(fmt.Sprintf("Facility: %s\n", followup.HospitalName))
 	sb.WriteString("\n---\n\nLab Results:\n\n")

@@ -606,6 +606,7 @@ type HealthProfile struct {
 	Name        string     `db:"name"`
 	DateOfBirth *time.Time `db:"date_of_birth"`
 	Gender      *Gender    `db:"gender"`
+	Description *string    `db:"description"`
 	CreatedAt   time.Time  `db:"created_at"`
 	UpdatedAt   time.Time  `db:"updated_at"`
 }
