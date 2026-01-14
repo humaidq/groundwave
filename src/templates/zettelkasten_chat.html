@@ -69,7 +69,10 @@ import { marked } from 'https://cdnjs.cloudflare.com/ajax/libs/marked/16.3.0/lib
     {{ end }}
   ];
 
+  const notesByID = new Map(notes.map((note) => [note.id, note]));
   const selectedNotes = new Map();
+  const expandedLinks = new Set();
+  const expandedBacklinks = new Set();
   let currentItems = [];
   let selectedIndex = -1;
 
@@ -90,6 +93,74 @@ import { marked } from 'https://cdnjs.cloudflare.com/ajax/libs/marked/16.3.0/lib
     return message;
   }
 
+  async function addLinkedNotes(noteId) {
+    try {
+      const response = await fetch('/zk/chat/links', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken.value
+        },
+        body: JSON.stringify({ note_id: noteId })
+      });
+
+      if (!response.ok) {
+        throw new Error('Server returned ' + response.status);
+      }
+
+      const data = await response.json();
+      const links = Array.isArray(data.links) ? data.links : [];
+
+      if (links.length === 0) {
+        addMessage('system', 'No linked notes found for this page.', false);
+      }
+
+      links.forEach((id) => {
+        const note = notesByID.get(id) || { id: id, title: id };
+        addNote(note);
+      });
+    } catch (err) {
+      addMessage('system', 'Failed to load linked notes: ' + err.message, false);
+    } finally {
+      expandedLinks.add(noteId);
+      renderSelectedNotes();
+    }
+  }
+
+  async function addBacklinkedNotes(noteId) {
+    try {
+      const response = await fetch('/zk/chat/backlinks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken.value
+        },
+        body: JSON.stringify({ note_id: noteId })
+      });
+
+      if (!response.ok) {
+        throw new Error('Server returned ' + response.status);
+      }
+
+      const data = await response.json();
+      const backlinks = Array.isArray(data.backlinks) ? data.backlinks : [];
+
+      if (backlinks.length === 0) {
+        addMessage('system', 'No backlinks found for this page.', false);
+      }
+
+      backlinks.forEach((id) => {
+        const note = notesByID.get(id) || { id: id, title: id };
+        addNote(note);
+      });
+    } catch (err) {
+      addMessage('system', 'Failed to load backlinks: ' + err.message, false);
+    } finally {
+      expandedBacklinks.add(noteId);
+      renderSelectedNotes();
+    }
+  }
+
   function renderSelectedNotes() {
     selectedList.innerHTML = '';
 
@@ -101,6 +172,33 @@ import { marked } from 'https://cdnjs.cloudflare.com/ajax/libs/marked/16.3.0/lib
       label.className = 'tag-pill-name';
       label.textContent = note.title;
 
+      const actions = document.createElement('div');
+      actions.className = 'zk-note-pill-actions';
+
+      if (!expandedBacklinks.has(note.id)) {
+        const expandUp = document.createElement('button');
+        expandUp.type = 'button';
+        expandUp.className = 'zk-note-pill-expand-btn';
+        expandUp.title = 'Add backlinks';
+        expandUp.textContent = '▲';
+        expandUp.addEventListener('click', () => {
+          addBacklinkedNotes(note.id);
+        });
+        actions.appendChild(expandUp);
+      }
+
+      if (!expandedLinks.has(note.id)) {
+        const expand = document.createElement('button');
+        expand.type = 'button';
+        expand.className = 'zk-note-pill-expand-btn';
+        expand.title = 'Add linked notes';
+        expand.textContent = '▼';
+        expand.addEventListener('click', () => {
+          addLinkedNotes(note.id);
+        });
+        actions.appendChild(expand);
+      }
+
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'tag-pill-delete-btn';
@@ -108,11 +206,15 @@ import { marked } from 'https://cdnjs.cloudflare.com/ajax/libs/marked/16.3.0/lib
       remove.textContent = '×';
       remove.addEventListener('click', () => {
         selectedNotes.delete(note.id);
+        expandedLinks.delete(note.id);
+        expandedBacklinks.delete(note.id);
         renderSelectedNotes();
       });
 
+      actions.appendChild(remove);
+
       pill.appendChild(label);
-      pill.appendChild(remove);
+      pill.appendChild(actions);
       selectedList.appendChild(pill);
     });
   }

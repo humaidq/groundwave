@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/humaidq/groundwave/db"
+	"github.com/humaidq/groundwave/utils"
 )
 
 // ZKHistoryItem represents a visited zettelkasten note in navigation history
@@ -237,6 +238,14 @@ type zkChatRequest struct {
 	Message string   `json:"message"`
 }
 
+type zkChatLinksRequest struct {
+	NoteID string `json:"note_id"`
+}
+
+type zkChatBacklinksRequest struct {
+	NoteID string `json:"note_id"`
+}
+
 // ZettelkastenChat renders the zettelkasten chat page.
 func ZettelkastenChat(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	ctx := c.Request().Context()
@@ -257,6 +266,65 @@ func ZettelkastenChat(c flamego.Context, s session.Session, t template.Template,
 	}
 
 	t.HTML(http.StatusOK, "zettelkasten_chat")
+}
+
+// ZettelkastenChatLinks returns linked note IDs for a note.
+func ZettelkastenChatLinks(c flamego.Context) {
+	ctx := c.Request().Context()
+	w := c.ResponseWriter()
+
+	var reqBody zkChatLinksRequest
+	if err := json.NewDecoder(c.Request().Body().ReadCloser()).Decode(&reqBody); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	noteID := strings.TrimSpace(strings.TrimPrefix(reqBody.NoteID, "id:"))
+	if noteID == "" {
+		http.Error(w, "Note ID is required", http.StatusBadRequest)
+		return
+	}
+
+	links, err := db.GetZKNoteLinks(ctx, noteID)
+	if err != nil {
+		log.Printf("Error fetching links for note %s: %v", noteID, err)
+		http.Error(w, "Failed to fetch links", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string][]string{"links": links}); err != nil {
+		log.Printf("Error encoding chat links response: %v", err)
+	}
+}
+
+// ZettelkastenChatBacklinks returns backlinks for a note.
+func ZettelkastenChatBacklinks(c flamego.Context) {
+	w := c.ResponseWriter()
+
+	var reqBody zkChatBacklinksRequest
+	if err := json.NewDecoder(c.Request().Body().ReadCloser()).Decode(&reqBody); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	noteID := strings.TrimSpace(strings.TrimPrefix(reqBody.NoteID, "id:"))
+	if noteID == "" {
+		http.Error(w, "Note ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := utils.ValidateUUID(noteID); err != nil {
+		http.Error(w, "Invalid note ID", http.StatusBadRequest)
+		return
+	}
+
+	backlinks := db.GetBacklinksFromCache(noteID)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string][]string{"backlinks": backlinks}); err != nil {
+		log.Printf("Error encoding chat backlinks response: %v", err)
+	}
 }
 
 // ZettelkastenChatStream streams AI chat responses using SSE.

@@ -3334,6 +3334,27 @@ code:not(pre code) {
   justify-content: space-between;
 }
 
+.zk-note-pill-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65em;
+}
+
+.zk-note-pill-expand-btn {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 1.3em;
+  line-height: 1;
+  padding: 0.15em 0.2em;
+  margin: 0;
+}
+
+.zk-note-pill-expand-btn:hover {
+  color: #0969da;
+}
+
 .zk-chat-message {
   padding: 0.75rem 0.9rem;
   border-radius: 10px;
