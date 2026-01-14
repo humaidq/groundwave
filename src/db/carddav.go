@@ -9,12 +9,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/emersion/go-vcard"
 	"github.com/emersion/go-webdav/carddav"
+	"github.com/google/uuid"
 )
 
 // CardDAVConfig holds the CardDAV server configuration
@@ -517,5 +519,239 @@ func SyncAllCardDAVContacts(ctx context.Context) error {
 		fmt.Printf("CardDAV sync completed: %d contacts synced\n", syncCount)
 	}
 
+	return nil
+}
+
+// CreateCardDAVContact creates a new contact on the CardDAV server
+// Returns the UUID of the created contact
+func CreateCardDAVContact(ctx context.Context, contact *ContactDetail) (string, error) {
+	config, err := GetCardDAVConfig()
+	if err != nil {
+		return "", err
+	}
+
+	client, err := newCardDAVClient(config)
+	if err != nil {
+		return "", err
+	}
+
+	// Generate a new UUID for the vCard
+	newUUID := uuid.New().String()
+
+	// Build the vCard
+	card := make(vcard.Card)
+
+	// Set UID
+	card.SetValue(vcard.FieldUID, newUUID)
+
+	// Set name fields
+	nameGiven := ""
+	if contact.NameGiven != nil {
+		nameGiven = *contact.NameGiven
+	}
+	nameFamily := ""
+	if contact.NameFamily != nil {
+		nameFamily = *contact.NameFamily
+	}
+
+	// FN (formatted name) is required
+	card.SetValue(vcard.FieldFormattedName, contact.NameDisplay)
+
+	// N (structured name) - set using vcard.Name struct
+	card.AddName(&vcard.Name{
+		FamilyName: nameFamily,
+		GivenName:  nameGiven,
+	})
+
+	// Add organization if present
+	if contact.Organization != nil && *contact.Organization != "" {
+		card.SetValue(vcard.FieldOrganization, *contact.Organization)
+	}
+
+	// Add title if present
+	if contact.Title != nil && *contact.Title != "" {
+		card.SetValue(vcard.FieldTitle, *contact.Title)
+	}
+
+	// Add emails (only local ones, not already from carddav)
+	for _, email := range contact.Emails {
+		if email.Source != "carddav" {
+			emailType := "home"
+			if email.EmailType == EmailWork {
+				emailType = "work"
+			}
+			card.Add(vcard.FieldEmail, &vcard.Field{
+				Value:  email.Email,
+				Params: vcard.Params{vcard.ParamType: []string{emailType}},
+			})
+		}
+	}
+
+	// Add phones (only local ones, not already from carddav)
+	for _, phone := range contact.Phones {
+		if phone.Source != "carddav" {
+			phoneType := "cell"
+			switch phone.PhoneType {
+			case PhoneHome:
+				phoneType = "home"
+			case PhoneWork:
+				phoneType = "work"
+			case PhoneFax:
+				phoneType = "fax"
+			}
+			card.Add(vcard.FieldTelephone, &vcard.Field{
+				Value:  phone.Phone,
+				Params: vcard.Params{vcard.ParamType: []string{phoneType}},
+			})
+		}
+	}
+
+	// Convert to vCard 4.0
+	vcard.ToV4(card)
+
+	// Determine the path for the new contact
+	// Parse the URL to extract just the path portion
+	parsedURL, err := url.Parse(config.URL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse CardDAV URL: %w", err)
+	}
+
+	basePath := strings.TrimSuffix(parsedURL.Path, "/")
+	// Remove any trailing filename if present (e.g., .vcf)
+	if strings.HasSuffix(basePath, ".vcf") {
+		basePath = basePath[:strings.LastIndex(basePath, "/")]
+	}
+	path := fmt.Sprintf("%s/%s.vcf", basePath, newUUID)
+
+	// Create the contact on the server using PUT
+	_, err = client.PutAddressObject(ctx, path, card)
+	if err != nil {
+		return "", fmt.Errorf("failed to create CardDAV contact: %w", err)
+	}
+
+	return newUUID, nil
+}
+
+// UpdateCardDAVContact updates an existing contact on the CardDAV server
+// This fetches the existing vCard first, updates only the fields we manage,
+// and preserves all other fields (notes, photo, birthday, addresses, etc.)
+func UpdateCardDAVContact(ctx context.Context, contact *ContactDetail) error {
+	if contact.CardDAVUUID == nil || *contact.CardDAVUUID == "" {
+		return fmt.Errorf("contact is not linked to CardDAV")
+	}
+
+	config, err := GetCardDAVConfig()
+	if err != nil {
+		return err
+	}
+
+	client, err := newCardDAVClient(config)
+	if err != nil {
+		return err
+	}
+
+	existingUUID := *contact.CardDAVUUID
+
+	// Determine the path for the contact
+	parsedURL, err := url.Parse(config.URL)
+	if err != nil {
+		return fmt.Errorf("failed to parse CardDAV URL: %w", err)
+	}
+
+	basePath := strings.TrimSuffix(parsedURL.Path, "/")
+	if strings.HasSuffix(basePath, ".vcf") {
+		basePath = basePath[:strings.LastIndex(basePath, "/")]
+	}
+	path := fmt.Sprintf("%s/%s.vcf", basePath, existingUUID)
+
+	// Fetch the existing vCard to preserve fields we don't manage
+	existingObj, err := client.GetAddressObject(ctx, path)
+	if err != nil {
+		return fmt.Errorf("failed to fetch existing CardDAV contact: %w", err)
+	}
+	card := existingObj.Card
+
+	// Update name fields, preserving components we don't manage (prefix, suffix, middle name)
+	nameGiven := ""
+	if contact.NameGiven != nil {
+		nameGiven = *contact.NameGiven
+	}
+	nameFamily := ""
+	if contact.NameFamily != nil {
+		nameFamily = *contact.NameFamily
+	}
+
+	// Get existing name to preserve additional fields
+	existingName := card.Name()
+	var additionalName, honorificPrefix, honorificSuffix string
+	if existingName != nil {
+		additionalName = existingName.AdditionalName
+		honorificPrefix = existingName.HonorificPrefix
+		honorificSuffix = existingName.HonorificSuffix
+	}
+
+	// FN (formatted name) is required - update it
+	card.SetValue(vcard.FieldFormattedName, contact.NameDisplay)
+
+	// N (structured name) - remove existing and add new, preserving prefix/suffix/middle
+	delete(card, vcard.FieldName)
+	card.AddName(&vcard.Name{
+		FamilyName:      nameFamily,
+		GivenName:       nameGiven,
+		AdditionalName:  additionalName,
+		HonorificPrefix: honorificPrefix,
+		HonorificSuffix: honorificSuffix,
+	})
+
+	// Update organization - remove existing and add if present
+	delete(card, vcard.FieldOrganization)
+	if contact.Organization != nil && *contact.Organization != "" {
+		card.SetValue(vcard.FieldOrganization, *contact.Organization)
+	}
+
+	// Update title - remove existing and add if present
+	delete(card, vcard.FieldTitle)
+	if contact.Title != nil && *contact.Title != "" {
+		card.SetValue(vcard.FieldTitle, *contact.Title)
+	}
+
+	// Update emails - remove existing and add all from local
+	delete(card, vcard.FieldEmail)
+	for _, email := range contact.Emails {
+		emailType := "home"
+		if email.EmailType == EmailWork {
+			emailType = "work"
+		}
+		card.Add(vcard.FieldEmail, &vcard.Field{
+			Value:  email.Email,
+			Params: vcard.Params{vcard.ParamType: []string{emailType}},
+		})
+	}
+
+	// Update phones - remove existing and add all from local
+	delete(card, vcard.FieldTelephone)
+	for _, phone := range contact.Phones {
+		phoneType := "cell"
+		switch phone.PhoneType {
+		case PhoneHome:
+			phoneType = "home"
+		case PhoneWork:
+			phoneType = "work"
+		case PhoneFax:
+			phoneType = "fax"
+		}
+		card.Add(vcard.FieldTelephone, &vcard.Field{
+			Value:  phone.Phone,
+			Params: vcard.Params{vcard.ParamType: []string{phoneType}},
+		})
+	}
+
+	// Update the contact on the server using PUT
+	_, err = client.PutAddressObject(ctx, path, card)
+	if err != nil {
+		return fmt.Errorf("failed to update CardDAV contact: %w", err)
+	}
+
+	fmt.Printf("UpdateCardDAVContact: Successfully updated CardDAV contact %s\n", existingUUID)
 	return nil
 }

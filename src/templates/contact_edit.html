@@ -25,7 +25,7 @@
 {{ if .Contact.CardDAVUUID }}
 <div class="alert alert-grey">
   <h5 class="alert-title">CardDAV Synced Contact</h5>
-  <p>This contact is synced with CardDAV. Name, organization, and job title are automatically updated from CardDAV and cannot be edited here.</p>
+  <p>This contact is synced with CardDAV. Changes to name, organization, and job title will be pushed to CardDAV.</p>
 </div>
 {{ end }}
 
@@ -35,10 +35,9 @@
     <label for="name_given" class="item-title">First Name <span class="required">*</span></label>
     <input type="text" id="name_given" name="name_given" class="form-item" required
            value="{{ with .Contact.NameGiven }}{{ . }}{{ end }}"
-           placeholder="e.g., John"
-           {{ if .Contact.CardDAVUUID }}readonly{{ end }}>
+           placeholder="e.g., John">
     {{ if .Contact.CardDAVUUID }}
-    <small class="muted-text">Synced from CardDAV (read-only)</small>
+    <small class="muted-text">Changes will sync to CardDAV</small>
     {{ else }}
     <small class="muted-text">Required</small>
     {{ end }}
@@ -48,10 +47,9 @@
     <label for="name_family" class="item-title">Last Name</label>
     <input type="text" id="name_family" name="name_family" class="form-item"
            value="{{ with .Contact.NameFamily }}{{ . }}{{ end }}"
-           placeholder="e.g., Doe"
-           {{ if .Contact.CardDAVUUID }}readonly{{ end }}>
+           placeholder="e.g., Doe">
     {{ if .Contact.CardDAVUUID }}
-    <small class="muted-text">Synced from CardDAV (read-only)</small>
+    <small class="muted-text">Changes will sync to CardDAV</small>
     {{ end }}
   </div>
 
@@ -59,10 +57,9 @@
     <label for="organization" class="item-title">Organization</label>
     <input type="text" id="organization" name="organization" class="form-item"
            value="{{ with .Contact.Organization }}{{ . }}{{ end }}"
-           placeholder="e.g., Acme Corp"
-           {{ if .Contact.CardDAVUUID }}readonly{{ end }}>
+           placeholder="e.g., Acme Corp">
     {{ if .Contact.CardDAVUUID }}
-    <small class="muted-text">Synced from CardDAV (read-only)</small>
+    <small class="muted-text">Changes will sync to CardDAV</small>
     {{ end }}
   </div>
 
@@ -70,10 +67,9 @@
     <label for="title" class="item-title">Job Title</label>
     <input type="text" id="title" name="title" class="form-item"
            value="{{ with .Contact.Title }}{{ . }}{{ end }}"
-           placeholder="e.g., Software Engineer"
-           {{ if .Contact.CardDAVUUID }}readonly{{ end }}>
+           placeholder="e.g., Software Engineer">
     {{ if .Contact.CardDAVUUID }}
-    <small class="muted-text">Synced from CardDAV (read-only)</small>
+    <small class="muted-text">Changes will sync to CardDAV</small>
     {{ end }}
   </div>
 
@@ -126,5 +122,69 @@
     <a href="/contact/{{ .Contact.ID }}" class="btn">Cancel</a>
   </div>
 </form>
+
+<div class="form-group">
+  <hr class="contact-type-divider">
+  <h4 class="contact-type-heading">CardDAV Integration</h4>
+  {{ if .Contact.CardDAVUUID }}
+  <p class="muted-text contact-type-description">This contact is linked to CardDAV and syncs automatically.</p>
+  <form method="POST" action="/contact/{{ .Contact.ID }}/carddav/unlink" onsubmit="return confirm('Unlink this contact from CardDAV? The local contact data will remain, but will no longer sync.');">
+    <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+    <button type="submit" class="btn">Unlink from CardDAV</button>
+  </form>
+  {{ else }}
+  <p class="muted-text contact-type-description">This contact is not linked to CardDAV. You can link it to an existing CardDAV contact or migrate the data to create a new CardDAV contact.</p>
+  <div class="page-header-actions">
+    <button type="button" class="btn" onclick="openCardDAVLinkDialog()">Link to Existing</button>
+    <form method="POST" action="/contact/{{ .Contact.ID }}/carddav/migrate" onsubmit="return confirm('Create a new CardDAV contact from this local data? This will migrate the name, emails, and phone numbers to CardDAV. Notes will remain in Groundwave only.');">
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+      <button type="submit" class="btn">Migrate to CardDAV</button>
+    </form>
+  </div>
+  {{ end }}
+</div>
+
+<input type="hidden" id="csrf-token" value="{{ .csrf_token }}" />
+<script>
+function openCardDAVLinkDialog() {
+  const width = 600;
+  const height = 700;
+  const left = (screen.width - width) / 2;
+  const top = (screen.height - height) / 2;
+
+  window.open(
+    '/carddav/picker',
+    'CardDAV Contact Picker',
+    `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+  );
+}
+
+window.addEventListener('message', function(event) {
+  if (event.origin !== window.location.origin) {
+    return;
+  }
+
+  if (event.data.type === 'carddav-contact-selected') {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/contact/{{ .Contact.ID }}/carddav/link';
+
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = '_csrf';
+    csrfInput.value = document.getElementById('csrf-token').value;
+    form.appendChild(csrfInput);
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'carddav_uuid';
+    input.value = event.data.uuid;
+
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+  }
+});
+</script>
 
 {{ template "foot" . }}

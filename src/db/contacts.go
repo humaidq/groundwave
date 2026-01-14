@@ -751,6 +751,92 @@ func DeletePhone(ctx context.Context, phoneID string) error {
 	return nil
 }
 
+// UpdateEmailInput represents input for updating an email
+type UpdateEmailInput struct {
+	ID        string
+	Email     string
+	EmailType EmailType
+	IsPrimary bool
+}
+
+// UpdateEmail updates an existing email
+func UpdateEmail(ctx context.Context, input UpdateEmailInput) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		UPDATE contact_emails
+		SET email = $1, email_type = $2, is_primary = $3
+		WHERE id = $4
+	`
+	_, err := pool.Exec(ctx, query, input.Email, input.EmailType, input.IsPrimary, input.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update email: %w", err)
+	}
+
+	return nil
+}
+
+// UpdatePhoneInput represents input for updating a phone
+type UpdatePhoneInput struct {
+	ID        string
+	Phone     string
+	PhoneType PhoneType
+	IsPrimary bool
+}
+
+// UpdatePhone updates an existing phone
+func UpdatePhone(ctx context.Context, input UpdatePhoneInput) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		UPDATE contact_phones
+		SET phone = $1, phone_type = $2, is_primary = $3
+		WHERE id = $4
+	`
+	_, err := pool.Exec(ctx, query, input.Phone, input.PhoneType, input.IsPrimary, input.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update phone: %w", err)
+	}
+
+	return nil
+}
+
+// GetContactIDByEmailID returns the contact ID for a given email ID
+func GetContactIDByEmailID(ctx context.Context, emailID string) (string, error) {
+	if pool == nil {
+		return "", fmt.Errorf("database connection not initialized")
+	}
+
+	var contactID string
+	query := `SELECT contact_id FROM contact_emails WHERE id = $1`
+	err := pool.QueryRow(ctx, query, emailID).Scan(&contactID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get contact ID for email: %w", err)
+	}
+
+	return contactID, nil
+}
+
+// GetContactIDByPhoneID returns the contact ID for a given phone ID
+func GetContactIDByPhoneID(ctx context.Context, phoneID string) (string, error) {
+	if pool == nil {
+		return "", fmt.Errorf("database connection not initialized")
+	}
+
+	var contactID string
+	query := `SELECT contact_id FROM contact_phones WHERE id = $1`
+	err := pool.QueryRow(ctx, query, phoneID).Scan(&contactID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get contact ID for phone: %w", err)
+	}
+
+	return contactID, nil
+}
+
 // DeleteURL removes a URL from a contact
 func DeleteURL(ctx context.Context, urlID string) error {
 	if pool == nil {
@@ -898,6 +984,73 @@ func IsCardDAVUUIDLinked(ctx context.Context, uuid string) (bool, error) {
 	}
 
 	return exists, nil
+}
+
+// MigrateContactToCardDAV creates a new CardDAV contact from local data and links it
+func MigrateContactToCardDAV(ctx context.Context, contactID string) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	// Fetch full contact details
+	contact, err := GetContact(ctx, contactID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch contact: %w", err)
+	}
+	fmt.Printf("MigrateContactToCardDAV: Fetched contact %s (%s)\n", contactID, contact.NameDisplay)
+
+	// Check if already linked to CardDAV
+	if contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
+		return fmt.Errorf("contact is already linked to CardDAV")
+	}
+
+	// Create the CardDAV contact
+	newUUID, err := CreateCardDAVContact(ctx, contact)
+	if err != nil {
+		return fmt.Errorf("failed to create CardDAV contact: %w", err)
+	}
+	fmt.Printf("MigrateContactToCardDAV: Created CardDAV contact with UUID %s\n", newUUID)
+
+	// Start a transaction to update local data
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Update the source of local emails to 'carddav'
+	_, err = tx.Exec(ctx, `
+		UPDATE contact_emails SET source = 'carddav'
+		WHERE contact_id = $1 AND source = 'local'
+	`, contactID)
+	if err != nil {
+		return fmt.Errorf("failed to update email sources: %w", err)
+	}
+
+	// Update the source of local phones to 'carddav'
+	_, err = tx.Exec(ctx, `
+		UPDATE contact_phones SET source = 'carddav'
+		WHERE contact_id = $1 AND source = 'local'
+	`, contactID)
+	if err != nil {
+		return fmt.Errorf("failed to update phone sources: %w", err)
+	}
+
+	// Link the contact to the new CardDAV UUID
+	_, err = tx.Exec(ctx, `
+		UPDATE contacts SET carddav_uuid = $1 WHERE id = $2
+	`, newUUID, contactID)
+	if err != nil {
+		return fmt.Errorf("failed to link contact to CardDAV: %w", err)
+	}
+
+	// Commit transaction
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	fmt.Printf("MigrateContactToCardDAV: Successfully linked contact %s to CardDAV UUID %s\n", contactID, newUUID)
+	return nil
 }
 
 // OverdueContactItem represents a contact that is overdue for contact

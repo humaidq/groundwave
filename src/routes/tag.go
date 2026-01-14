@@ -109,6 +109,26 @@ func UpdateTag(c flamego.Context, s session.Session) {
 	c.Redirect("/tags", http.StatusSeeOther)
 }
 
+// DeleteTag handles tag deletion
+func DeleteTag(c flamego.Context, s session.Session) {
+	tagID := c.Param("id")
+	if tagID == "" {
+		SetErrorFlash(s, "Tag ID is required")
+		c.Redirect("/tags", http.StatusSeeOther)
+		return
+	}
+
+	err := db.DeleteTag(c.Request().Context(), tagID)
+	if err != nil {
+		log.Printf("Error deleting tag %s: %v", tagID, err)
+		SetErrorFlash(s, "Failed to delete tag")
+	} else {
+		SetSuccessFlash(s, "Tag deleted successfully")
+	}
+
+	c.Redirect("/tags", http.StatusSeeOther)
+}
+
 // ViewTagContacts shows all contacts with a specific tag
 func ViewTagContacts(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	tagID := c.Param("id")

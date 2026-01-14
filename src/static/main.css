@@ -1079,6 +1079,7 @@ code:not(pre code) {
 .contact-item {
   display: flex;
   align-items: flex-start;
+  flex-wrap: wrap;
   margin-bottom: 1rem;
   padding: 0.75rem;
   background-color: #f9f9f9;
@@ -1276,6 +1277,28 @@ code:not(pre code) {
 .checkbox-label input[type="checkbox"] {
   cursor: pointer;
   width: auto;
+}
+
+/* Inline Edit Details */
+.inline-edit-details summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.inline-edit-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.inline-edit-details[open] {
+  flex-basis: 100%;
+  margin-top: 0.75rem;
+}
+
+.inline-edit-form {
+  padding: 0.75rem;
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
 }
 
 /* Delete buttons and forms */
@@ -1750,6 +1773,11 @@ code:not(pre code) {
 
   .add-item-form {
     border-top-color: #666;
+  }
+
+  .inline-edit-form {
+    background-color: #2d2e31;
+    border-color: #666;
   }
 
   .btn-edit {

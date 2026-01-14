@@ -237,6 +237,27 @@ func RemoveTagFromContact(ctx context.Context, contactID string, tagID string) e
 	return nil
 }
 
+// DeleteTag deletes a tag and all its associations with contacts
+func DeleteTag(ctx context.Context, tagID string) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	// Delete tag associations first (due to foreign key constraints)
+	_, err := pool.Exec(ctx, `DELETE FROM contact_tags WHERE tag_id = $1`, tagID)
+	if err != nil {
+		return fmt.Errorf("failed to delete tag associations: %w", err)
+	}
+
+	// Delete the tag itself
+	_, err = pool.Exec(ctx, `DELETE FROM tags WHERE id = $1`, tagID)
+	if err != nil {
+		return fmt.Errorf("failed to delete tag: %w", err)
+	}
+
+	return nil
+}
+
 // GetContactsByTags returns contacts matching ALL specified tags (AND logic)
 func GetContactsByTags(ctx context.Context, tagIDs []string) ([]ContactListItem, error) {
 	if pool == nil {

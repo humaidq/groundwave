@@ -355,6 +355,15 @@ func UpdateContact(c flamego.Context, s session.Session, t template.Template, da
 		return
 	}
 
+	// If contact is linked to CardDAV, push the update
+	contact, err := db.GetContact(c.Request().Context(), contactID)
+	if err == nil && contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
+		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
+			log.Printf("Error pushing contact update to CardDAV: %v", err)
+			// Don't fail the whole operation, just log the error
+		}
+	}
+
 	// Redirect to contact view page on success
 	log.Printf("Successfully updated contact: %s", contactID)
 	SetSuccessFlash(s, "Contact updated successfully")
@@ -389,16 +398,45 @@ func AddEmail(c flamego.Context) {
 
 	isPrimary := form.Get("is_primary") == "on"
 
-	input := db.AddEmailInput{
-		ContactID: contactID,
-		Email:     email,
-		EmailType: emailType,
-		IsPrimary: isPrimary,
+	// Check if contact is linked to CardDAV first
+	contact, err := db.GetContact(c.Request().Context(), contactID)
+	if err != nil {
+		log.Printf("Error getting contact: %v", err)
+		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+		return
 	}
 
-	err := db.AddEmail(c.Request().Context(), input)
-	if err != nil {
-		log.Printf("Error adding email: %v", err)
+	if contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
+		// For CardDAV-linked contacts, add to contact in memory and push to CardDAV
+		// The sync will bring it back with source='carddav'
+		newEmail := db.ContactEmail{
+			Email:     email,
+			EmailType: emailType,
+			IsPrimary: isPrimary,
+			Source:    "carddav",
+		}
+		contact.Emails = append(contact.Emails, newEmail)
+
+		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
+			log.Printf("Error pushing new email to CardDAV: %v", err)
+		} else {
+			// Sync the contact back to get the email with proper ID
+			if err := db.SyncContactFromCardDAV(c.Request().Context(), contact.ID.String(), *contact.CardDAVUUID); err != nil {
+				log.Printf("Error syncing contact after adding email: %v", err)
+			}
+		}
+	} else {
+		// For local contacts, add to database directly
+		input := db.AddEmailInput{
+			ContactID: contactID,
+			Email:     email,
+			EmailType: emailType,
+			IsPrimary: isPrimary,
+		}
+
+		if err := db.AddEmail(c.Request().Context(), input); err != nil {
+			log.Printf("Error adding email: %v", err)
+		}
 	}
 
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
@@ -432,16 +470,45 @@ func AddPhone(c flamego.Context) {
 
 	isPrimary := form.Get("is_primary") == "on"
 
-	input := db.AddPhoneInput{
-		ContactID: contactID,
-		Phone:     phone,
-		PhoneType: phoneType,
-		IsPrimary: isPrimary,
+	// Check if contact is linked to CardDAV first
+	contact, err := db.GetContact(c.Request().Context(), contactID)
+	if err != nil {
+		log.Printf("Error getting contact: %v", err)
+		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+		return
 	}
 
-	err := db.AddPhone(c.Request().Context(), input)
-	if err != nil {
-		log.Printf("Error adding phone: %v", err)
+	if contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
+		// For CardDAV-linked contacts, add to contact in memory and push to CardDAV
+		// The sync will bring it back with source='carddav'
+		newPhone := db.ContactPhone{
+			Phone:     phone,
+			PhoneType: phoneType,
+			IsPrimary: isPrimary,
+			Source:    "carddav",
+		}
+		contact.Phones = append(contact.Phones, newPhone)
+
+		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
+			log.Printf("Error pushing new phone to CardDAV: %v", err)
+		} else {
+			// Sync the contact back to get the phone with proper ID
+			if err := db.SyncContactFromCardDAV(c.Request().Context(), contact.ID.String(), *contact.CardDAVUUID); err != nil {
+				log.Printf("Error syncing contact after adding phone: %v", err)
+			}
+		}
+	} else {
+		// For local contacts, add to database directly
+		input := db.AddPhoneInput{
+			ContactID: contactID,
+			Phone:     phone,
+			PhoneType: phoneType,
+			IsPrimary: isPrimary,
+		}
+
+		if err := db.AddPhone(c.Request().Context(), input); err != nil {
+			log.Printf("Error adding phone: %v", err)
+		}
 	}
 
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
@@ -512,6 +579,14 @@ func DeleteEmail(c flamego.Context) {
 		log.Printf("Error deleting email: %v", err)
 	}
 
+	// If contact is linked to CardDAV, push the deletion
+	contact, err := db.GetContact(c.Request().Context(), contactID)
+	if err == nil && contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
+		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
+			log.Printf("Error pushing email deletion to CardDAV: %v", err)
+		}
+	}
+
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 }
 
@@ -528,6 +603,112 @@ func DeletePhone(c flamego.Context) {
 	err := db.DeletePhone(c.Request().Context(), phoneID)
 	if err != nil {
 		log.Printf("Error deleting phone: %v", err)
+	}
+
+	// If contact is linked to CardDAV, push the deletion
+	contact, err := db.GetContact(c.Request().Context(), contactID)
+	if err == nil && contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
+		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
+			log.Printf("Error pushing phone deletion to CardDAV: %v", err)
+		}
+	}
+
+	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+}
+
+// UpdateEmail handles updating an email
+func UpdateEmail(c flamego.Context) {
+	contactID := c.Param("id")
+	emailID := c.Param("email_id")
+
+	if contactID == "" || emailID == "" {
+		c.Redirect("/", http.StatusSeeOther)
+		return
+	}
+
+	if err := c.Request().ParseForm(); err != nil {
+		log.Printf("Error parsing form: %v", err)
+		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+		return
+	}
+
+	form := c.Request().Form
+	email := strings.TrimSpace(form.Get("email"))
+	emailType := db.EmailType(form.Get("email_type"))
+	isPrimary := form.Get("is_primary") == "on"
+
+	if email == "" {
+		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+		return
+	}
+
+	input := db.UpdateEmailInput{
+		ID:        emailID,
+		Email:     email,
+		EmailType: emailType,
+		IsPrimary: isPrimary,
+	}
+
+	err := db.UpdateEmail(c.Request().Context(), input)
+	if err != nil {
+		log.Printf("Error updating email: %v", err)
+	}
+
+	// If contact is linked to CardDAV, push the update
+	contact, err := db.GetContact(c.Request().Context(), contactID)
+	if err == nil && contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
+		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
+			log.Printf("Error pushing email update to CardDAV: %v", err)
+		}
+	}
+
+	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+}
+
+// UpdatePhone handles updating a phone
+func UpdatePhone(c flamego.Context) {
+	contactID := c.Param("id")
+	phoneID := c.Param("phone_id")
+
+	if contactID == "" || phoneID == "" {
+		c.Redirect("/", http.StatusSeeOther)
+		return
+	}
+
+	if err := c.Request().ParseForm(); err != nil {
+		log.Printf("Error parsing form: %v", err)
+		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+		return
+	}
+
+	form := c.Request().Form
+	phone := strings.TrimSpace(form.Get("phone"))
+	phoneType := db.PhoneType(form.Get("phone_type"))
+	isPrimary := form.Get("is_primary") == "on"
+
+	if phone == "" {
+		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+		return
+	}
+
+	input := db.UpdatePhoneInput{
+		ID:        phoneID,
+		Phone:     phone,
+		PhoneType: phoneType,
+		IsPrimary: isPrimary,
+	}
+
+	err := db.UpdatePhone(c.Request().Context(), input)
+	if err != nil {
+		log.Printf("Error updating phone: %v", err)
+	}
+
+	// If contact is linked to CardDAV, push the update
+	contact, err := db.GetContact(c.Request().Context(), contactID)
+	if err == nil && contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
+		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
+			log.Printf("Error pushing phone update to CardDAV: %v", err)
+		}
 	}
 
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
@@ -680,7 +861,7 @@ func LinkCardDAV(c flamego.Context, t template.Template, data template.Data) {
 		log.Printf("Successfully linked contact %s with CardDAV UUID %s", contactID, cardDAVUUID)
 	}
 
-	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+	c.Redirect("/contact/"+contactID+"/edit", http.StatusSeeOther)
 }
 
 // UnlinkCardDAV handles unlinking a contact from CardDAV
@@ -698,7 +879,27 @@ func UnlinkCardDAV(c flamego.Context) {
 		log.Printf("Successfully unlinked contact %s from CardDAV", contactID)
 	}
 
-	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+	c.Redirect("/contact/"+contactID+"/edit", http.StatusSeeOther)
+}
+
+// MigrateToCardDAV handles creating a new CardDAV contact from local data
+func MigrateToCardDAV(c flamego.Context, s session.Session) {
+	contactID := c.Param("id")
+	if contactID == "" {
+		c.Redirect("/", http.StatusSeeOther)
+		return
+	}
+
+	err := db.MigrateContactToCardDAV(c.Request().Context(), contactID)
+	if err != nil {
+		log.Printf("Error migrating contact %s to CardDAV: %v", contactID, err)
+		SetErrorFlash(s, "Failed to migrate to CardDAV: "+err.Error())
+	} else {
+		log.Printf("Successfully migrated contact %s to CardDAV", contactID)
+		SetSuccessFlash(s, "Contact successfully migrated to CardDAV")
+	}
+
+	c.Redirect("/contact/"+contactID+"/edit", http.StatusSeeOther)
 }
 
 // CardDAVContactWithStatus represents a CardDAV contact with linked status

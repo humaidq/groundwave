@@ -206,7 +206,9 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Post("/contact/{id}/phone", routes.AddPhone)
 		f.Post("/contact/{id}/url", routes.AddURL)
 		f.Post("/contact/{id}/email/{email_id}/delete", routes.DeleteEmail)
+		f.Post("/contact/{id}/email/{email_id}/edit", routes.UpdateEmail)
 		f.Post("/contact/{id}/phone/{phone_id}/delete", routes.DeletePhone)
+		f.Post("/contact/{id}/phone/{phone_id}/edit", routes.UpdatePhone)
 		f.Post("/contact/{id}/url/{url_id}/delete", routes.DeleteURL)
 		f.Post("/contact/{id}/log", routes.AddLog)
 		f.Post("/contact/{id}/log/{log_id}/delete", routes.DeleteLog)
@@ -214,6 +216,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Post("/contact/{id}/note/{note_id}/delete", routes.DeleteNote)
 		f.Post("/contact/{id}/carddav/link", routes.LinkCardDAV)
 		f.Post("/contact/{id}/carddav/unlink", routes.UnlinkCardDAV)
+		f.Post("/contact/{id}/carddav/migrate", routes.MigrateToCardDAV)
 		f.Get("/carddav/contacts", routes.ListCardDAVContacts)
 		f.Get("/carddav/picker", routes.CardDAVPicker)
 		f.Post("/contact/{id}/delete", routes.DeleteContact)
@@ -228,6 +231,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Get("/tags/{id}", routes.ViewTagContacts)
 		f.Get("/tags/{id}/edit", routes.EditTagForm)
 		f.Post("/tags/{id}/edit", routes.UpdateTag)
+		f.Post("/tags/{id}/delete", routes.DeleteTag)
 
 		// Zettelkasten routes
 		f.Get("/zk", routes.ZettelkastenIndex)
