@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +36,21 @@ type ZKNote struct {
 	Title    string
 	Filename string
 	HTMLBody template.HTML
+}
+
+// ZKNoteSummary represents a lightweight note listing
+// for selection in the zettelkasten chat UI.
+type ZKNoteSummary struct {
+	ID    string
+	Title string
+}
+
+// ZKChatNote represents a note with raw org content
+// for use in chat prompts.
+type ZKChatNote struct {
+	ID      string
+	Title   string
+	Content string
 }
 
 // In-memory cache for ID to filename mappings
@@ -231,6 +247,58 @@ func FindFileByID(ctx context.Context, id string) (string, error) {
 	}
 
 	return "", fmt.Errorf("note with ID %s not found (scanned %d files)", id, len(files))
+}
+
+// ListZKNotes returns all zettelkasten notes with IDs and titles.
+func ListZKNotes(ctx context.Context) ([]ZKNoteSummary, error) {
+	files, err := ListOrgFiles(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	notes := make([]ZKNoteSummary, 0, len(files))
+	for _, file := range files {
+		content, err := FetchOrgFile(ctx, file)
+		if err != nil {
+			log.Printf("Skipping unreadable file %s: %v", file, err)
+			continue
+		}
+
+		id, err := utils.ExtractIDProperty(content)
+		if err != nil {
+			continue
+		}
+
+		notes = append(notes, ZKNoteSummary{
+			ID:    id,
+			Title: utils.ExtractTitle(content),
+		})
+	}
+
+	sort.Slice(notes, func(i, j int) bool {
+		return strings.ToLower(notes[i].Title) < strings.ToLower(notes[j].Title)
+	})
+
+	return notes, nil
+}
+
+// GetZKNoteForChat fetches raw org content for chat prompts.
+func GetZKNoteForChat(ctx context.Context, id string) (*ZKChatNote, error) {
+	filename, err := FindFileByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	content, err := FetchOrgFile(ctx, filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch note: %w", err)
+	}
+
+	return &ZKChatNote{
+		ID:      id,
+		Title:   utils.ExtractTitle(content),
+		Content: content,
+	}, nil
 }
 
 // GetNoteByID fetches and parses a note by its ID

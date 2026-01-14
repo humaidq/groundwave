@@ -1,0 +1,315 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+<div class="page-header">
+  <h2>Zettelkasten Chat</h2>
+  <div class="page-header-actions">
+    <a href="/zk" class="btn">Index</a>
+    <a href="/zettel-inbox" class="btn">Comments Inbox</a>
+  </div>
+</div>
+
+<div class="contact-detail">
+  <div class="contact-section">
+    <form id="zk-chat-form" class="zk-chat-form">
+      <input type="hidden" id="csrf-token" value="{{ .CSRFToken }}" />
+      <div class="form-group">
+        <label for="zk-note-input" class="item-title">Notes in context</label>
+        <div class="autocomplete-container">
+          <input type="text" id="zk-note-input" class="form-item" placeholder="Type to search notes..." autocomplete="off" />
+          <div class="autocomplete-dropdown" id="zk-note-dropdown"></div>
+        </div>
+        <small class="muted-text">Press Tab or Enter to add the highlighted note.</small>
+      </div>
+
+      <div id="zk-note-selected" class="tag-pills zk-note-pill-list"></div>
+
+      <div id="zk-chat-history" class="zk-chat-history"></div>
+
+      <div class="zk-chat-input-row">
+        <textarea id="zk-chat-message" class="form-item" rows="3" placeholder="Ask a question about the selected notes..." required></textarea>
+        <button type="submit" id="zk-chat-send" class="btn">Send</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script type="module">
+import { marked } from 'https://cdnjs.cloudflare.com/ajax/libs/marked/16.3.0/lib/marked.esm.js';
+
+(function() {
+  const form = document.getElementById('zk-chat-form');
+  const history = document.getElementById('zk-chat-history');
+  const noteInput = document.getElementById('zk-note-input');
+  const noteDropdown = document.getElementById('zk-note-dropdown');
+  const selectedList = document.getElementById('zk-note-selected');
+  const messageInput = document.getElementById('zk-chat-message');
+  const sendButton = document.getElementById('zk-chat-send');
+  const csrfToken = document.getElementById('csrf-token');
+
+  if (!form || !history || !noteInput || !noteDropdown || !selectedList || !messageInput || !sendButton || !csrfToken) {
+    return;
+  }
+
+  const notes = [
+    {{ range .Notes }}
+      { id: "{{ .ID }}", title: "{{ js .Title }}" },
+    {{ end }}
+  ];
+
+  const selectedNotes = new Map();
+  let currentItems = [];
+  let selectedIndex = -1;
+
+  function scrollHistory() {
+    history.scrollTop = history.scrollHeight;
+  }
+
+  function addMessage(role, content, asMarkdown) {
+    const message = document.createElement('div');
+    message.className = `zk-chat-message zk-chat-message-${role}`;
+    if (asMarkdown) {
+      message.innerHTML = marked.parse(content || '');
+    } else {
+      message.textContent = content;
+    }
+    history.appendChild(message);
+    scrollHistory();
+    return message;
+  }
+
+  function renderSelectedNotes() {
+    selectedList.innerHTML = '';
+
+    selectedNotes.forEach((note) => {
+      const pill = document.createElement('div');
+      pill.className = 'tag-pill zk-note-pill';
+
+      const label = document.createElement('span');
+      label.className = 'tag-pill-name';
+      label.textContent = note.title;
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'tag-pill-delete-btn';
+      remove.title = 'Remove';
+      remove.textContent = '×';
+      remove.addEventListener('click', () => {
+        selectedNotes.delete(note.id);
+        renderSelectedNotes();
+      });
+
+      pill.appendChild(label);
+      pill.appendChild(remove);
+      selectedList.appendChild(pill);
+    });
+  }
+
+  function updateSelection(newIndex) {
+    selectedIndex = newIndex;
+    const items = noteDropdown.querySelectorAll('.autocomplete-item');
+    items.forEach((item, index) => {
+      item.classList.toggle('selected', index === selectedIndex);
+    });
+  }
+
+  function renderDropdown(filter) {
+    const query = (filter || '').toLowerCase();
+    currentItems = notes.filter((note) => {
+      if (selectedNotes.has(note.id)) {
+        return false;
+      }
+      return note.title.toLowerCase().includes(query);
+    });
+
+    if (currentItems.length === 0) {
+      noteDropdown.innerHTML = '<div class="autocomplete-empty">No matches found</div>';
+      selectedIndex = -1;
+      return;
+    }
+
+    noteDropdown.innerHTML = currentItems.map((note, index) => {
+      const highlighted = query ? note.title.replace(
+        new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'),
+        '<span class="autocomplete-item-highlight">$1</span>'
+      ) : note.title;
+      return `<div class="autocomplete-item" data-index="${index}">${highlighted}</div>`;
+    }).join('');
+
+    updateSelection(-1);
+  }
+
+  function showDropdown() {
+    renderDropdown(noteInput.value);
+    noteDropdown.classList.add('show');
+  }
+
+  function hideDropdown() {
+    noteDropdown.classList.remove('show');
+    selectedIndex = -1;
+  }
+
+  function addNote(note) {
+    if (!note || selectedNotes.has(note.id)) {
+      return;
+    }
+    selectedNotes.set(note.id, note);
+    renderSelectedNotes();
+    noteInput.value = '';
+    showDropdown();
+  }
+
+  function addHighlightedNote() {
+    if (currentItems.length === 0) {
+      return false;
+    }
+    const index = selectedIndex >= 0 ? selectedIndex : 0;
+    addNote(currentItems[index]);
+    return true;
+  }
+
+  noteInput.addEventListener('focus', showDropdown);
+  noteInput.addEventListener('input', () => showDropdown());
+
+  noteInput.addEventListener('keydown', (event) => {
+    if (!noteDropdown.classList.contains('show')) {
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (currentItems.length > 0) {
+        updateSelection((selectedIndex + 1) % currentItems.length);
+      }
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (currentItems.length > 0) {
+        updateSelection((selectedIndex - 1 + currentItems.length) % currentItems.length);
+      }
+    } else if (event.key === 'Enter' || event.key === 'Tab') {
+      if (addHighlightedNote()) {
+        event.preventDefault();
+      }
+    } else if (event.key === 'Escape') {
+      hideDropdown();
+    }
+  });
+
+  noteDropdown.addEventListener('click', (event) => {
+    const item = event.target.closest('.autocomplete-item');
+    if (!item) {
+      return;
+    }
+    const index = parseInt(item.dataset.index, 10);
+    addNote(currentItems[index]);
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.autocomplete-container')) {
+      hideDropdown();
+    }
+  });
+
+  function getSelectedNoteIDs() {
+    return Array.from(selectedNotes.keys());
+  }
+
+  form.addEventListener('submit', async function(event) {
+    event.preventDefault();
+
+    const message = messageInput.value.trim();
+    const noteIDs = getSelectedNoteIDs();
+
+    if (!message) {
+      messageInput.focus();
+      return;
+    }
+
+    if (noteIDs.length === 0) {
+      addMessage('system', 'Select at least one note to include in context.', false);
+      return;
+    }
+
+    addMessage('user', message, false);
+    const assistantMessage = addMessage('assistant', '', true);
+
+    messageInput.value = '';
+    messageInput.disabled = true;
+    sendButton.disabled = true;
+
+    let fullText = '';
+
+    try {
+      const response = await fetch('/zk/chat/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken.value
+        },
+        body: JSON.stringify({
+          note_ids: noteIDs,
+          message: message
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Server returned ' + response.status);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        let currentEvent = '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.substring(7);
+          } else if (line.startsWith('data: ')) {
+            const data = line.substring(6);
+
+            if (currentEvent === 'error') {
+              assistantMessage.textContent = 'Error: ' + data;
+              return;
+            } else if (currentEvent === 'chunk') {
+              fullText += data;
+              assistantMessage.innerHTML = marked.parse(fullText);
+              scrollHistory();
+            } else if (currentEvent === 'done') {
+              return;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      assistantMessage.textContent = 'Error: ' + err.message;
+    } finally {
+      messageInput.disabled = false;
+      sendButton.disabled = false;
+      messageInput.focus();
+    }
+  });
+})();
+</script>
+
+{{ template "foot" . }}

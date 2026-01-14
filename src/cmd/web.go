@@ -235,6 +235,8 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 
 		// Zettelkasten routes
 		f.Get("/zk", routes.ZettelkastenIndex)
+		f.Get("/zk/chat", routes.ZettelkastenChat)
+		f.Post("/zk/chat/stream", routes.ZettelkastenChatStream)
 		f.Get("/zk/{id}", routes.ViewZKNote)
 		f.Post("/zk/{id}/comment", routes.AddZettelComment)
 		f.Post("/zk/{id}/comment/{comment_id}/delete", routes.DeleteZettelComment)

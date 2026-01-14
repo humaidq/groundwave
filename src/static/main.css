@@ -3300,6 +3300,99 @@ code:not(pre code) {
   }
 }
 
+/* Zettelkasten Chat */
+.zk-chat-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.zk-note-select {
+  min-height: 280px;
+}
+
+.zk-chat-history {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 1rem;
+  background: #f8f9fa;
+  min-height: 220px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.zk-note-pill-list {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.zk-note-pill {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.zk-chat-message {
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  line-height: 1.5;
+  font-size: 0.95rem;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.zk-chat-message-user {
+  background: #dbeafe;
+  align-self: flex-end;
+}
+
+.zk-chat-message-assistant {
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+}
+
+.zk-chat-message-system {
+  background: #fff3cd;
+  border: 1px solid #ffeeba;
+  color: #856404;
+}
+
+.zk-chat-input-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.zk-chat-input-row textarea {
+  flex: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+  .zk-chat-history {
+    background: #1f1f1f;
+    border-color: #3a3a3a;
+  }
+
+  .zk-chat-message-user {
+    background: #1e3a8a;
+    color: #e5e7eb;
+  }
+
+  .zk-chat-message-assistant {
+    background: #2d2d2d;
+    border-color: #444;
+    color: #e0e0e0;
+  }
+
+  .zk-chat-message-system {
+    background: #3a2a00;
+    border-color: #5c4300;
+    color: #fbd38d;
+  }
+}
+
 /* Inventory Status Badges */
 .status-badge {
   display: inline-block;

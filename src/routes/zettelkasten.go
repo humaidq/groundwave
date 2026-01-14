@@ -6,6 +6,7 @@ package routes
 
 import (
 	"encoding/gob"
+	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
@@ -229,6 +230,110 @@ func ViewZKNote(c flamego.Context, s session.Session, t template.Template, data 
 	data["ZKHistory"] = history
 
 	t.HTML(http.StatusOK, "zettelkasten")
+}
+
+type zkChatRequest struct {
+	NoteIDs []string `json:"note_ids"`
+	Message string   `json:"message"`
+}
+
+// ZettelkastenChat renders the zettelkasten chat page.
+func ZettelkastenChat(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+	ctx := c.Request().Context()
+
+	notes, err := db.ListZKNotes(ctx)
+	if err != nil {
+		log.Printf("Error listing zettelkasten notes: %v", err)
+		SetErrorFlash(s, "Failed to load zettelkasten notes")
+		c.Redirect("/zk", http.StatusSeeOther)
+		return
+	}
+
+	data["Notes"] = notes
+	data["IsZettelkasten"] = true
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "Zettelkasten", URL: "/zk", IsCurrent: false},
+		{Name: "Chat", URL: "", IsCurrent: true},
+	}
+
+	t.HTML(http.StatusOK, "zettelkasten_chat")
+}
+
+// ZettelkastenChatStream streams AI chat responses using SSE.
+func ZettelkastenChatStream(c flamego.Context) {
+	ctx := c.Request().Context()
+	w := c.ResponseWriter()
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	sendEvent := func(event, data string) {
+		if event != "" {
+			w.Write([]byte("event: " + event + "\n"))
+		}
+		escapedData := strings.ReplaceAll(data, "\n", "\ndata: ")
+		w.Write([]byte("data: " + escapedData + "\n\n"))
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+	}
+
+	sendError := func(message string) {
+		sendEvent("error", message)
+	}
+
+	var reqBody zkChatRequest
+	if err := json.NewDecoder(c.Request().Body().ReadCloser()).Decode(&reqBody); err != nil {
+		sendError("Invalid request")
+		return
+	}
+
+	message := strings.TrimSpace(reqBody.Message)
+	if message == "" {
+		sendError("Message is required")
+		return
+	}
+
+	if len(reqBody.NoteIDs) == 0 {
+		sendError("Select at least one note")
+		return
+	}
+
+	notes := make([]db.ZKChatNote, 0, len(reqBody.NoteIDs))
+	for _, noteID := range reqBody.NoteIDs {
+		noteID = strings.TrimSpace(strings.TrimPrefix(noteID, "id:"))
+		if noteID == "" {
+			continue
+		}
+
+		note, err := db.GetZKNoteForChat(ctx, noteID)
+		if err != nil {
+			log.Printf("Error fetching zettelkasten note %s: %v", noteID, err)
+			sendError("Note not found: " + noteID)
+			return
+		}
+
+		notes = append(notes, *note)
+	}
+
+	if len(notes) == 0 {
+		sendError("No valid notes selected")
+		return
+	}
+
+	err := db.StreamZKChat(ctx, notes, message, func(chunk string) error {
+		sendEvent("chunk", chunk)
+		return nil
+	})
+	if err != nil {
+		log.Printf("Error generating zettelkasten chat response: %v", err)
+		sendError("Failed to generate response: " + err.Error())
+		return
+	}
+
+	sendEvent("done", "")
 }
 
 // AddZettelComment handles posting a comment to a zettel
