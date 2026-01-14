@@ -217,6 +217,16 @@
     <h3>Email Addresses</h3>
     {{ if .Contact.Emails }}
     {{ range .Contact.Emails }}
+    {{ if eq .Source "carddav" }}
+    <div class="contact-item contact-item-readonly">
+      <div class="contact-item-content">
+        <a href="mailto:{{ .Email }}" class="contact-item-value">{{ .Email }}</a>
+        <div class="contact-item-meta">
+          {{ .EmailType }}{{ if .IsPrimary }} • Primary{{ end }} • CardDAV
+        </div>
+      </div>
+    </div>
+    {{ else }}
     <div class="contact-item">
       <div class="contact-item-content">
         <a href="mailto:{{ .Email }}" class="contact-item-value">{{ .Email }}</a>
@@ -228,20 +238,6 @@
         <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
         <button type="submit" class="btn-delete" title="Delete">×</button>
       </form>
-    </div>
-    {{ end }}
-    {{ end }}
-
-    {{ if .CardDAVContact }}
-    {{ if .CardDAVContact.Emails }}
-    {{ range .CardDAVContact.Emails }}
-    <div class="contact-item contact-item-readonly">
-      <div class="contact-item-content">
-        <a href="mailto:{{ .Email }}" class="contact-item-value">{{ .Email }}</a>
-        <div class="contact-item-meta">
-          {{ .Type }} • CardDAV
-        </div>
-      </div>
     </div>
     {{ end }}
     {{ end }}
@@ -275,6 +271,16 @@
     <h3>Phone Numbers</h3>
     {{ if .Contact.Phones }}
     {{ range .Contact.Phones }}
+    {{ if eq .Source "carddav" }}
+    <div class="contact-item contact-item-readonly">
+      <div class="contact-item-content">
+        <a href="tel:{{ .Phone }}" class="contact-item-value">{{ .Phone }}</a>
+        <div class="contact-item-meta">
+          {{ .PhoneType }}{{ if .IsPrimary }} • Primary{{ end }} • CardDAV
+        </div>
+      </div>
+    </div>
+    {{ else }}
     <div class="contact-item">
       <div class="contact-item-content">
         <a href="tel:{{ .Phone }}" class="contact-item-value">{{ .Phone }}</a>
@@ -286,20 +292,6 @@
         <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
         <button type="submit" class="btn-delete" title="Delete">×</button>
       </form>
-    </div>
-    {{ end }}
-    {{ end }}
-
-    {{ if .CardDAVContact }}
-    {{ if .CardDAVContact.Phones }}
-    {{ range .CardDAVContact.Phones }}
-    <div class="contact-item contact-item-readonly">
-      <div class="contact-item-content">
-        <a href="tel:{{ .Phone }}" class="contact-item-value">{{ .Phone }}</a>
-        <div class="contact-item-meta">
-          {{ .Type }} • CardDAV
-        </div>
-      </div>
     </div>
     {{ end }}
     {{ end }}

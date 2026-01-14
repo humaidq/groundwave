@@ -442,7 +442,7 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 	}
 
 	// Get emails
-	emailQuery := `SELECT id, contact_id, email, email_type, is_primary, created_at
+	emailQuery := `SELECT id, contact_id, email, email_type, is_primary, source, created_at
 		FROM contact_emails WHERE contact_id = $1 ORDER BY is_primary DESC, created_at`
 	emailRows, err := pool.Query(ctx, emailQuery, id)
 	if err != nil {
@@ -452,7 +452,7 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 
 	for emailRows.Next() {
 		var email ContactEmail
-		err := emailRows.Scan(&email.ID, &email.ContactID, &email.Email, &email.EmailType, &email.IsPrimary, &email.CreatedAt)
+		err := emailRows.Scan(&email.ID, &email.ContactID, &email.Email, &email.EmailType, &email.IsPrimary, &email.Source, &email.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan email: %w", err)
 		}
@@ -460,7 +460,7 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 	}
 
 	// Get phones
-	phoneQuery := `SELECT id, contact_id, phone, phone_type, is_primary, created_at
+	phoneQuery := `SELECT id, contact_id, phone, phone_type, is_primary, source, created_at
 		FROM contact_phones WHERE contact_id = $1 ORDER BY is_primary DESC, created_at`
 	phoneRows, err := pool.Query(ctx, phoneQuery, id)
 	if err != nil {
@@ -470,7 +470,7 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 
 	for phoneRows.Next() {
 		var phone ContactPhone
-		err := phoneRows.Scan(&phone.ID, &phone.ContactID, &phone.Phone, &phone.PhoneType, &phone.IsPrimary, &phone.CreatedAt)
+		err := phoneRows.Scan(&phone.ID, &phone.ContactID, &phone.Phone, &phone.PhoneType, &phone.IsPrimary, &phone.Source, &phone.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan phone: %w", err)
 		}

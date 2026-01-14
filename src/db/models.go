@@ -85,6 +85,7 @@ type ContactEmail struct {
 	Email     string    `db:"email"`
 	EmailType EmailType `db:"email_type"`
 	IsPrimary bool      `db:"is_primary"`
+	Source    string    `db:"source"`
 	CreatedAt time.Time `db:"created_at"`
 }
 
@@ -107,6 +108,7 @@ type ContactPhone struct {
 	Phone     string    `db:"phone"`
 	PhoneType PhoneType `db:"phone_type"`
 	IsPrimary bool      `db:"is_primary"`
+	Source    string    `db:"source"`
 	CreatedAt time.Time `db:"created_at"`
 }
 

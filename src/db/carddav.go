@@ -330,7 +330,7 @@ func parseDateString(s string) (time.Time, error) {
 }
 
 // SyncContactFromCardDAV updates a contact's details from CardDAV
-// It syncs: name_given, name_family, organization, title
+// It syncs: name_given, name_family, organization, title, emails, phones
 func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID string) error {
 	if pool == nil {
 		return fmt.Errorf("database connection not initialized")
@@ -392,6 +392,71 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update contact from CardDAV: %w", err)
+	}
+
+	// Sync emails: delete existing CardDAV emails, then insert new ones
+	_, err = pool.Exec(ctx, `DELETE FROM contact_emails WHERE contact_id = $1 AND source = 'carddav'`, contactID)
+	if err != nil {
+		return fmt.Errorf("failed to delete existing CardDAV emails: %w", err)
+	}
+
+	for i, email := range cardDAVContact.Emails {
+		// Map CardDAV email type to database enum
+		emailType := "other"
+		switch email.Type {
+		case "work":
+			emailType = "work"
+		case "personal":
+			emailType = "personal"
+		}
+
+		// First email from CardDAV is primary if no local primary exists
+		isPrimary := i == 0
+
+		_, err = pool.Exec(ctx, `
+			INSERT INTO contact_emails (contact_id, email, email_type, is_primary, source)
+			VALUES ($1, $2, $3, $4, 'carddav')
+			ON CONFLICT (contact_id, lower(email)) DO UPDATE SET
+				email_type = EXCLUDED.email_type,
+				source = 'carddav'
+		`, contactID, email.Email, emailType, isPrimary)
+		if err != nil {
+			// Log but continue - email might fail validation
+			fmt.Printf("Warning: failed to sync CardDAV email %s: %v\n", email.Email, err)
+		}
+	}
+
+	// Sync phones: delete existing CardDAV phones, then insert new ones
+	_, err = pool.Exec(ctx, `DELETE FROM contact_phones WHERE contact_id = $1 AND source = 'carddav'`, contactID)
+	if err != nil {
+		return fmt.Errorf("failed to delete existing CardDAV phones: %w", err)
+	}
+
+	for i, phone := range cardDAVContact.Phones {
+		// Map CardDAV phone type to database enum
+		phoneType := "other"
+		switch phone.Type {
+		case "cell":
+			phoneType = "cell"
+		case "work":
+			phoneType = "work"
+		case "home":
+			phoneType = "home"
+		case "fax":
+			phoneType = "fax"
+		}
+
+		// First phone from CardDAV is primary if no local primary exists
+		isPrimary := i == 0
+
+		_, err = pool.Exec(ctx, `
+			INSERT INTO contact_phones (contact_id, phone, phone_type, is_primary, source)
+			VALUES ($1, $2, $3, $4, 'carddav')
+		`, contactID, phone.Phone, phoneType, isPrimary)
+		if err != nil {
+			// Log but continue
+			fmt.Printf("Warning: failed to sync CardDAV phone %s: %v\n", phone.Phone, err)
+		}
 	}
 
 	return nil
