@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Groundwave Connector",
+  "version": "0.1.0",
+  "description": "Checks LinkedIn connections against Groundwave contacts.",
+  "permissions": ["storage", "tabs", "scripting"],
+  "host_permissions": ["https://www.linkedin.com/*", "https://gw.alq.ae/*", "http://localhost:8080/*"],
+  "action": {
+    "default_title": "Groundwave Connector",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.linkedin.com/mynetwork/invite-connect/connections*",
+        "https://www.linkedin.com/mynetwork/invite-connect/*",
+        "https://www.linkedin.com/in/*"
+      ],
+      "js": ["config.js", "content.js"],
+      "css": ["styles.css"]
+    }
+  ]
+}

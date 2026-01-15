@@ -1,0 +1,60 @@
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f3f2ef;
+  color: #1f1f1f;
+}
+
+.container {
+  width: 220px;
+  padding: 16px;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #b0b0b0;
+}
+
+.status-dot--ok {
+  background: #057642;
+}
+
+.status-dot--bad {
+  background: #b24020;
+}
+
+.status-text {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.auth-button {
+  width: 100%;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #0a66c2;
+  color: #fff;
+  cursor: pointer;
+}
+
+.auth-button:hover {
+  background: #004182;
+}
+
+.hint {
+  margin: 12px 0 0;
+  font-size: 11px;
+  color: #666;
+}

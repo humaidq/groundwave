@@ -301,36 +301,9 @@ func GetZKNoteForChat(ctx context.Context, id string) (*ZKChatNote, error) {
 	}, nil
 }
 
-// GetZKNoteLinks returns unique linked note IDs from a note.
-func GetZKNoteLinks(ctx context.Context, id string) ([]string, error) {
-	note, err := GetZKNoteForChat(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	links := ExtractLinksFromContent(note.Content)
-	if len(links) == 0 {
-		return []string{}, nil
-	}
-
-	seen := make(map[string]struct{}, len(links))
-	unique := make([]string, 0, len(links))
-	for _, link := range links {
-		if link == "" {
-			continue
-		}
-		if _, exists := seen[link]; exists {
-			continue
-		}
-		seen[link] = struct{}{}
-		unique = append(unique, link)
-	}
-
-	sort.Slice(unique, func(i, j int) bool {
-		return unique[i] < unique[j]
-	})
-
-	return unique, nil
+// GetZKNoteLinks returns cached forward links for a note.
+func GetZKNoteLinks(id string) []string {
+	return GetForwardLinksFromCache(id)
 }
 
 // GetNoteByID fetches and parses a note by its ID

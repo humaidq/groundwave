@@ -270,7 +270,6 @@ func ZettelkastenChat(c flamego.Context, s session.Session, t template.Template,
 
 // ZettelkastenChatLinks returns linked note IDs for a note.
 func ZettelkastenChatLinks(c flamego.Context) {
-	ctx := c.Request().Context()
 	w := c.ResponseWriter()
 
 	var reqBody zkChatLinksRequest
@@ -285,12 +284,12 @@ func ZettelkastenChatLinks(c flamego.Context) {
 		return
 	}
 
-	links, err := db.GetZKNoteLinks(ctx, noteID)
-	if err != nil {
-		log.Printf("Error fetching links for note %s: %v", noteID, err)
-		http.Error(w, "Failed to fetch links", http.StatusBadRequest)
+	if err := utils.ValidateUUID(noteID); err != nil {
+		http.Error(w, "Invalid note ID", http.StatusBadRequest)
 		return
 	}
+
+	links := db.GetZKNoteLinks(noteID)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string][]string{"links": links}); err != nil {

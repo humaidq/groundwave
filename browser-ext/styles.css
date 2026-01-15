@@ -1,0 +1,32 @@
+.gw-connector-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 8px;
+  border-radius: 50%;
+  border: 1px solid #d0d0d0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  background: #ffffff;
+  text-decoration: none;
+  pointer-events: auto;
+}
+
+.gw-connector--found {
+  color: #057642;
+  border-color: #8fd1b2;
+  background: #e7f5ee;
+}
+
+.gw-connector--missing {
+  color: #b24020;
+  border-color: #f2c1b1;
+  background: #fdecea;
+}
+
+.gw-connector--clickable {
+  cursor: pointer;
+}

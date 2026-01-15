@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"sort"
 	"sync"
 	"time"
 
@@ -17,9 +18,10 @@ import (
 
 // Global cache for backlinks
 var (
-	backlinkCache  = make(map[string][]string) // target ID -> slice of source IDs
-	backlinkMutex  sync.RWMutex
-	lastCacheBuild time.Time
+	backlinkCache    = make(map[string][]string) // target ID -> slice of source IDs
+	forwardLinkCache = make(map[string][]string) // source ID -> slice of target IDs
+	backlinkMutex    sync.RWMutex
+	lastCacheBuild   time.Time
 )
 
 // ExtractLinksFromContent extracts all org-roam ID links from content
@@ -55,7 +57,8 @@ func BuildBacklinkCache(ctx context.Context) error {
 	}
 
 	// Build temporary cache
-	tempCache := make(map[string][]string)
+	tempBacklinkCache := make(map[string][]string)
+	tempForwardCache := make(map[string][]string)
 	filesProcessed := 0
 	filesSkipped := 0
 
@@ -80,23 +83,38 @@ func BuildBacklinkCache(ctx context.Context) error {
 		// Extract all link targets from this note
 		targetIDs := ExtractLinksFromContent(content)
 
-		// Build inverse map: for each target, add this source
+		seenTargets := make(map[string]struct{}, len(targetIDs))
 		for _, targetID := range targetIDs {
-			tempCache[targetID] = append(tempCache[targetID], sourceID)
+			if targetID == "" {
+				continue
+			}
+			if _, exists := seenTargets[targetID]; exists {
+				continue
+			}
+			seenTargets[targetID] = struct{}{}
+			tempBacklinkCache[targetID] = append(tempBacklinkCache[targetID], sourceID)
 		}
+
+		forwardLinks := make([]string, 0, len(seenTargets))
+		for targetID := range seenTargets {
+			forwardLinks = append(forwardLinks, targetID)
+		}
+		sort.Strings(forwardLinks)
+		tempForwardCache[sourceID] = forwardLinks
 
 		filesProcessed++
 	}
 
 	// Update global cache with write lock
 	backlinkMutex.Lock()
-	backlinkCache = tempCache
+	backlinkCache = tempBacklinkCache
+	forwardLinkCache = tempForwardCache
 	lastCacheBuild = time.Now()
 	backlinkMutex.Unlock()
 
 	duration := time.Since(startTime)
 	log.Printf("Backlink cache built: %d files processed, %d skipped, %d backlink entries, took %v",
-		filesProcessed, filesSkipped, len(tempCache), duration)
+		filesProcessed, filesSkipped, len(tempBacklinkCache), duration)
 
 	return nil
 }
@@ -116,6 +134,21 @@ func GetBacklinksFromCache(targetID string) []string {
 	// Return a copy to prevent external modification
 	result := make([]string, len(backlinks))
 	copy(result, backlinks)
+	return result
+}
+
+// GetForwardLinksFromCache retrieves forward links for a given source ID.
+func GetForwardLinksFromCache(sourceID string) []string {
+	backlinkMutex.RLock()
+	defer backlinkMutex.RUnlock()
+
+	links, exists := forwardLinkCache[sourceID]
+	if !exists {
+		return []string{}
+	}
+
+	result := make([]string, len(links))
+	copy(result, links)
 	return result
 }
 

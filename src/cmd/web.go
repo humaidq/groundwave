@@ -186,6 +186,16 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	f.Get("/login", routes.LoginForm)
 	f.Post("/login", routes.Login)
 	f.Get("/connectivity", func(c flamego.Context) { c.ResponseWriter().Write([]byte("1")) })
+	f.Get("/ext/auth", routes.RequireAuth, routes.ExtensionAuth)
+	f.Get("/ext/complete", routes.ExtensionComplete)
+	f.Get("/ext/validate", routes.ExtensionValidate)
+	f.Get("/ext/contacts-no-linkedin", routes.ExtensionContactsWithoutLinkedIn)
+	f.Post("/ext/linkedin-lookup", routes.ExtensionLinkedInLookup)
+	f.Post("/ext/linkedin-assign", routes.ExtensionLinkedInAssign)
+	f.Options("/ext/validate", routes.ExtensionValidate)
+	f.Options("/ext/contacts-no-linkedin", routes.ExtensionContactsWithoutLinkedIn)
+	f.Options("/ext/linkedin-lookup", routes.ExtensionLinkedInLookup)
+	f.Options("/ext/linkedin-assign", routes.ExtensionLinkedInAssign)
 
 	// Protected routes (require authentication)
 	f.Group("", func() {
