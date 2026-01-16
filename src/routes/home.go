@@ -100,6 +100,7 @@ func Home(c flamego.Context, s session.Session, t template.Template, data templa
 		privateMode = pm.(bool)
 	}
 	data["PrivateMode"] = privateMode
+	data["IsContacts"] = true
 
 	// Get tag filter from URL query
 	tagIDs := c.QueryStrings("tag")
@@ -175,6 +176,7 @@ func Overdue(c flamego.Context, t template.Template, data template.Data) {
 	}
 
 	data["IsOverdue"] = true
+	data["IsContacts"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "Contacts", URL: "/contacts", IsCurrent: false},
 		{Name: "Overdue", URL: "", IsCurrent: true},

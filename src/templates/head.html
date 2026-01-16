@@ -51,18 +51,11 @@
         <div class="nav-menu">
           <a href="/"{{ if .IsWelcome }} class="nav-active"{{ end }}>Home</a>
           <a href="/todo"{{ if .IsTodo }} class="nav-active"{{ end }}>Todo</a>
-          <a href="/contacts"{{ if and (not .ContactName) (not .IsNewContact) (not .IsQSOView) (not .IsInventory) (not .IsZettelkasten) (not .IsQSL) (not .IsWelcome) (not .IsHealth) (not .IsTodo) }} class="nav-active"{{ end }}>Contacts</a>
+          <a href="/contacts"{{ if .IsContacts }} class="nav-active"{{ end }}>Contacts</a>
           <a href="/qsl"{{ if .IsQSL }} class="nav-active"{{ end }}>QSL</a>
           <a href="/zk"{{ if .IsZettelkasten }} class="nav-active"{{ end }}>Zettelkasten</a>
           <a href="/inventory"{{ if .IsInventory }} class="nav-active"{{ end }}>Inventory</a>
           <a href="/health"{{ if .IsHealth }} class="nav-active"{{ end }}>Health</a>
-          {{ if .ContactName }}
-            <a href="#" class="nav-active" title="{{ .ContactName }}">{{ .ContactName }}</a>
-          {{ else if .IsNewContact }}
-            <a href="#" class="nav-active">Add New Contact</a>
-          {{ else if .IsQSOView }}
-            <a href="#" class="nav-active">QSO Details</a>
-          {{ end }}
         </div>
       </nav>
     </header>

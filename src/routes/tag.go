@@ -37,6 +37,7 @@ func ListTags(c flamego.Context, t template.Template, data template.Data) {
 		data["SearchQuery"] = searchQuery
 	}
 
+	data["IsContacts"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "Tags", URL: "/tags", IsCurrent: true},
 	}
@@ -61,6 +62,7 @@ func EditTagForm(c flamego.Context, s session.Session, t template.Template, data
 	}
 
 	data["Tag"] = tag
+	data["IsContacts"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "Tags", URL: "/tags", IsCurrent: false},
 		{Name: tag.Name, URL: "/tags/" + tagID + "/contacts", IsCurrent: false},
@@ -155,6 +157,7 @@ func ViewTagContacts(c flamego.Context, s session.Session, t template.Template, 
 	}
 
 	data["Tag"] = tag
+	data["IsContacts"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "Tags", URL: "/tags", IsCurrent: false},
 		{Name: tag.Name, URL: "", IsCurrent: true},

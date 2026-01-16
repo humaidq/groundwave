@@ -30,7 +30,7 @@ func isValidPhone(phone string) bool {
 
 // NewContactForm renders the add contact form
 func NewContactForm(c flamego.Context, t template.Template, data template.Data) {
-	data["IsNewContact"] = true
+	data["IsContacts"] = true
 	isService := c.Query("is_service") == "true"
 	data["IsService"] = isService
 	if isService {
@@ -221,6 +221,7 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 
 	data["Contact"] = contact
 	data["ContactName"] = contact.NameDisplay
+	data["IsContacts"] = true
 	data["TierLower"] = strings.ToLower(string(contact.Tier))
 	data["CardDAVContact"] = contact.CardDAVContact
 	if contact.IsService {
@@ -298,6 +299,7 @@ func ViewContactChats(c flamego.Context, s session.Session, t template.Template,
 	data["Contact"] = contact
 	data["ContactName"] = contact.NameDisplay
 	data["Chats"] = chats
+	data["IsContacts"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "Contacts", URL: "/contacts", IsCurrent: false},
 		{Name: contact.NameDisplay, URL: "/contact/" + contactID, IsCurrent: false},
@@ -423,6 +425,7 @@ func EditContactForm(c flamego.Context, s session.Session, t template.Template, 
 
 	data["Contact"] = contact
 	data["ContactName"] = contact.NameDisplay
+	data["IsContacts"] = true
 	if contact.IsService {
 		data["Breadcrumbs"] = []BreadcrumbItem{
 			{Name: "Contacts", URL: "/contacts", IsCurrent: false},
@@ -1314,6 +1317,7 @@ func ListServiceContacts(c flamego.Context, t template.Template, data template.D
 	}
 
 	data["IsServiceContacts"] = true
+	data["IsContacts"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "Contacts", URL: "/contacts", IsCurrent: false},
 		{Name: "Service Contacts", URL: "", IsCurrent: true},
@@ -1353,6 +1357,7 @@ func BulkContactLogForm(c flamego.Context, t template.Template, data template.Da
 		data["Contacts"] = contacts
 	}
 
+	data["IsContacts"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "Contacts", URL: "/contacts", IsCurrent: false},
 		{Name: "Bulk Contact Log", URL: "", IsCurrent: true},

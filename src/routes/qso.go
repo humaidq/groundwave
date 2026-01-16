@@ -78,7 +78,6 @@ func ViewQSO(c flamego.Context, t template.Template, data template.Data) {
 
 	data["QSO"] = qso
 	data["MapURL"] = mapURL
-	data["IsQSOView"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "QSL", URL: "/qsl", IsCurrent: false},
 		{Name: qso.Call, URL: "", IsCurrent: true},
