@@ -357,6 +357,12 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 		nameDisplay = cardDAVContact.DisplayName
 	}
 
+	// Use GivenName, falling back to DisplayName if empty (consistent with CreateContact)
+	nameGiven := cardDAVContact.GivenName
+	if nameGiven == "" {
+		nameGiven = cardDAVContact.DisplayName
+	}
+
 	// Prepare optional fields
 	var nameFamilyPtr *string
 	if cardDAVContact.FamilyName != "" {
@@ -386,7 +392,7 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 	`
 	_, err = pool.Exec(ctx, query,
 		nameDisplay,
-		cardDAVContact.GivenName,
+		nameGiven,
 		nameFamilyPtr,
 		organizationPtr,
 		titlePtr,

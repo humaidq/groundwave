@@ -150,6 +150,7 @@ const (
 	URLFacebook  URLType = "facebook"
 	URLInstagram URLType = "instagram"
 	URLLinkedIn  URLType = "linkedin"
+	URLOrcid     URLType = "orcid"
 	URLGitHub    URLType = "github"
 	URLGitLab    URLType = "gitlab"
 	URLCodeberg  URLType = "codeberg"
