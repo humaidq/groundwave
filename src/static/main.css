@@ -693,6 +693,11 @@ code:not(pre code) {
     color: #aaa;
   }
 
+  .tier-heading {
+    border-bottom-color: #acbbf9;
+    color: #acbbf9;
+  }
+
   textarea, input {
     background-color: #434449;
     border-color: #666;
@@ -2599,6 +2604,23 @@ code:not(pre code) {
     color: #acbbf9;
   }
 
+  .stats-compact {
+    background: #2c2d30;
+    border-color: #555;
+  }
+
+  .stat-item-label {
+    color: #aaa;
+  }
+
+  .stat-item-value {
+    color: #acbbf9;
+  }
+
+  .stat-item-value.warning {
+    color: #ffb74d;
+  }
+
   .action-btn {
     background: #3c4043;
     border-color: #666;
@@ -3176,6 +3198,11 @@ code:not(pre code) {
   }
 
   .empty-state p {
+    color: #aaa;
+  }
+
+  .cache-info {
+    background-color: #2c2d30;
     color: #aaa;
   }
 }

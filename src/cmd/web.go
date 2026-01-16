@@ -234,6 +234,10 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Post("/contact/{id}/tag", routes.AddTag)
 		f.Post("/contact/{id}/tag/{tag_id}/delete", routes.RemoveTag)
 
+		// Bulk contact operations
+		f.Get("/bulk-contact-log", routes.BulkContactLogForm)
+		f.Post("/bulk-contact-log", routes.BulkAddLog)
+
 		// Service contacts routes
 		f.Get("/service-contacts", routes.ListServiceContacts)
 

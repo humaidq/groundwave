@@ -1,0 +1,262 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+{{ if .Error }}
+<div class="alert alert-red">
+  {{ .Error }}
+</div>
+{{ end }}
+
+<div class="page-header">
+  <h2>Bulk Contact Log</h2>
+</div>
+
+<div class="content-section">
+  <form id="bulk-log-form" class="bulk-log-form" method="POST" action="/bulk-contact-log">
+    <input type="hidden" id="csrf-token" name="_csrf" value="{{ .csrf_token }}" />
+
+    <div class="form-group">
+      <label for="contact-input" class="item-title">Select Contacts</label>
+      <div class="autocomplete-container">
+        <input type="text" id="contact-input" class="form-item" placeholder="Type to search contacts..." autocomplete="off" />
+        <div class="autocomplete-dropdown" id="contact-dropdown"></div>
+      </div>
+      <small class="muted-text">Press Tab or Enter to add the highlighted contact.</small>
+    </div>
+
+    <div id="contact-selected" class="tag-pills"></div>
+
+    <div class="form-group">
+      <label for="log_type" class="item-title">Log Type</label>
+      <select name="log_type" id="log_type" class="form-item">
+        <option value="general">General</option>
+        <option value="email_sent">Email Sent</option>
+        <option value="email_received">Email Received</option>
+        <option value="call">Phone/Video Call</option>
+        <option value="meeting">Meeting</option>
+        <option value="message">Text/Chat Message</option>
+        <option value="gift_sent">Gift Sent</option>
+        <option value="gift_received">Gift Received</option>
+        <option value="intro">Introduction Made</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="logged_at" class="item-title">Date (optional)</label>
+      <input type="date" name="logged_at" id="logged_at" class="form-item" placeholder="Date (optional)">
+    </div>
+
+    <div class="form-group">
+      <label for="content" class="item-title">Details (optional)</label>
+      <textarea name="content" id="content" class="form-item" rows="5" placeholder="Enter details about this interaction..."></textarea>
+    </div>
+
+    <button type="submit" class="btn">Add Log to Selected Contacts</button>
+  </form>
+</div>
+
+<script>
+(function() {
+  const form = document.getElementById('bulk-log-form');
+  const contactInput = document.getElementById('contact-input');
+  const contactDropdown = document.getElementById('contact-dropdown');
+  const selectedList = document.getElementById('contact-selected');
+  const csrfToken = document.getElementById('csrf-token');
+
+  if (!form || !contactInput || !contactDropdown || !selectedList || !csrfToken) {
+    return;
+  }
+
+  const contacts = [
+    {{ range .Contacts }}
+      { id: "{{ .ID }}", name: "{{ js .NameDisplay }}" },
+    {{ end }}
+  ];
+
+  const contactsByID = new Map(contacts.map((contact) => [contact.id, contact]));
+  const selectedContacts = new Map();
+  let currentItems = [];
+  let selectedIndex = -1;
+
+  function renderSelectedContacts() {
+    selectedList.innerHTML = '';
+
+    if (selectedContacts.size === 0) {
+      selectedList.innerHTML = '<div class="muted-text">No contacts selected yet</div>';
+      return;
+    }
+
+    selectedContacts.forEach((contact) => {
+      const pill = document.createElement('div');
+      pill.className = 'tag-pill';
+
+      const label = document.createElement('span');
+      label.className = 'tag-pill-name';
+      label.textContent = contact.name;
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'tag-pill-delete-btn';
+      remove.title = 'Remove';
+      remove.textContent = '×';
+      remove.addEventListener('click', () => {
+        selectedContacts.delete(contact.id);
+        renderSelectedContacts();
+        showDropdown();
+      });
+
+      pill.appendChild(label);
+      pill.appendChild(remove);
+      selectedList.appendChild(pill);
+    });
+  }
+
+  function updateSelection(newIndex) {
+    selectedIndex = newIndex;
+    const items = contactDropdown.querySelectorAll('.autocomplete-item');
+    items.forEach((item, index) => {
+      item.classList.toggle('selected', index === selectedIndex);
+    });
+  }
+
+  function renderDropdown(filter) {
+    const query = (filter || '').toLowerCase();
+    currentItems = contacts.filter((contact) => {
+      if (selectedContacts.has(contact.id)) {
+        return false;
+      }
+      return contact.name.toLowerCase().includes(query);
+    });
+
+    if (currentItems.length === 0) {
+      contactDropdown.innerHTML = '<div class="autocomplete-empty">No matches found</div>';
+      selectedIndex = -1;
+      return;
+    }
+
+    contactDropdown.innerHTML = currentItems.map((contact, index) => {
+      const highlighted = query ? contact.name.replace(
+        new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'),
+        '<span class="autocomplete-item-highlight">$1</span>'
+      ) : contact.name;
+      return `<div class="autocomplete-item" data-index="${index}">${highlighted}</div>`;
+    }).join('');
+
+    updateSelection(-1);
+  }
+
+  function showDropdown() {
+    renderDropdown(contactInput.value);
+    contactDropdown.classList.add('show');
+  }
+
+  function hideDropdown() {
+    contactDropdown.classList.remove('show');
+    selectedIndex = -1;
+  }
+
+  function addContact(contact) {
+    if (!contact || selectedContacts.has(contact.id)) {
+      return;
+    }
+    selectedContacts.set(contact.id, contact);
+    renderSelectedContacts();
+    contactInput.value = '';
+    showDropdown();
+  }
+
+  function addHighlightedContact() {
+    if (currentItems.length === 0) {
+      return false;
+    }
+    const index = selectedIndex >= 0 ? selectedIndex : 0;
+    addContact(currentItems[index]);
+    return true;
+  }
+
+  contactInput.addEventListener('focus', showDropdown);
+  contactInput.addEventListener('input', () => showDropdown());
+
+  contactInput.addEventListener('keydown', (event) => {
+    if (!contactDropdown.classList.contains('show')) {
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (currentItems.length > 0) {
+        updateSelection((selectedIndex + 1) % currentItems.length);
+      }
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (currentItems.length > 0) {
+        updateSelection((selectedIndex - 1 + currentItems.length) % currentItems.length);
+      }
+    } else if (event.key === 'Enter' || event.key === 'Tab') {
+      if (addHighlightedContact()) {
+        event.preventDefault();
+      }
+    } else if (event.key === 'Escape') {
+      hideDropdown();
+    }
+  });
+
+  contactDropdown.addEventListener('click', (event) => {
+    const item = event.target.closest('.autocomplete-item');
+    if (!item) {
+      return;
+    }
+    const index = parseInt(item.dataset.index, 10);
+    addContact(currentItems[index]);
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.autocomplete-container')) {
+      hideDropdown();
+    }
+  });
+
+  function getSelectedContactIDs() {
+    return Array.from(selectedContacts.keys());
+  }
+
+  form.addEventListener('submit', function(event) {
+    const contactIDs = getSelectedContactIDs();
+
+    if (contactIDs.length === 0) {
+      event.preventDefault();
+      alert('Please select at least one contact');
+      return false;
+    }
+
+    // Add contact IDs as hidden inputs
+    contactIDs.forEach(id => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'contact_ids[]';
+      input.value = id;
+      form.appendChild(input);
+    });
+
+    return true;
+  });
+
+  // Initial render
+  renderSelectedContacts();
+})();
+</script>
+
+{{ template "foot" . }}

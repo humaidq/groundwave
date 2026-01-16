@@ -6,6 +6,7 @@ package routes
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"regexp"
@@ -1190,4 +1191,98 @@ func TogglePrivateMode(c flamego.Context, s session.Session) {
 		referer = "/contacts"
 	}
 	c.Redirect(referer, http.StatusSeeOther)
+}
+
+// BulkContactLogForm renders the bulk contact log form
+func BulkContactLogForm(c flamego.Context, t template.Template, data template.Data) {
+	ctx := c.Request().Context()
+
+	// Fetch all contacts for the multi-select
+	contacts, err := db.ListContacts(ctx)
+	if err != nil {
+		log.Printf("Error fetching contacts: %v", err)
+		data["Error"] = "Failed to load contacts"
+	} else {
+		data["Contacts"] = contacts
+	}
+
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "Contacts", URL: "/contacts", IsCurrent: false},
+		{Name: "Bulk Contact Log", URL: "", IsCurrent: true},
+	}
+
+	t.HTML(http.StatusOK, "bulk_contact_log")
+}
+
+// BulkAddLog handles adding a contact log to multiple contacts
+func BulkAddLog(c flamego.Context, s session.Session) {
+	ctx := c.Request().Context()
+
+	if err := c.Request().ParseForm(); err != nil {
+		log.Printf("Error parsing form: %v", err)
+		SetErrorFlash(s, "Failed to parse form data")
+		c.Redirect("/bulk-contact-log", http.StatusSeeOther)
+		return
+	}
+
+	form := c.Request().Form
+
+	// Get contact IDs array
+	contactIDs := form["contact_ids[]"]
+	if len(contactIDs) == 0 {
+		SetErrorFlash(s, "Please select at least one contact")
+		c.Redirect("/bulk-contact-log", http.StatusSeeOther)
+		return
+	}
+
+	// Get form fields
+	getOptionalString := func(key string) *string {
+		val := strings.TrimSpace(form.Get(key))
+		if val == "" {
+			return nil
+		}
+		return &val
+	}
+
+	logType := db.LogType(form.Get("log_type"))
+	if logType == "" {
+		logType = db.LogGeneral
+	}
+
+	loggedAt := getOptionalString("logged_at")
+	content := getOptionalString("content")
+
+	// Track successes and failures
+	successCount := 0
+	var failedContacts []string
+
+	// Loop through contacts and add log to each
+	for _, contactID := range contactIDs {
+		input := db.AddLogInput{
+			ContactID: contactID,
+			LogType:   logType,
+			LoggedAt:  loggedAt,
+			Subject:   nil, // Always nil - no subject field in bulk log
+			Content:   content,
+		}
+
+		err := db.AddLog(ctx, input)
+		if err != nil {
+			log.Printf("Error adding log to contact %s: %v", contactID, err)
+			failedContacts = append(failedContacts, contactID)
+		} else {
+			successCount++
+		}
+	}
+
+	// Flash message based on results
+	if len(failedContacts) == 0 {
+		SetSuccessFlash(s, fmt.Sprintf("Successfully added log to %d contact(s)", successCount))
+	} else if successCount == 0 {
+		SetErrorFlash(s, "Failed to add logs to all contacts")
+	} else {
+		SetWarningFlash(s, fmt.Sprintf("Added log to %d contact(s), failed for %d contact(s)", successCount, len(failedContacts)))
+	}
+
+	c.Redirect("/contacts", http.StatusSeeOther)
 }

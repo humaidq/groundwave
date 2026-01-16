@@ -31,6 +31,7 @@
     {{ if gt .OverdueCount 0 }}
     <a href="/overdue" class="btn">View Overdue Contacts ({{ .OverdueCount }})</a>
     {{ end }}
+    <a href="/bulk-contact-log" class="btn">Bulk Contact Log</a>
     <a href="/whatsapp" class="btn{{ if eq .WhatsAppStatus "connected" }} btn-success{{ end }}">WhatsApp: {{ .WhatsAppStatus }}</a>
   </div>
 

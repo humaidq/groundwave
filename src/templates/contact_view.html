@@ -140,10 +140,7 @@
           </select>
         </div>
         <div class="add-item-field">
-          <input type="datetime-local" name="logged_at" id="logged_at" class="form-item" placeholder="Date/Time (optional)">
-        </div>
-        <div class="add-item-field">
-          <input type="text" name="subject" id="subject" class="form-item" placeholder="Subject (optional)">
+          <input type="date" name="logged_at" id="logged_at" class="form-item" placeholder="Date (optional)">
         </div>
         <div class="add-item-field">
           <textarea name="content" id="content" class="form-item" rows="3" placeholder="Details (optional)"></textarea>
@@ -160,15 +157,12 @@
       <div class="log-entry">
         <div class="log-header">
           <span class="log-type log-type-{{ .LogType }}">{{ .LogType }}</span>
-          <span class="log-date">{{ .LoggedAt.Format "Jan 2, 2006 3:04 PM" }}</span>
+          <span class="log-date">{{ .LoggedAt.Format "Jan 2, 2006" }}</span>
           <form method="POST" action="/contact/{{ $contact.ID }}/log/{{ .ID }}/delete" class="log-delete-form" onsubmit="return confirm('Delete this log entry?');">
             <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
             <button type="submit" class="btn-delete" title="Delete">×</button>
           </form>
         </div>
-        {{ with .Subject }}
-        <div class="log-subject">{{ . }}</div>
-        {{ end }}
         {{ with .Content }}
         <div class="log-content">{{ . }}</div>
         {{ end }}
@@ -178,7 +172,7 @@
       <div class="log-entry">
         <div class="log-header">
           <span class="log-type log-type-note">note</span>
-          <span class="log-date">{{ .NotedAt.Format "Jan 2, 2006 3:04 PM" }}</span>
+          <span class="log-date">{{ .NotedAt.Format "Jan 2, 2006" }}</span>
           <form method="POST" action="/contact/{{ $contact.ID }}/note/{{ .ID }}/delete" class="log-delete-form" onsubmit="return confirm('Delete this note?');">
             <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
             <button type="submit" class="btn-delete" title="Delete">×</button>
