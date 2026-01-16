@@ -200,6 +200,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	// Protected routes (require authentication)
 	f.Group("", func() {
 		f.Get("/", routes.Welcome)
+		f.Get("/todo", routes.Todo)
 		f.Get("/logout", routes.Logout)
 		f.Post("/private-mode/toggle", routes.TogglePrivateMode)
 		f.Get("/contacts", routes.Home)

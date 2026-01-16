@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/flamego/flamego"
@@ -16,6 +17,15 @@ import (
 
 	"github.com/humaidq/groundwave/db"
 )
+
+// digitRegex matches digits for phone validation
+var digitRegex = regexp.MustCompile(`\d`)
+
+// isValidPhone checks if a phone number has at least 7 digits
+func isValidPhone(phone string) bool {
+	digits := digitRegex.FindAllString(phone, -1)
+	return len(digits) >= 7
+}
 
 // NewContactForm renders the add contact form
 func NewContactForm(c flamego.Context, t template.Template, data template.Data) {
@@ -371,7 +381,7 @@ func UpdateContact(c flamego.Context, s session.Session, t template.Template, da
 }
 
 // AddEmail handles adding a new email to a contact
-func AddEmail(c flamego.Context) {
+func AddEmail(c flamego.Context, s session.Session) {
 	contactID := c.Param("id")
 	if contactID == "" {
 		c.Redirect("/", http.StatusSeeOther)
@@ -380,6 +390,7 @@ func AddEmail(c flamego.Context) {
 
 	if err := c.Request().ParseForm(); err != nil {
 		log.Printf("Error parsing form: %v", err)
+		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
 	}
@@ -387,6 +398,7 @@ func AddEmail(c flamego.Context) {
 	form := c.Request().Form
 	email := strings.TrimSpace(form.Get("email"))
 	if email == "" {
+		SetErrorFlash(s, "Email address is required")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
 	}
@@ -402,6 +414,7 @@ func AddEmail(c flamego.Context) {
 	contact, err := db.GetContact(c.Request().Context(), contactID)
 	if err != nil {
 		log.Printf("Error getting contact: %v", err)
+		SetErrorFlash(s, "Contact not found")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
 	}
@@ -419,6 +432,7 @@ func AddEmail(c flamego.Context) {
 
 		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
 			log.Printf("Error pushing new email to CardDAV: %v", err)
+			SetErrorFlash(s, "Failed to sync email to CardDAV")
 		} else {
 			// Sync the contact back to get the email with proper ID
 			if err := db.SyncContactFromCardDAV(c.Request().Context(), contact.ID.String(), *contact.CardDAVUUID); err != nil {
@@ -436,6 +450,7 @@ func AddEmail(c flamego.Context) {
 
 		if err := db.AddEmail(c.Request().Context(), input); err != nil {
 			log.Printf("Error adding email: %v", err)
+			SetErrorFlash(s, "Failed to add email")
 		}
 	}
 
@@ -443,7 +458,7 @@ func AddEmail(c flamego.Context) {
 }
 
 // AddPhone handles adding a new phone to a contact
-func AddPhone(c flamego.Context) {
+func AddPhone(c flamego.Context, s session.Session) {
 	contactID := c.Param("id")
 	if contactID == "" {
 		c.Redirect("/", http.StatusSeeOther)
@@ -452,6 +467,7 @@ func AddPhone(c flamego.Context) {
 
 	if err := c.Request().ParseForm(); err != nil {
 		log.Printf("Error parsing form: %v", err)
+		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
 	}
@@ -459,6 +475,13 @@ func AddPhone(c flamego.Context) {
 	form := c.Request().Form
 	phone := strings.TrimSpace(form.Get("phone"))
 	if phone == "" {
+		SetErrorFlash(s, "Phone number is required")
+		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+		return
+	}
+
+	if !isValidPhone(phone) {
+		SetErrorFlash(s, "Phone number must have at least 7 digits")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
 	}
@@ -474,6 +497,7 @@ func AddPhone(c flamego.Context) {
 	contact, err := db.GetContact(c.Request().Context(), contactID)
 	if err != nil {
 		log.Printf("Error getting contact: %v", err)
+		SetErrorFlash(s, "Contact not found")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
 	}
@@ -491,6 +515,7 @@ func AddPhone(c flamego.Context) {
 
 		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
 			log.Printf("Error pushing new phone to CardDAV: %v", err)
+			SetErrorFlash(s, "Failed to sync phone to CardDAV")
 		} else {
 			// Sync the contact back to get the phone with proper ID
 			if err := db.SyncContactFromCardDAV(c.Request().Context(), contact.ID.String(), *contact.CardDAVUUID); err != nil {
@@ -508,6 +533,7 @@ func AddPhone(c flamego.Context) {
 
 		if err := db.AddPhone(c.Request().Context(), input); err != nil {
 			log.Printf("Error adding phone: %v", err)
+			SetErrorFlash(s, "Failed to add phone")
 		}
 	}
 
@@ -565,7 +591,7 @@ func AddURL(c flamego.Context) {
 }
 
 // DeleteEmail handles deleting an email
-func DeleteEmail(c flamego.Context) {
+func DeleteEmail(c flamego.Context, s session.Session) {
 	contactID := c.Param("id")
 	emailID := c.Param("email_id")
 
@@ -574,9 +600,10 @@ func DeleteEmail(c flamego.Context) {
 		return
 	}
 
-	err := db.DeleteEmail(c.Request().Context(), emailID)
+	err := db.DeleteEmail(c.Request().Context(), emailID, contactID)
 	if err != nil {
 		log.Printf("Error deleting email: %v", err)
+		SetErrorFlash(s, "Failed to delete email")
 	}
 
 	// If contact is linked to CardDAV, push the deletion
@@ -591,7 +618,7 @@ func DeleteEmail(c flamego.Context) {
 }
 
 // DeletePhone handles deleting a phone
-func DeletePhone(c flamego.Context) {
+func DeletePhone(c flamego.Context, s session.Session) {
 	contactID := c.Param("id")
 	phoneID := c.Param("phone_id")
 
@@ -600,9 +627,10 @@ func DeletePhone(c flamego.Context) {
 		return
 	}
 
-	err := db.DeletePhone(c.Request().Context(), phoneID)
+	err := db.DeletePhone(c.Request().Context(), phoneID, contactID)
 	if err != nil {
 		log.Printf("Error deleting phone: %v", err)
+		SetErrorFlash(s, "Failed to delete phone")
 	}
 
 	// If contact is linked to CardDAV, push the deletion
@@ -617,7 +645,7 @@ func DeletePhone(c flamego.Context) {
 }
 
 // UpdateEmail handles updating an email
-func UpdateEmail(c flamego.Context) {
+func UpdateEmail(c flamego.Context, s session.Session) {
 	contactID := c.Param("id")
 	emailID := c.Param("email_id")
 
@@ -628,6 +656,7 @@ func UpdateEmail(c flamego.Context) {
 
 	if err := c.Request().ParseForm(); err != nil {
 		log.Printf("Error parsing form: %v", err)
+		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
 	}
@@ -638,12 +667,14 @@ func UpdateEmail(c flamego.Context) {
 	isPrimary := form.Get("is_primary") == "on"
 
 	if email == "" {
+		SetErrorFlash(s, "Email address is required")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
 	}
 
 	input := db.UpdateEmailInput{
 		ID:        emailID,
+		ContactID: contactID,
 		Email:     email,
 		EmailType: emailType,
 		IsPrimary: isPrimary,
@@ -652,6 +683,7 @@ func UpdateEmail(c flamego.Context) {
 	err := db.UpdateEmail(c.Request().Context(), input)
 	if err != nil {
 		log.Printf("Error updating email: %v", err)
+		SetErrorFlash(s, "Failed to update email")
 	}
 
 	// If contact is linked to CardDAV, push the update
@@ -666,7 +698,7 @@ func UpdateEmail(c flamego.Context) {
 }
 
 // UpdatePhone handles updating a phone
-func UpdatePhone(c flamego.Context) {
+func UpdatePhone(c flamego.Context, s session.Session) {
 	contactID := c.Param("id")
 	phoneID := c.Param("phone_id")
 
@@ -677,6 +709,7 @@ func UpdatePhone(c flamego.Context) {
 
 	if err := c.Request().ParseForm(); err != nil {
 		log.Printf("Error parsing form: %v", err)
+		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
 	}
@@ -687,12 +720,20 @@ func UpdatePhone(c flamego.Context) {
 	isPrimary := form.Get("is_primary") == "on"
 
 	if phone == "" {
+		SetErrorFlash(s, "Phone number is required")
+		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+		return
+	}
+
+	if !isValidPhone(phone) {
+		SetErrorFlash(s, "Phone number must have at least 7 digits")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
 	}
 
 	input := db.UpdatePhoneInput{
 		ID:        phoneID,
+		ContactID: contactID,
 		Phone:     phone,
 		PhoneType: phoneType,
 		IsPrimary: isPrimary,
@@ -701,6 +742,7 @@ func UpdatePhone(c flamego.Context) {
 	err := db.UpdatePhone(c.Request().Context(), input)
 	if err != nil {
 		log.Printf("Error updating phone: %v", err)
+		SetErrorFlash(s, "Failed to update phone")
 	}
 
 	// If contact is linked to CardDAV, push the update

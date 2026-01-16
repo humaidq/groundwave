@@ -656,6 +656,14 @@ func AddEmail(ctx context.Context, input AddEmailInput) error {
 		return fmt.Errorf("database connection not initialized")
 	}
 
+	// If setting as primary, clear other primaries first
+	if input.IsPrimary {
+		clearQuery := `UPDATE contact_emails SET is_primary = false WHERE contact_id = $1 AND is_primary = true`
+		if _, err := pool.Exec(ctx, clearQuery, input.ContactID); err != nil {
+			return fmt.Errorf("failed to clear primary emails: %w", err)
+		}
+	}
+
 	query := `
 		INSERT INTO contact_emails (contact_id, email, email_type, is_primary)
 		VALUES ($1, $2, $3, $4)
@@ -680,6 +688,14 @@ type AddPhoneInput struct {
 func AddPhone(ctx context.Context, input AddPhoneInput) error {
 	if pool == nil {
 		return fmt.Errorf("database connection not initialized")
+	}
+
+	// If setting as primary, clear other primaries first
+	if input.IsPrimary {
+		clearQuery := `UPDATE contact_phones SET is_primary = false WHERE contact_id = $1 AND is_primary = true`
+		if _, err := pool.Exec(ctx, clearQuery, input.ContactID); err != nil {
+			return fmt.Errorf("failed to clear primary phones: %w", err)
+		}
 	}
 
 	query := `
@@ -722,13 +738,13 @@ func AddURL(ctx context.Context, input AddURLInput) error {
 }
 
 // DeleteEmail removes an email from a contact
-func DeleteEmail(ctx context.Context, emailID string) error {
+func DeleteEmail(ctx context.Context, emailID, contactID string) error {
 	if pool == nil {
 		return fmt.Errorf("database connection not initialized")
 	}
 
-	query := `DELETE FROM contact_emails WHERE id = $1`
-	_, err := pool.Exec(ctx, query, emailID)
+	query := `DELETE FROM contact_emails WHERE id = $1 AND contact_id = $2`
+	_, err := pool.Exec(ctx, query, emailID, contactID)
 	if err != nil {
 		return fmt.Errorf("failed to delete email: %w", err)
 	}
@@ -737,13 +753,13 @@ func DeleteEmail(ctx context.Context, emailID string) error {
 }
 
 // DeletePhone removes a phone from a contact
-func DeletePhone(ctx context.Context, phoneID string) error {
+func DeletePhone(ctx context.Context, phoneID, contactID string) error {
 	if pool == nil {
 		return fmt.Errorf("database connection not initialized")
 	}
 
-	query := `DELETE FROM contact_phones WHERE id = $1`
-	_, err := pool.Exec(ctx, query, phoneID)
+	query := `DELETE FROM contact_phones WHERE id = $1 AND contact_id = $2`
+	_, err := pool.Exec(ctx, query, phoneID, contactID)
 	if err != nil {
 		return fmt.Errorf("failed to delete phone: %w", err)
 	}
@@ -754,6 +770,7 @@ func DeletePhone(ctx context.Context, phoneID string) error {
 // UpdateEmailInput represents input for updating an email
 type UpdateEmailInput struct {
 	ID        string
+	ContactID string
 	Email     string
 	EmailType EmailType
 	IsPrimary bool
@@ -765,12 +782,20 @@ func UpdateEmail(ctx context.Context, input UpdateEmailInput) error {
 		return fmt.Errorf("database connection not initialized")
 	}
 
+	// If setting as primary, clear other primaries first
+	if input.IsPrimary {
+		clearQuery := `UPDATE contact_emails SET is_primary = false WHERE contact_id = $1 AND is_primary = true AND id != $2`
+		if _, err := pool.Exec(ctx, clearQuery, input.ContactID, input.ID); err != nil {
+			return fmt.Errorf("failed to clear primary emails: %w", err)
+		}
+	}
+
 	query := `
 		UPDATE contact_emails
 		SET email = $1, email_type = $2, is_primary = $3
-		WHERE id = $4
+		WHERE id = $4 AND contact_id = $5
 	`
-	_, err := pool.Exec(ctx, query, input.Email, input.EmailType, input.IsPrimary, input.ID)
+	_, err := pool.Exec(ctx, query, input.Email, input.EmailType, input.IsPrimary, input.ID, input.ContactID)
 	if err != nil {
 		return fmt.Errorf("failed to update email: %w", err)
 	}
@@ -781,6 +806,7 @@ func UpdateEmail(ctx context.Context, input UpdateEmailInput) error {
 // UpdatePhoneInput represents input for updating a phone
 type UpdatePhoneInput struct {
 	ID        string
+	ContactID string
 	Phone     string
 	PhoneType PhoneType
 	IsPrimary bool
@@ -792,12 +818,20 @@ func UpdatePhone(ctx context.Context, input UpdatePhoneInput) error {
 		return fmt.Errorf("database connection not initialized")
 	}
 
+	// If setting as primary, clear other primaries first
+	if input.IsPrimary {
+		clearQuery := `UPDATE contact_phones SET is_primary = false WHERE contact_id = $1 AND is_primary = true AND id != $2`
+		if _, err := pool.Exec(ctx, clearQuery, input.ContactID, input.ID); err != nil {
+			return fmt.Errorf("failed to clear primary phones: %w", err)
+		}
+	}
+
 	query := `
 		UPDATE contact_phones
 		SET phone = $1, phone_type = $2, is_primary = $3
-		WHERE id = $4
+		WHERE id = $4 AND contact_id = $5
 	`
-	_, err := pool.Exec(ctx, query, input.Phone, input.PhoneType, input.IsPrimary, input.ID)
+	_, err := pool.Exec(ctx, query, input.Phone, input.PhoneType, input.IsPrimary, input.ID, input.ContactID)
 	if err != nil {
 		return fmt.Errorf("failed to update phone: %w", err)
 	}

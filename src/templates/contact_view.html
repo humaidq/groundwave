@@ -387,27 +387,23 @@
       <form method="POST" action="/contact/{{ .Contact.ID }}/url" class="add-item-form">
         <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
         <div class="add-item-field">
-          <input type="url" name="url" placeholder="URL" required class="form-item">
+          <input type="url" id="contact-url-input" name="url" placeholder="URL" required class="form-item">
         </div>
         <div class="add-item-field">
-          <select name="url_type" class="form-item">
+          <select id="contact-url-type" name="url_type" class="form-item">
             <option value="website">Website</option>
             <option value="blog">Blog</option>
             <option value="twitter">Twitter</option>
             <option value="mastodon">Mastodon</option>
             <option value="bluesky">Bluesky</option>
-            <option value="threads">Threads</option>
-            <option value="facebook">Facebook</option>
             <option value="instagram">Instagram</option>
             <option value="linkedin">LinkedIn</option>
+            <option value="orcid">ORCID</option>
             <option value="github">GitHub</option>
             <option value="gitlab">GitLab</option>
             <option value="codeberg">Codeberg</option>
             <option value="youtube">YouTube</option>
-            <option value="twitch">Twitch</option>
-            <option value="tiktok">TikTok</option>
             <option value="signal">Signal</option>
-            <option value="telegram">Telegram</option>
             <option value="whatsapp">WhatsApp</option>
             <option value="matrix">Matrix</option>
             <option value="qrz">QRZ</option>
@@ -491,12 +487,94 @@
 </div>
 
 <script>
-// Initialize tag autocomplete
+// Initialize tag autocomplete and link type detection
 document.addEventListener('DOMContentLoaded', function() {
   var tagNames = [{{ range $i, $t := .AllTags }}{{ if $i }}, {{ end }}"{{ $t.Name }}"{{ end }}];
   if (tagNames.length > 0) {
     initAutocomplete('#tag-autocomplete', tagNames);
   }
+
+  var urlInput = document.getElementById('contact-url-input');
+  var urlTypeSelect = document.getElementById('contact-url-type');
+  if (!urlInput || !urlTypeSelect) {
+    return;
+  }
+
+  var manualSelection = false;
+  var manualUrlValue = '';
+
+  urlTypeSelect.addEventListener('change', function() {
+    manualSelection = true;
+    manualUrlValue = urlInput.value.trim();
+  });
+
+  function parseUrl(value) {
+    if (!value) return null;
+    try {
+      return new URL(value);
+    } catch (err) {
+      try {
+        return new URL('https://' + value);
+      } catch (err2) {
+        return null;
+      }
+    }
+  }
+
+  function detectUrlType(value) {
+    var parsed = parseUrl(value);
+    if (!parsed) return '';
+    var host = parsed.hostname.toLowerCase();
+
+    var matchers = [
+      { type: 'linkedin', patterns: ['linkedin.com'] },
+      { type: 'twitter', patterns: ['twitter.com', 'x.com'] },
+      { type: 'mastodon', patterns: ['mastodon'] },
+      { type: 'bluesky', patterns: ['bsky.app', 'bsky.social', 'bluesky'] },
+      { type: 'instagram', patterns: ['instagram.com'] },
+      { type: 'orcid', patterns: ['orcid.org'] },
+      { type: 'github', patterns: ['github.com'] },
+      { type: 'gitlab', patterns: ['gitlab.com'] },
+      { type: 'codeberg', patterns: ['codeberg.org'] },
+      { type: 'youtube', patterns: ['youtube.com', 'youtu.be'] },
+      { type: 'signal', patterns: ['signal.me', 'signal.org'] },
+      { type: 'whatsapp', patterns: ['wa.me', 'whatsapp.com'] },
+      { type: 'matrix', patterns: ['matrix.to', 'element.io'] },
+      { type: 'qrz', patterns: ['qrz.com'] }
+    ];
+
+    for (var i = 0; i < matchers.length; i++) {
+      var matcher = matchers[i];
+      for (var j = 0; j < matcher.patterns.length; j++) {
+        if (host.includes(matcher.patterns[j])) {
+          return matcher.type;
+        }
+      }
+    }
+
+    return '';
+  }
+
+  urlInput.addEventListener('input', function() {
+    var value = urlInput.value.trim();
+    if (manualSelection && value === manualUrlValue) {
+      return;
+    }
+    if (value !== manualUrlValue) {
+      manualSelection = false;
+      manualUrlValue = '';
+    }
+
+    var detectedType = detectUrlType(value);
+    if (!detectedType) {
+      return;
+    }
+
+    var option = urlTypeSelect.querySelector('option[value="' + detectedType + '"]');
+    if (option) {
+      urlTypeSelect.value = detectedType;
+    }
+  });
 });
 </script>
 

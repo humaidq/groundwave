@@ -1,0 +1,16 @@
+{{ template "head" . }}
+
+{{ if .Error }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Error</h5>
+  <p>{{ .Error }}</p>
+</div>
+{{ end }}
+
+{{ if .Note }}
+<div class="zk-content todo-content">
+  {{ .Note.HTMLBody }}
+</div>
+{{ end }}
+
+{{ template "foot" . }}

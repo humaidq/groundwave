@@ -38,6 +38,7 @@ let modalInput = null;
 let modalStatus = null;
 let modalActiveIndicator = null;
 let modalActiveUrl = null;
+let lastLocationHref = window.location.href;
 
 const CARD_SELECTOR = 'div[data-view-name="connections-list"]';
 const PROFILE_LINK_SELECTOR = 'a[data-view-name="connections-profile"]';
@@ -535,6 +536,25 @@ function scanExistingCards() {
   });
 }
 
+function clearIndicators() {
+  document.querySelectorAll(".gw-connector-indicator").forEach((indicator) => {
+    indicator.remove();
+  });
+  document.querySelectorAll("[data-gw-indicator]").forEach((element) => {
+    delete element.dataset.gwIndicator;
+  });
+}
+
+function handleLocationChange() {
+  if (window.location.href === lastLocationHref) {
+    return;
+  }
+
+  lastLocationHref = window.location.href;
+  closeAssignModal();
+  clearIndicators();
+}
+
 function updateProfileIndicator() {
   if (!isProfilePage()) {
     return;
@@ -596,6 +616,7 @@ scanExistingCards();
 updateProfileIndicator();
 
 const periodicScan = window.setInterval(() => {
+  handleLocationChange();
   scanExistingCards();
   updateProfileIndicator();
 }, 1500);

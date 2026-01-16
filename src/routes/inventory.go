@@ -161,6 +161,10 @@ func CreateInventoryItem(c flamego.Context, s session.Session, t template.Templa
 	status := db.InventoryStatus(form.Get("status"))
 	if status == "" {
 		status = db.InventoryStatusActive
+	} else if !isValidInventoryStatus(status) {
+		SetErrorFlash(s, "Invalid status value")
+		c.Redirect("/inventory/new", http.StatusSeeOther)
+		return
 	}
 
 	ctx := c.Request().Context()
@@ -234,6 +238,13 @@ func UpdateInventoryItem(c flamego.Context, s session.Session, t template.Templa
 	location := getOptionalString(form.Get("location"))
 	description := getOptionalString(form.Get("description"))
 	status := db.InventoryStatus(form.Get("status"))
+
+	// Validate status if provided
+	if status != "" && !isValidInventoryStatus(status) {
+		SetErrorFlash(s, "Invalid status value")
+		c.Redirect("/inventory/"+inventoryID+"/edit", http.StatusSeeOther)
+		return
+	}
 
 	ctx := c.Request().Context()
 
@@ -332,6 +343,13 @@ func DownloadInventoryFile(c flamego.Context, s session.Session, t template.Temp
 	inventoryID := c.Param("id")
 	filename := c.Param("filename")
 
+	// Validate filename to prevent path traversal attacks
+	if !isValidFilename(filename) {
+		SetErrorFlash(s, "Invalid filename")
+		c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
+		return
+	}
+
 	ctx := c.Request().Context()
 
 	// Fetch file from WebDAV
@@ -345,7 +363,7 @@ func DownloadInventoryFile(c flamego.Context, s session.Session, t template.Temp
 
 	// Set headers and serve file
 	c.ResponseWriter().Header().Set("Content-Type", contentType)
-	c.ResponseWriter().Header().Set("Content-Disposition", "inline; filename=\""+filename+"\"")
+	c.ResponseWriter().Header().Set("Content-Disposition", "inline; filename=\""+sanitizeFilenameForHeader(filename)+"\"")
 	c.ResponseWriter().Header().Set("Content-Length", strconv.Itoa(len(fileData)))
 
 	c.ResponseWriter().WriteHeader(http.StatusOK)
@@ -359,4 +377,30 @@ func getOptionalString(val string) *string {
 		return nil
 	}
 	return &trimmed
+}
+
+// isValidFilename checks for path traversal attempts in filenames
+func isValidFilename(filename string) bool {
+	return !strings.Contains(filename, "..") &&
+		!strings.Contains(filename, "/") &&
+		!strings.Contains(filename, "\\")
+}
+
+// isValidInventoryStatus validates inventory status values
+func isValidInventoryStatus(s db.InventoryStatus) bool {
+	switch s {
+	case db.InventoryStatusActive, db.InventoryStatusStored,
+		db.InventoryStatusDamaged, db.InventoryStatusGiven,
+		db.InventoryStatusDisposed, db.InventoryStatusLost:
+		return true
+	}
+	return false
+}
+
+// sanitizeFilenameForHeader escapes special chars for Content-Disposition header
+func sanitizeFilenameForHeader(filename string) string {
+	s := strings.ReplaceAll(filename, "\"", "\\\"")
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, "\n", "")
+	return s
 }

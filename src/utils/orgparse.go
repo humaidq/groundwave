@@ -17,6 +17,8 @@ import (
 func ParseOrgToHTML(content string) (string, error) {
 	config := org.New()
 
+	config.DefaultSettings["TODO"] = "TODO PROJ STRT WAIT HOLD | DONE KILL"
+
 	// Custom link resolver for org-roam ID links
 	config.ResolveLink = func(protocol string, description []org.Node, link string) org.Node {
 		// Handle id: protocol links (org-roam)
