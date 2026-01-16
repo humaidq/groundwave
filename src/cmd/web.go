@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/flamego/csrf"
@@ -211,6 +212,8 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Get("/contact/new", routes.NewContactForm)
 		f.Post("/contact/new", routes.CreateContact)
 		f.Get("/contact/{id}", routes.ViewContact)
+		f.Get("/contact/{id}/chats", routes.ViewContactChats)
+		f.Post("/contact/{id}/chats", routes.AddContactChat)
 		f.Get("/contact/{id}/edit", routes.EditContactForm)
 		f.Post("/contact/{id}/edit", routes.UpdateContact)
 		f.Post("/contact/{id}/email", routes.AddEmail)
@@ -316,7 +319,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 
 // handleWhatsAppMessage is called when a WhatsApp message is sent or received.
 // It updates the last_auto_contact timestamp for matching contacts.
-func handleWhatsAppMessage(jid string, timestamp time.Time, isOutgoing bool) {
+func handleWhatsAppMessage(jid string, timestamp time.Time, isOutgoing bool, message string) {
 	ctx := context.Background()
 
 	// Extract phone number from JID
@@ -339,6 +342,26 @@ func handleWhatsAppMessage(jid string, timestamp time.Time, isOutgoing bool) {
 	if err != nil {
 		log.Printf("Error updating auto contact timestamp for %s: %v", *contactID, err)
 		return
+	}
+
+	cleanMessage := strings.TrimSpace(message)
+	if cleanMessage != "" {
+		sentAt := timestamp.Format(time.RFC3339Nano)
+		sender := db.ChatSenderThem
+		if isOutgoing {
+			sender = db.ChatSenderMe
+		}
+
+		err = db.AddChat(ctx, db.AddChatInput{
+			ContactID: *contactID,
+			Platform:  db.ChatPlatformWhatsApp,
+			Sender:    sender,
+			Message:   cleanMessage,
+			SentAt:    &sentAt,
+		})
+		if err != nil {
+			log.Printf("Error adding WhatsApp chat entry for %s: %v", *contactID, err)
+		}
 	}
 
 	direction := "received"

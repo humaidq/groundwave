@@ -1163,6 +1163,25 @@ code:not(pre code) {
   color: #333;
 }
 
+.chat-sender {
+  text-transform: capitalize;
+}
+
+.chat-sender-me {
+  background-color: #e8f5e9;
+  color: #388e3c;
+}
+
+.chat-sender-them {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.chat-sender-mix {
+  background-color: #fff3cd;
+  color: #8a6d3b;
+}
+
 .log-type-note {
   background-color: #e3f2fd;
   color: #1976d2;

@@ -945,6 +945,105 @@ func DeleteLog(ctx context.Context, logID string) error {
 	return nil
 }
 
+// AddChatInput represents input for adding a chat entry
+
+type AddChatInput struct {
+	ContactID string
+	Platform  ChatPlatform
+	Sender    ChatSender
+	Message   string
+	SentAt    *string // Optional, defaults to now
+}
+
+// AddChat adds a new chat entry to a contact
+func AddChat(ctx context.Context, input AddChatInput) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	if strings.TrimSpace(input.Message) == "" {
+		return fmt.Errorf("chat message is required")
+	}
+
+	isService, err := IsServiceContact(ctx, input.ContactID)
+	if err != nil {
+		return err
+	}
+	if isService {
+		return nil
+	}
+
+	platform := input.Platform
+	if platform == "" {
+		platform = ChatPlatformManual
+	}
+
+	sender := input.Sender
+	if sender == "" {
+		sender = ChatSenderThem
+	}
+
+	query := `
+		INSERT INTO contact_chats (contact_id, platform, sender, message, sent_at)
+		VALUES ($1, $2, $3, $4, COALESCE($5::timestamptz, now()))
+	`
+	_, err = pool.Exec(ctx, query, input.ContactID, platform, sender, input.Message, input.SentAt)
+	if err != nil {
+		return fmt.Errorf("failed to add chat entry: %w", err)
+	}
+
+	return nil
+}
+
+// GetContactChats returns chat history for a contact
+func GetContactChats(ctx context.Context, contactID string) ([]ContactChat, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		SELECT id, contact_id, platform, sender, message, sent_at, created_at
+		FROM contact_chats
+		WHERE contact_id = $1
+		ORDER BY sent_at DESC, created_at DESC
+	`
+	rows, err := pool.Query(ctx, query, contactID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query chats: %w", err)
+	}
+	defer rows.Close()
+
+	var chats []ContactChat
+	for rows.Next() {
+		var chat ContactChat
+		if err := rows.Scan(&chat.ID, &chat.ContactID, &chat.Platform, &chat.Sender, &chat.Message, &chat.SentAt, &chat.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan chat: %w", err)
+		}
+		chats = append(chats, chat)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate chats: %w", err)
+	}
+
+	return chats, nil
+}
+
+// IsServiceContact checks if a contact is marked as a service contact
+func IsServiceContact(ctx context.Context, contactID string) (bool, error) {
+	if pool == nil {
+		return false, fmt.Errorf("database connection not initialized")
+	}
+
+	query := `SELECT is_service FROM contacts WHERE id = $1`
+	var isService bool
+	if err := pool.QueryRow(ctx, query, contactID).Scan(&isService); err != nil {
+		return false, fmt.Errorf("failed to query contact service status: %w", err)
+	}
+
+	return isService, nil
+}
+
 // LinkCardDAV links a contact with a CardDAV contact UUID
 func LinkCardDAV(ctx context.Context, contactID string, cardDAVUUID string) error {
 	if pool == nil {

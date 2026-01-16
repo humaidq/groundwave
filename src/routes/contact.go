@@ -257,6 +257,153 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 	t.HTML(http.StatusOK, "contact_view")
 }
 
+// ViewContactChats displays chat history for a contact
+func ViewContactChats(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+	contactID := c.Param("id")
+	if contactID == "" {
+		SetErrorFlash(s, "Contact ID is required")
+		c.Redirect("/contacts", http.StatusSeeOther)
+		return
+	}
+
+	contact, err := db.GetContact(c.Request().Context(), contactID)
+	if err != nil {
+		log.Printf("Error fetching contact %s: %v", contactID, err)
+		SetErrorFlash(s, "Contact not found")
+		c.Redirect("/contacts", http.StatusSeeOther)
+		return
+	}
+
+	if contact.IsService {
+		SetErrorFlash(s, "Chats are not available for service contacts")
+		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+		return
+	}
+
+	privateMode := false
+	if pm := s.Get("private_mode"); pm != nil {
+		privateMode = pm.(bool)
+	}
+	if privateMode {
+		SetErrorFlash(s, "Private mode is enabled")
+		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+		return
+	}
+
+	chats, err := db.GetContactChats(c.Request().Context(), contactID)
+	if err != nil {
+		log.Printf("Error fetching chats for contact %s: %v", contactID, err)
+	}
+
+	data["Contact"] = contact
+	data["ContactName"] = contact.NameDisplay
+	data["Chats"] = chats
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "Contacts", URL: "/contacts", IsCurrent: false},
+		{Name: contact.NameDisplay, URL: "/contact/" + contactID, IsCurrent: false},
+		{Name: "Chats", URL: "", IsCurrent: true},
+	}
+
+	t.HTML(http.StatusOK, "contact_chats")
+}
+
+// AddContactChat handles adding a manual chat entry
+func AddContactChat(c flamego.Context, s session.Session) {
+	contactID := c.Param("id")
+	if contactID == "" {
+		c.Redirect("/contacts", http.StatusSeeOther)
+		return
+	}
+
+	isService, err := db.IsServiceContact(c.Request().Context(), contactID)
+	if err != nil {
+		log.Printf("Error checking service contact %s: %v", contactID, err)
+		c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
+		return
+	}
+	if isService {
+		SetErrorFlash(s, "Chats are not available for service contacts")
+		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+		return
+	}
+
+	if pm := s.Get("private_mode"); pm != nil {
+		if pm.(bool) {
+			SetErrorFlash(s, "Private mode is enabled")
+			c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+			return
+		}
+	}
+
+	if err := c.Request().ParseForm(); err != nil {
+		log.Printf("Error parsing form: %v", err)
+		c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
+		return
+	}
+
+	form := c.Request().Form
+	message := strings.TrimSpace(form.Get("message"))
+	if message == "" {
+		SetErrorFlash(s, "Message content is required")
+		c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
+		return
+	}
+
+	platform := parseChatPlatform(form.Get("platform"))
+	sender := parseChatSender(form.Get("sender"))
+
+	var sentAt *string
+	if value := strings.TrimSpace(form.Get("sent_at")); value != "" {
+		sentAt = &value
+	}
+
+	input := db.AddChatInput{
+		ContactID: contactID,
+		Platform:  platform,
+		Sender:    sender,
+		Message:   message,
+		SentAt:    sentAt,
+	}
+
+	if err := db.AddChat(c.Request().Context(), input); err != nil {
+		log.Printf("Error adding chat entry: %v", err)
+	}
+
+	c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
+}
+
+func parseChatPlatform(value string) db.ChatPlatform {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case string(db.ChatPlatformEmail):
+		return db.ChatPlatformEmail
+	case string(db.ChatPlatformWhatsApp):
+		return db.ChatPlatformWhatsApp
+	case string(db.ChatPlatformSignal):
+		return db.ChatPlatformSignal
+	case string(db.ChatPlatformWeChat):
+		return db.ChatPlatformWeChat
+	case string(db.ChatPlatformTeams):
+		return db.ChatPlatformTeams
+	case string(db.ChatPlatformSlack):
+		return db.ChatPlatformSlack
+	case string(db.ChatPlatformOther):
+		return db.ChatPlatformOther
+	default:
+		return db.ChatPlatformManual
+	}
+}
+
+func parseChatSender(value string) db.ChatSender {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case string(db.ChatSenderMe):
+		return db.ChatSenderMe
+	case string(db.ChatSenderMix):
+		return db.ChatSenderMix
+	default:
+		return db.ChatSenderThem
+	}
+}
+
 // EditContactForm displays the edit contact form
 func EditContactForm(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	contactID := c.Param("id")

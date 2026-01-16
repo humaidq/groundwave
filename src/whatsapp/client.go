@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,7 +32,7 @@ const (
 )
 
 // MessageHandler is called when a WhatsApp message is sent or received
-type MessageHandler func(jid string, timestamp time.Time, isOutgoing bool)
+type MessageHandler func(jid string, timestamp time.Time, isOutgoing bool, message string)
 
 // Client manages the WhatsApp connection via whatsmeow
 type Client struct {
@@ -275,6 +276,11 @@ func (c *Client) handleMessage(evt *events.Message) {
 		return
 	}
 
+	messageText := extractMessageText(evt)
+	if messageText == "" {
+		return
+	}
+
 	// Get the JID of the other party
 	jid := evt.Info.Chat.User
 
@@ -283,8 +289,38 @@ func (c *Client) handleMessage(evt *events.Message) {
 
 	// Call the message handler
 	if c.onMessage != nil {
-		c.onMessage(jid, evt.Info.Timestamp, isOutgoing)
+		c.onMessage(jid, evt.Info.Timestamp, isOutgoing, messageText)
 	}
+}
+
+func extractMessageText(evt *events.Message) string {
+	if evt == nil {
+		return ""
+	}
+
+	messageEvent := evt.UnwrapRaw()
+	if messageEvent == nil || messageEvent.Message == nil {
+		return ""
+	}
+
+	message := messageEvent.Message
+	if text := strings.TrimSpace(message.GetConversation()); text != "" {
+		return text
+	}
+
+	if extended := message.GetExtendedTextMessage(); extended != nil {
+		if text := strings.TrimSpace(extended.GetText()); text != "" {
+			return text
+		}
+	}
+
+	if image := message.GetImageMessage(); image != nil {
+		if caption := strings.TrimSpace(image.GetCaption()); caption != "" {
+			return "<image> " + caption
+		}
+	}
+
+	return ""
 }
 
 // IsConnected returns true if WhatsApp is connected

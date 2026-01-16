@@ -1,0 +1,85 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+{{ if .Error }}
+<div class="alert alert-red">
+  {{ .Error }}
+</div>
+{{ end }}
+
+<div class="page-header">
+  <h2>Chats with {{ .Contact.NameDisplay }}</h2>
+  <div class="page-header-actions">
+    <a href="/contact/{{ .Contact.ID }}" class="btn">Back to Contact</a>
+  </div>
+</div>
+
+<div class="contact-section">
+  <h3>Add Chat Entry</h3>
+  <details class="add-item-details">
+    <summary class="add-item-summary">+ Add Message</summary>
+    <form method="POST" action="/contact/{{ .Contact.ID }}/chats" class="add-item-form">
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+      <div class="add-item-field">
+        <select name="platform" class="form-item">
+          <option value="manual">Manual</option>
+          <option value="email">Email</option>
+          <option value="whatsapp">WhatsApp</option>
+          <option value="signal">Signal</option>
+          <option value="wechat">WeChat</option>
+          <option value="teams">Teams</option>
+          <option value="slack">Slack</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="add-item-field">
+        <select name="sender" class="form-item">
+          <option value="them">Them</option>
+          <option value="me">Me</option>
+          <option value="mix">Mix</option>
+        </select>
+      </div>
+      <div class="add-item-field">
+        <input type="datetime-local" name="sent_at" class="form-item" placeholder="Date/Time (optional)">
+      </div>
+      <div class="add-item-field">
+        <textarea name="message" class="form-item" rows="4" placeholder="Chat message..." required></textarea>
+      </div>
+      <button type="submit" class="btn">Add Chat Entry</button>
+    </form>
+  </details>
+</div>
+
+<div class="contact-section">
+  <h3>Chat History</h3>
+  {{ if .Chats }}
+  <div class="log-list">
+    {{ range .Chats }}
+    <div class="log-entry">
+      <div class="log-header">
+        <span class="log-type log-type-{{ .Platform }}">{{ .Platform }}</span>
+        <span class="log-type chat-sender chat-sender-{{ .Sender }}">{{ .Sender }}</span>
+        <span class="log-date">{{ .SentAt.Format "Jan 2, 2006 3:04 PM" }}</span>
+      </div>
+      <div class="log-content">{{ .Message }}</div>
+    </div>
+    {{ end }}
+  </div>
+  {{ else }}
+  <p class="muted-text">No chat history recorded yet.</p>
+  {{ end }}
+</div>
+
+{{ template "foot" . }}

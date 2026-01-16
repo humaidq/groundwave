@@ -36,6 +36,7 @@
       {{ if not .Contact.IsService }}
       {{ if not .PrivateMode }}
       <span class="contact-tier tier-{{ .TierLower }}">{{ .Contact.Tier }}</span>
+      <a href="/contact/{{ .Contact.ID }}/chats" class="btn ml-half">Chats</a>
       {{ end }}
       {{ with .Contact.CallSign }}
       <span class="contact-callsign">{{ . }}</span>

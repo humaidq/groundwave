@@ -43,26 +43,26 @@ const (
 
 // Contact represents a person in the CRM
 type Contact struct {
-	ID             uuid.UUID  `db:"id"`
-	NameGiven      *string    `db:"name_given"`
-	NameAdditional *string    `db:"name_additional"`
-	NameFamily     *string    `db:"name_family"`
-	NameDisplay    string     `db:"name_display"`
-	Nickname       *string    `db:"nickname"`
-	Organization   *string    `db:"organization"`
-	Title          *string    `db:"title"`
-	Role           *string    `db:"role"`
-	Birthday       *time.Time `db:"birthday"`
-	Anniversary    *time.Time `db:"anniversary"`
-	Gender         *string    `db:"gender"`
-	Timezone       *string    `db:"timezone"`
-	GeoLat         *float64   `db:"geo_lat"`
-	GeoLon         *float64   `db:"geo_lon"`
-	Language       *string    `db:"language"`
-	PhotoURL       *string    `db:"photo_url"`
-	Tier           Tier       `db:"tier"`
-	CallSign       *string    `db:"call_sign"`
-	IsService      bool       `db:"is_service"`
+	ID              uuid.UUID  `db:"id"`
+	NameGiven       *string    `db:"name_given"`
+	NameAdditional  *string    `db:"name_additional"`
+	NameFamily      *string    `db:"name_family"`
+	NameDisplay     string     `db:"name_display"`
+	Nickname        *string    `db:"nickname"`
+	Organization    *string    `db:"organization"`
+	Title           *string    `db:"title"`
+	Role            *string    `db:"role"`
+	Birthday        *time.Time `db:"birthday"`
+	Anniversary     *time.Time `db:"anniversary"`
+	Gender          *string    `db:"gender"`
+	Timezone        *string    `db:"timezone"`
+	GeoLat          *float64   `db:"geo_lat"`
+	GeoLon          *float64   `db:"geo_lon"`
+	Language        *string    `db:"language"`
+	PhotoURL        *string    `db:"photo_url"`
+	Tier            Tier       `db:"tier"`
+	CallSign        *string    `db:"call_sign"`
+	IsService       bool       `db:"is_service"`
 	CardDAVUUID     *string    `db:"carddav_uuid"`
 	CreatedAt       time.Time  `db:"created_at"`
 	UpdatedAt       time.Time  `db:"updated_at"`
@@ -206,6 +206,43 @@ const (
 	LogIntro         LogType = "intro"
 	LogOther         LogType = "other"
 )
+
+// ChatPlatform represents the chat platform/source
+
+type ChatPlatform string
+
+const (
+	ChatPlatformManual   ChatPlatform = "manual"
+	ChatPlatformEmail    ChatPlatform = "email"
+	ChatPlatformWhatsApp ChatPlatform = "whatsapp"
+	ChatPlatformSignal   ChatPlatform = "signal"
+	ChatPlatformWeChat   ChatPlatform = "wechat"
+	ChatPlatformTeams    ChatPlatform = "teams"
+	ChatPlatformSlack    ChatPlatform = "slack"
+	ChatPlatformOther    ChatPlatform = "other"
+)
+
+// ChatSender represents the sender for a chat entry
+
+type ChatSender string
+
+const (
+	ChatSenderMe   ChatSender = "me"
+	ChatSenderThem ChatSender = "them"
+	ChatSenderMix  ChatSender = "mix"
+)
+
+// ContactChat represents a chat message with a contact
+
+type ContactChat struct {
+	ID        uuid.UUID    `db:"id"`
+	ContactID uuid.UUID    `db:"contact_id"`
+	Platform  ChatPlatform `db:"platform"`
+	Sender    ChatSender   `db:"sender"`
+	Message   string       `db:"message"`
+	SentAt    time.Time    `db:"sent_at"`
+	CreatedAt time.Time    `db:"created_at"`
+}
 
 // ContactLog represents an interaction with a contact
 type ContactLog struct {
