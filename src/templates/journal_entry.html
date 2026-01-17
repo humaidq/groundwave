@@ -1,0 +1,34 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+<div class="page-header">
+  <h2>Journal {{ if .Entry }}{{ .Entry.DateString }}{{ end }}</h2>
+  <div class="page-header-actions">
+    <a href="/timeline" class="btn">Back to Timeline</a>
+  </div>
+</div>
+
+{{ if .Error }}
+  <div class="alert alert-red">
+    <h5 class="alert-title">Error</h5>
+    <p>{{ .Error }}</p>
+  </div>
+{{ else if .Entry }}
+  <div class="zk-content">
+    {{ .Entry.HTMLBody }}
+  </div>
+{{ end }}
+
+{{ template "foot" . }}

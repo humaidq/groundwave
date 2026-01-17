@@ -252,11 +252,12 @@ code, pre {
   color: #666;
 }
 
-textarea, input {
+textarea, input, select {
   border-radius: 0;
   border: #ccc 1px solid;
   padding: 4px 6px;
   max-width: 100%;
+  box-sizing: border-box;
 }
 
 input[readonly] {
@@ -434,7 +435,7 @@ input {
   }
 }
 
-textarea:focus, input:focus {
+textarea:focus, input:focus, select:focus {
   border: #888 1px solid;
 }
 
@@ -449,7 +450,10 @@ label {
 .form-item {
   display: block;
   width: 100%;
+  max-width: 100%;
   margin-top: 5px;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .form-group {
@@ -543,7 +547,12 @@ section {
   width: 40%;
 }
 
-.entry {
+.list-card-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-card {
   display: block;
   margin-bottom: 1rem;
   background-color: #f9f9f9;
@@ -552,16 +561,16 @@ section {
   padding: 1rem;
 }
 
-.entry a {
+.list-card a {
   display: block;
   text-decoration: none;
 }
 
-.entry a:hover {
+.list-card a:hover {
   text-decoration: underline;
 }
 
-.tier-heading {
+.section-heading {
   margin-top: 2rem;
   margin-bottom: 1rem;
   padding-bottom: 0.5rem;
@@ -571,7 +580,7 @@ section {
   font-weight: 600;
 }
 
-.tier-heading:first-of-type {
+.section-heading:first-of-type {
   margin-top: 1rem;
 }
 
@@ -693,12 +702,12 @@ code:not(pre code) {
     color: #aaa;
   }
 
-  .tier-heading {
+  .section-heading {
     border-bottom-color: #acbbf9;
     color: #acbbf9;
   }
 
-  textarea, input {
+  textarea, input, select {
     background-color: #434449;
     border-color: #666;
     color: #efefef;
@@ -1028,20 +1037,28 @@ code:not(pre code) {
 }
 
 /* Contact Detail View */
-.contact-detail {
+.detail-layout {
   /* Removed max-width to allow full width usage */
 }
 
-.contact-section {
+.detail-section {
   margin-bottom: 2rem;
 }
 
-.contact-section h3 {
+.detail-section h3 {
   font-size: 1.1rem;
   color: #333;
   margin-bottom: 0.75rem;
   border-bottom: 2px solid #e0e0e0;
   padding-bottom: 0.5rem;
+}
+
+.section-actions {
+  margin-bottom: 1rem;
+}
+
+.section-actions .btn {
+  margin-right: 0.5rem;
 }
 
 /* Contact type section styling */
@@ -1059,7 +1076,7 @@ code:not(pre code) {
   margin-bottom: 1rem;
 }
 
-.contact-meta {
+.detail-meta {
   margin-bottom: 1rem;
   display: flex;
   gap: 0.5rem;
@@ -1081,7 +1098,7 @@ code:not(pre code) {
   color: #333;
 }
 
-.contact-item {
+.detail-card {
   display: flex;
   align-items: flex-start;
   flex-wrap: wrap;
@@ -1093,11 +1110,11 @@ code:not(pre code) {
   position: relative;
 }
 
-.contact-item-content {
+.detail-card-content {
   flex: 1;
 }
 
-.contact-item-value {
+.detail-card-value {
   display: block;
   font-weight: 500;
   color: #134dae;
@@ -1105,22 +1122,22 @@ code:not(pre code) {
   line-height: 1.4;
 }
 
-.contact-item-value:hover {
+.detail-card-value:hover {
   text-decoration: underline;
 }
 
-.contact-item-meta {
+.detail-card-meta {
   font-size: 0.85rem;
   color: #888;
   margin-top: 0.25rem;
   text-transform: capitalize;
 }
 
-.contact-item-readonly {
+.detail-card-readonly {
   /* CardDAV items - no delete button but otherwise styled the same */
 }
 
-.contact-notes {
+.detail-notes {
   background-color: #f9f9f9;
   padding: 1rem;
   border-radius: 6px;
@@ -1137,11 +1154,16 @@ code:not(pre code) {
   margin-top: 1.5rem;
 }
 
-.log-entry {
+.log-entry,
+.timeline-entry {
   background-color: #f9f9f9;
   padding: 1rem;
   border-radius: 6px;
-  border-left: 4px solid #134dae;
+  border-left: 4px solid;
+}
+
+.log-entry {
+  border-left-color: #134dae;
 }
 
 .log-header {
@@ -1150,6 +1172,55 @@ code:not(pre code) {
   gap: 0.75rem;
   margin-bottom: 0.5rem;
   flex-wrap: wrap;
+}
+
+.log-contact {
+  color: #134dae;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.log-contact:hover {
+  text-decoration: underline;
+}
+
+.timeline-entry {
+  border-left-color: #6c757d;
+  margin-top: 1rem;
+}
+
+.timeline-entry-link {
+  color: inherit;
+  display: block;
+  text-decoration: none;
+}
+
+.timeline-entry-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.timeline-entry-type {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  background-color: #eef0f7;
+  color: #333;
+}
+
+.timeline-entry-content p {
+  margin: 0.4em 0;
+}
+
+.timeline-ellipsis {
+  display: block;
+  font-weight: 600;
 }
 
 .log-type {
@@ -1195,6 +1266,21 @@ code:not(pre code) {
 .log-type-email_received {
   background-color: #f3e5f5;
   color: #7b1fa2;
+}
+
+.log-type-qsl {
+  background-color: #ffe8cc;
+  color: #b54800;
+}
+
+.log-type-zettel {
+  background-color: #ede7f6;
+  color: #5e35b1;
+}
+
+.log-type-health {
+  background-color: #e0f2f1;
+  color: #00695c;
 }
 
 .log-type-call {
@@ -1344,7 +1430,7 @@ code:not(pre code) {
 }
 
 /* Inline action buttons for items (edit/delete) */
-.contact-item-actions {
+.detail-card-actions {
   display: flex;
   gap: 0.25rem;
   align-items: center;
@@ -1683,10 +1769,36 @@ code:not(pre code) {
     color: #efefef;
   }
 
-  .contact-section h3 {
-    color: #eee;
-    border-bottom-color: #666;
+  .detail-section h3 {
+    font-size: 1rem;
   }
+
+  .contact-type-divider {
+    margin: 1rem 0;
+  }
+
+  .detail-label {
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+
+  .detail-card {
+    padding: 0.6rem;
+  }
+
+  .detail-card-value {
+    font-size: 0.95rem;
+  }
+
+  .detail-card-meta {
+    font-size: 0.8rem;
+  }
+
+  .detail-notes {
+    padding: 0.75rem;
+    font-size: 0.95rem;
+  }
+
 
   .contact-type-divider {
     border-top-color: #444;
@@ -1700,28 +1812,38 @@ code:not(pre code) {
     color: #eee;
   }
 
-  .contact-item {
+  .detail-card {
     background-color: #3c4043;
     border-color: #666;
   }
 
-  .contact-item-value {
+  .detail-card-value {
     color: #acbbf9;
   }
 
-  .contact-item-meta {
+  .detail-card-meta {
     color: #aaa;
   }
 
-  .contact-notes {
+  .detail-notes {
     background-color: #3c4043;
     border-color: #666;
     color: #eee;
   }
 
-  .log-entry {
+  .log-entry,
+  .timeline-entry,
+  .list-card {
     background-color: #2c2d30;
+    border-color: #444;
+  }
+
+  .log-entry {
     border-left-color: #5c8ee6;
+  }
+
+  .timeline-entry {
+    border-left-color: #777;
   }
 
   .log-subject {
@@ -1857,13 +1979,13 @@ code:not(pre code) {
     background-color: #434449;
   }
 
-  .entry {
-    background-color: #2c2d30;
-    border-color: #555;
+  .list-card {
+    margin-bottom: 0.75rem;
+    padding: 0.75rem;
   }
 
-  .entry a:hover {
-    text-decoration: underline;
+  .list-card a:hover {
+    text-decoration: none;
   }
 }
 
@@ -2467,27 +2589,27 @@ code:not(pre code) {
 
 
 /* Tag Badges in Contact Lists */
-.entry-main-link {
+.list-card-link {
   text-decoration: none;
   color: inherit;
   display: block;
 }
 
-.entry-title {
+.list-card-title {
   font-weight: 600;
   font-size: 1.05rem;
   margin-bottom: 0.3rem;
   color: #134dae;
 }
 
-.entry-meta {
+.list-card-meta {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   margin-top: 0.5rem;
 }
 
-.entry-org {
+.list-card-org {
   font-size: 0.9rem;
 }
 
@@ -2652,9 +2774,10 @@ code:not(pre code) {
   }
 
   /* Tag badges dark mode */
-  .entry-title {
-    color: #acbbf9;
+  .list-card-title {
+    font-size: 1rem;
   }
+
 
   .tag-badge {
     background: #2c5266;

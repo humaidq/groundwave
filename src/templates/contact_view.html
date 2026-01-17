@@ -30,9 +30,9 @@
   </div>
 </div>
 
-<div class="contact-detail">
-  <div class="contact-section">
-    <div class="contact-meta">
+<div class="detail-layout">
+  <div class="detail-section">
+    <div class="detail-meta">
       {{ if not .Contact.IsService }}
       {{ if not .PrivateMode }}
       <span class="contact-tier tier-{{ .TierLower }}">{{ .Contact.Tier }}</span>
@@ -69,7 +69,7 @@
   </div>
 
   {{ if not .PrivateMode }}
-  <div class="contact-section">
+  <div class="detail-section">
     <h3>Tags</h3>
     {{ if .Contact.Tags }}
     <div class="tag-pills">
@@ -105,7 +105,7 @@
   {{ end }}
 
   {{ if and (not .Contact.IsService) (not .PrivateMode) }}
-  <div class="contact-section">
+  <div class="detail-section">
     <h3>Activity Feed</h3>
 
     <details class="add-item-details">
@@ -200,14 +200,14 @@
   </div>
   {{ end }}
 
-  <div class="contact-section">
+  <div class="detail-section">
     <h3>Email Addresses</h3>
     {{ if .Contact.Emails }}
     {{ range .Contact.Emails }}
-    <div class="contact-item">
-      <div class="contact-item-content">
-        <a href="mailto:{{ .Email }}" class="contact-item-value">{{ .Email }}</a>
-        <div class="contact-item-meta">
+    <div class="detail-card">
+      <div class="detail-card-content">
+        <a href="mailto:{{ .Email }}" class="detail-card-value">{{ .Email }}</a>
+        <div class="detail-card-meta">
           {{ .EmailType }}{{ if .IsPrimary }} • Primary{{ end }}{{ if eq .Source "carddav" }} • CardDAV{{ end }}
         </div>
       </div>
@@ -265,14 +265,14 @@
     </details>
   </div>
 
-  <div class="contact-section">
+  <div class="detail-section">
     <h3>Phone Numbers</h3>
     {{ if .Contact.Phones }}
     {{ range .Contact.Phones }}
-    <div class="contact-item">
-      <div class="contact-item-content">
-        <a href="tel:{{ .Phone }}" class="contact-item-value">{{ .Phone }}</a>
-        <div class="contact-item-meta">
+    <div class="detail-card">
+      <div class="detail-card-content">
+        <a href="tel:{{ .Phone }}" class="detail-card-value">{{ .Phone }}</a>
+        <div class="detail-card-meta">
           {{ .PhoneType }}{{ if .IsPrimary }} • Primary{{ end }}{{ if eq .Source "carddav" }} • CardDAV{{ end }}
         </div>
       </div>
@@ -337,17 +337,17 @@
   </div>
 
   {{ if .Contact.Addresses }}
-  <div class="contact-section">
+  <div class="detail-section">
     <h3>Addresses</h3>
     {{ range .Contact.Addresses }}
-    <div class="contact-item">
-      <div class="contact-item-content">
-        <div class="contact-item-value">
+    <div class="detail-card">
+      <div class="detail-card-content">
+        <div class="detail-card-value">
           {{ if .Street }}{{ .Street }}<br>{{ end }}
           {{ if .Locality }}{{ .Locality }}{{ end }}{{ if .Region }}, {{ .Region }}{{ end }} {{ if .PostalCode }}{{ .PostalCode }}{{ end }}
           {{ if .Country }}<br>{{ .Country }}{{ end }}
         </div>
-        <div class="contact-item-meta">
+        <div class="detail-card-meta">
           {{ .AddressType }}{{ if .IsPrimary }} • Primary{{ end }}
         </div>
       </div>
@@ -356,16 +356,16 @@
   </div>
   {{ end }}
 
-  <div class="contact-section">
+  <div class="detail-section">
     <h3>Links & Social Media</h3>
     {{ if .Contact.URLs }}
     {{ range .Contact.URLs }}
-    <div class="contact-item">
-      <div class="contact-item-content">
-        <a href="{{ .URL }}" target="_blank" class="contact-item-value">
+    <div class="detail-card">
+      <div class="detail-card-content">
+        <a href="{{ .URL }}" target="_blank" class="detail-card-value">
           {{ if .Label }}{{ .Label }}{{ else }}{{ .URL }}{{ end }}
         </a>
-        <div class="contact-item-meta">
+        <div class="detail-card-meta">
           {{ .URLType }}{{ if .Username }} • @{{ .Username }}{{ end }}
         </div>
       </div>
@@ -417,7 +417,7 @@
   </div>
 
   {{ if .QSOs }}
-  <div class="contact-section">
+  <div class="detail-section">
     <h3>QSO Log ({{ len .QSOs }} contacts)</h3>
     <table class="contacts-list">
       <thead>
@@ -476,7 +476,7 @@
   </div>
   {{ end }}
 
-  <div class="contact-section">
+  <div class="detail-section">
     <a href="/contacts" class="btn">← Back to Contacts</a>
   </div>
 </div>

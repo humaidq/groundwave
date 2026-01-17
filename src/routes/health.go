@@ -348,7 +348,9 @@ func CreateHealthProfile(c flamego.Context, s session.Session) {
 		description = &descStr
 	}
 
-	profileID, err := db.CreateHealthProfile(ctx, name, dob, gender, description)
+	isPrimary := c.Request().Form.Get("is_primary") == "on"
+
+	profileID, err := db.CreateHealthProfile(ctx, name, dob, gender, description, isPrimary)
 	if err != nil {
 		log.Printf("Error creating health profile: %v", err)
 		SetErrorFlash(s, "Failed to create health profile")
@@ -453,7 +455,6 @@ func ViewHealthProfile(c flamego.Context, s session.Session, t template.Template
 	}
 
 	data["Profile"] = profile
-	data["ProfileName"] = profile.Name
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		healthBreadcrumb(false),
 		profileBreadcrumb(profileID, profile.Name, true),
@@ -477,6 +478,12 @@ func EditHealthProfileForm(c flamego.Context, s session.Session, t template.Temp
 
 	data["Profile"] = profile
 	data["ProfileName"] = profile.Name
+	if profile.Gender != nil {
+		data["GenderValue"] = string(*profile.Gender)
+	} else {
+		data["GenderValue"] = ""
+	}
+
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		healthBreadcrumb(false),
 		profileBreadcrumb(profileID, profile.Name, false),
@@ -531,7 +538,9 @@ func UpdateHealthProfile(c flamego.Context, s session.Session) {
 		description = &descStr
 	}
 
-	err := db.UpdateHealthProfile(ctx, profileID, name, dob, gender, description)
+	isPrimary := c.Request().Form.Get("is_primary") == "on"
+
+	err := db.UpdateHealthProfile(ctx, profileID, name, dob, gender, description, isPrimary)
 	if err != nil {
 		log.Printf("Error updating health profile %s: %v", profileID, err)
 		c.Redirect("/health/"+profileID+"/edit", http.StatusSeeOther)

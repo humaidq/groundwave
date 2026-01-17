@@ -6,10 +6,12 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // ========== Health Profile Operations ==========
@@ -21,7 +23,7 @@ func ListHealthProfiles(ctx context.Context) ([]HealthProfileSummary, error) {
 	}
 
 	query := `
-		SELECT id, name, date_of_birth, gender, description, created_at, updated_at, followup_count, last_followup_date
+		SELECT id, name, date_of_birth, gender, description, is_primary, created_at, updated_at, followup_count, last_followup_date
 		FROM health_profiles_summary
 		ORDER BY name ASC
 	`
@@ -37,6 +39,7 @@ func ListHealthProfiles(ctx context.Context) ([]HealthProfileSummary, error) {
 		var profile HealthProfileSummary
 		err := rows.Scan(
 			&profile.ID, &profile.Name, &profile.DateOfBirth, &profile.Gender, &profile.Description,
+			&profile.IsPrimary,
 			&profile.CreatedAt, &profile.UpdatedAt,
 			&profile.FollowupCount, &profile.LastFollowupDate,
 		)
@@ -61,13 +64,14 @@ func GetHealthProfile(ctx context.Context, id string) (*HealthProfile, error) {
 
 	var profile HealthProfile
 	query := `
-		SELECT id, name, date_of_birth, gender, description, created_at, updated_at
+		SELECT id, name, date_of_birth, gender, description, is_primary, created_at, updated_at
 		FROM health_profiles
 		WHERE id = $1
 	`
 
 	err := pool.QueryRow(ctx, query, id).Scan(
 		&profile.ID, &profile.Name, &profile.DateOfBirth, &profile.Gender, &profile.Description,
+		&profile.IsPrimary,
 		&profile.CreatedAt, &profile.UpdatedAt,
 	)
 	if err != nil {
@@ -77,42 +81,105 @@ func GetHealthProfile(ctx context.Context, id string) (*HealthProfile, error) {
 	return &profile, nil
 }
 
+// GetPrimaryHealthProfile returns the primary health profile, if any.
+func GetPrimaryHealthProfile(ctx context.Context) (*HealthProfile, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	var profile HealthProfile
+	query := `
+		SELECT id, name, date_of_birth, gender, description, is_primary, created_at, updated_at
+		FROM health_profiles
+		WHERE is_primary = true
+		LIMIT 1
+	`
+
+	err := pool.QueryRow(ctx, query).Scan(
+		&profile.ID, &profile.Name, &profile.DateOfBirth, &profile.Gender, &profile.Description,
+		&profile.IsPrimary,
+		&profile.CreatedAt, &profile.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get primary health profile: %w", err)
+	}
+
+	return &profile, nil
+}
+
 // CreateHealthProfile creates a new health profile
-func CreateHealthProfile(ctx context.Context, name string, dob *time.Time, gender *Gender, description *string) (string, error) {
+func CreateHealthProfile(ctx context.Context, name string, dob *time.Time, gender *Gender, description *string, isPrimary bool) (string, error) {
 	if pool == nil {
 		return "", fmt.Errorf("database connection not initialized")
 	}
 
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if isPrimary {
+		_, err = tx.Exec(ctx, `UPDATE health_profiles SET is_primary = false WHERE is_primary = true`)
+		if err != nil {
+			return "", fmt.Errorf("failed to clear existing primary profile: %w", err)
+		}
+	}
+
 	var id string
 	query := `
-		INSERT INTO health_profiles (name, date_of_birth, gender, description)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO health_profiles (name, date_of_birth, gender, description, is_primary)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id
 	`
 
-	err := pool.QueryRow(ctx, query, name, dob, gender, description).Scan(&id)
+	err = tx.QueryRow(ctx, query, name, dob, gender, description, isPrimary).Scan(&id)
 	if err != nil {
 		return "", fmt.Errorf("failed to create health profile: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return "", fmt.Errorf("failed to commit health profile creation: %w", err)
 	}
 
 	return id, nil
 }
 
 // UpdateHealthProfile updates a health profile
-func UpdateHealthProfile(ctx context.Context, id, name string, dob *time.Time, gender *Gender, description *string) error {
+func UpdateHealthProfile(ctx context.Context, id, name string, dob *time.Time, gender *Gender, description *string, isPrimary bool) error {
 	if pool == nil {
 		return fmt.Errorf("database connection not initialized")
 	}
 
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if isPrimary {
+		_, err = tx.Exec(ctx, `UPDATE health_profiles SET is_primary = false WHERE is_primary = true AND id <> $1`, id)
+		if err != nil {
+			return fmt.Errorf("failed to clear existing primary profile: %w", err)
+		}
+	}
+
 	query := `
 		UPDATE health_profiles
-		SET name = $1, date_of_birth = $2, gender = $3, description = $4
-		WHERE id = $5
+		SET name = $1, date_of_birth = $2, gender = $3, description = $4, is_primary = $5
+		WHERE id = $6
 	`
 
-	_, err := pool.Exec(ctx, query, name, dob, gender, description, id)
+	_, err = tx.Exec(ctx, query, name, dob, gender, description, isPrimary, id)
 	if err != nil {
 		return fmt.Errorf("failed to update health profile: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit health profile update: %w", err)
 	}
 
 	return nil

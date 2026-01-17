@@ -28,9 +28,9 @@
 {{ if .OverdueContacts }}
 <p class="muted-text overdue-help">Contacts sorted by most overdue first. Tier F contacts (no regular contact needed) are not included.</p>
 
-<div class="entry-list">
+<div class="list-card-list">
   {{ range .OverdueContacts }}
-  <div class="entry">
+  <div class="list-card">
     <a href="/contact/{{ .ID }}">
       <div>
         {{ .NameDisplay }}

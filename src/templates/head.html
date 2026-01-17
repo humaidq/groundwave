@@ -51,6 +51,7 @@
         <div class="nav-menu">
           <a href="/"{{ if .IsWelcome }} class="nav-active"{{ end }}>Home</a>
           <a href="/todo"{{ if .IsTodo }} class="nav-active"{{ end }}>Todo</a>
+          <a href="/timeline"{{ if .IsTimeline }} class="nav-active"{{ end }}>Timeline</a>
           <a href="/contacts"{{ if .IsContacts }} class="nav-active"{{ end }}>Contacts</a>
           <a href="/qsl"{{ if .IsQSL }} class="nav-active"{{ end }}>QSL</a>
           <a href="/zk"{{ if .IsZettelkasten }} class="nav-active"{{ end }}>Zettelkasten</a>

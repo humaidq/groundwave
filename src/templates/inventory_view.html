@@ -30,9 +30,9 @@
   </div>
 </div>
 
-<div class="contact-detail">
+<div class="detail-layout">
   <!-- Item Details -->
-  <div class="contact-section">
+  <div class="detail-section">
     {{ with .Item.Location }}
     <div class="detail-item">
       <span class="detail-label">Location:</span>
@@ -47,14 +47,14 @@
 
   {{ with .Item.Description }}
   <!-- Description Section -->
-  <div class="contact-section">
+  <div class="detail-section">
     <h3>Description</h3>
     <div class="pre-line">{{ . }}</div>
   </div>
   {{ end }}
 
   <!-- Files Section -->
-  <div class="contact-section">
+  <div class="detail-section">
     <h3>Files</h3>
     {{ if .Files }}
     <ul class="file-list">
@@ -73,7 +73,7 @@
   </div>
 
   <!-- Comments Section -->
-  <div class="contact-section">
+  <div class="detail-section">
     <h3>Comments</h3>
     {{ if .Comments }}
     <div class="log-list">

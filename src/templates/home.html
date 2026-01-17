@@ -164,14 +164,14 @@
 <div id="contactList">
   {{ if .PrivateMode }}
   {{/* Private mode: flat alphabetical list, no tiers or tags */}}
-  <div class="entry-list">
+  <div class="list-card-list">
   {{ range .Contacts }}
-    <div class="entry">
-      <a href="/contact/{{ .ID }}" class="entry-main-link">
-        <div class="entry-title">{{ .NameDisplay }}</div>
+    <div class="list-card">
+      <a href="/contact/{{ .ID }}" class="list-card-link">
+        <div class="list-card-title">{{ .NameDisplay }}</div>
         {{ if .Organization }}
-        <div class="entry-meta">
-          <span class="entry-org muted-text">{{ .Organization }}</span>
+        <div class="list-card-meta">
+          <span class="list-card-org muted-text">{{ .Organization }}</span>
         </div>
         {{ end }}
       </a>
@@ -184,17 +184,17 @@
   {{ range .Contacts }}
     {{ if ne .Tier $prevTier }}
       {{ if ne $prevTier "" }}</div>{{ end }}
-      <h3 class="tier-heading">Tier {{ .Tier }}</h3>
-      <div class="entry-list">
+      <h3 class="section-heading">Tier {{ .Tier }}</h3>
+      <div class="list-card-list">
       {{ $prevTier = .Tier }}
     {{ end }}
-    <div class="entry">
-      <a href="/contact/{{ .ID }}" class="entry-main-link">
-        <div class="entry-title">{{ .NameDisplay }}</div>
+    <div class="list-card">
+      <a href="/contact/{{ .ID }}" class="list-card-link">
+        <div class="list-card-title">{{ .NameDisplay }}</div>
         {{ if or .Organization .Tags }}
-        <div class="entry-meta">
+        <div class="list-card-meta">
           {{ if .Organization }}
-          <span class="entry-org muted-text">{{ .Organization }}</span>
+          <span class="list-card-org muted-text">{{ .Organization }}</span>
           {{ end }}
           {{ if .Tags }}
           <div class="tag-badges">
@@ -224,7 +224,7 @@
   const contactList = document.getElementById('contactList');
 
   if (searchInput && contactList) {
-    const entries = contactList.getElementsByClassName('entry');
+    const entries = contactList.getElementsByClassName('list-card');
 
     searchInput.addEventListener('input', function(e) {
       const searchTerm = e.target.value.toLowerCase();

@@ -945,6 +945,46 @@ func DeleteLog(ctx context.Context, logID string) error {
 	return nil
 }
 
+// ListContactLogsTimeline returns all contact logs for the timeline feed.
+func ListContactLogsTimeline(ctx context.Context) ([]ContactLogTimelineEntry, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		SELECT l.id, l.contact_id, c.name_display, l.log_type, l.logged_at, l.subject, l.content, l.created_at
+		FROM contact_logs l
+		INNER JOIN contacts c ON c.id = l.contact_id
+		ORDER BY l.logged_at DESC, l.created_at DESC
+	`
+
+	rows, err := pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query contact logs: %w", err)
+	}
+	defer rows.Close()
+
+	entries := []ContactLogTimelineEntry{}
+	for rows.Next() {
+		var entry ContactLogTimelineEntry
+		if err := rows.Scan(
+			&entry.ID,
+			&entry.ContactID,
+			&entry.ContactName,
+			&entry.LogType,
+			&entry.LoggedAt,
+			&entry.Subject,
+			&entry.Content,
+			&entry.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan contact log: %w", err)
+		}
+		entries = append(entries, entry)
+	}
+
+	return entries, nil
+}
+
 // AddChatInput represents input for adding a chat entry
 
 type AddChatInput struct {

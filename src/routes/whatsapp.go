@@ -78,8 +78,8 @@ func WhatsAppStatusAPI(c flamego.Context) {
 	client := whatsapp.GetClient()
 
 	response := map[string]interface{}{
-		"status":   "unavailable",
-		"qrCode":   "",
+		"status":    "unavailable",
+		"qrCode":    "",
 		"connected": false,
 	}
 

@@ -38,12 +38,12 @@
   {{ if .RecentQSOs }}
   <div class="recent-section">
     <h3>Recent QSOs</h3>
-    <div class="entry-list">
+    <div class="list-card-list">
       {{ range .RecentQSOs }}
       <a href="/qsl/{{ .ID }}">
-        <div class="entry">
-          <div class="entry-title">{{ .Call }}</div>
-          <div class="entry-meta">
+        <div class="list-card">
+          <div class="list-card-title">{{ .Call }}</div>
+          <div class="list-card-meta">
             {{ .FormatDate }} {{ .FormatTime }}
             {{ if .Mode }}• {{ .Mode }}{{ end }}
             {{ if .Band }}• {{ .Band }}{{ end }}
@@ -59,13 +59,13 @@
   {{ if .RecentContacts }}
   <div class="recent-section">
     <h3>Recently Updated</h3>
-    <div class="entry-list">
+    <div class="list-card-list">
       {{ range .RecentContacts }}
       <a href="/contact/{{ .ID }}">
-        <div class="entry">
-          <div class="entry-title">{{ .NameDisplay }}</div>
+        <div class="list-card">
+          <div class="list-card-title">{{ .NameDisplay }}</div>
           {{ if .Organization }}
-          <div class="entry-meta">{{ .Organization }}</div>
+          <div class="list-card-meta">{{ .Organization }}</div>
           {{ end }}
         </div>
       </a>

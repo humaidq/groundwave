@@ -35,9 +35,9 @@
 
 <p class="muted-text qso-count">Total QSOs: {{ len .QSOs }}</p>
 
-<div class="entry-list" id="qslList">
+<div class="list-card-list" id="qslList">
   {{ range .QSOs }}
-  <div class="entry">
+  <div class="list-card">
     <a href="/qsl/{{ .ID }}">
       <div><span class="qso-callsign">{{ .Call }}</span> • {{ .QSODate.Format "2006-01-02" }} {{ .TimeOn.Format "15:04" }}Z</div>
       <div class="muted-text">
@@ -59,7 +59,7 @@
 (function() {
   const searchInput = document.getElementById('qslSearch');
   const qslList = document.getElementById('qslList');
-  const entries = qslList.getElementsByClassName('entry');
+  const entries = qslList.getElementsByClassName('list-card');
 
   if (searchInput && entries) {
     searchInput.addEventListener('input', function(e) {

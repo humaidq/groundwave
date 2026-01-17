@@ -151,7 +151,7 @@
 {{ if .AllQSOs }}
 <h3>All QSOs with {{ .QSO.Call }} ({{ len .AllQSOs }} total)</h3>
 {{ range .AllQSOs }}
-  <div class="entry">
+  <div class="list-card">
     {{ if eq .ID $.QSO.ID.String }}
     <span class="qso-current">
       {{ .FormatDate }} at {{ .FormatTime }} UTC (current)

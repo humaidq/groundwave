@@ -255,6 +255,18 @@ type ContactLog struct {
 	CreatedAt time.Time `db:"created_at"`
 }
 
+// ContactLogTimelineEntry represents a contact log entry for the timeline feed.
+type ContactLogTimelineEntry struct {
+	ID          uuid.UUID `db:"id"`
+	ContactID   uuid.UUID `db:"contact_id"`
+	ContactName string    `db:"name_display"`
+	LogType     LogType   `db:"log_type"`
+	LoggedAt    time.Time `db:"logged_at"`
+	Subject     *string   `db:"subject"`
+	Content     *string   `db:"content"`
+	CreatedAt   time.Time `db:"created_at"`
+}
+
 // ContactNote represents a timestamped note for a contact
 type ContactNote struct {
 	ID        uuid.UUID `db:"id"`
@@ -647,6 +659,7 @@ type HealthProfile struct {
 	DateOfBirth *time.Time `db:"date_of_birth"`
 	Gender      *Gender    `db:"gender"`
 	Description *string    `db:"description"`
+	IsPrimary   bool       `db:"is_primary"`
 	CreatedAt   time.Time  `db:"created_at"`
 	UpdatedAt   time.Time  `db:"updated_at"`
 }

@@ -3,6 +3,8 @@
 This file guides coding agents working in this repository.
 Follow these conventions when editing any file in this repo.
 
+See FEATURES.md file for the big picture.
+
 ## Repository Context
 
 - Project name: Groundwave (personal CRM + ham radio logging)

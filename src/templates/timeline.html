@@ -1,0 +1,129 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+<div class="page-header">
+  <h2>Timeline</h2>
+</div>
+
+{{ if .Error }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Error</h5>
+  <p>{{ .Error }}</p>
+</div>
+{{ end }}
+
+{{ if .Days }}
+  {{ range .Days }}
+    <h3 class="section-heading">{{ .Date.Format "Monday Jan 2, 2006" }}</h3>
+
+    {{ if .Journal }}
+      <div class="timeline-entry">
+        <a href="/journal/{{ .Journal.DateString }}" class="timeline-entry-link">
+          <div class="timeline-entry-header">
+            <span class="timeline-entry-type">Journal</span>
+            <span class="log-date">{{ .Journal.DateString }}</span>
+          </div>
+          <div class="timeline-entry-content">
+            {{ if .Journal.Preview }}
+              {{ .Journal.Preview }}
+            {{ else }}
+              <p class="muted-text">No preview available.</p>
+            {{ end }}
+            {{ if .Journal.HasMore }}<span class="timeline-ellipsis">...</span>{{ end }}
+          </div>
+        </a>
+      </div>
+    {{ end }}
+
+    {{ if .Followups }}
+      <div class="log-list">
+        {{ range .Followups }}
+          <div class="log-entry">
+            <div class="log-header">
+              <span class="log-type log-type-health">Health</span>
+              <span class="log-date">{{ .FollowupDate.Format "Jan 2, 2006" }}</span>
+              <a href="/health/{{ .ProfileID }}/followup/{{ .ID }}" class="log-contact">{{ .HospitalName }}</a>
+              {{ if $.PrimaryHealthProfileName }}<span class="muted-text">{{ $.PrimaryHealthProfileName }}</span>{{ end }}
+            </div>
+            <div class="log-content">
+              {{ .ResultCount }} test result{{ if ne .ResultCount 1 }}s{{ end }}
+            </div>
+          </div>
+        {{ end }}
+      </div>
+    {{ end }}
+
+    {{ if .Logs }}
+      <div class="log-list">
+        {{ range .Logs }}
+          <div class="log-entry">
+            <div class="log-header">
+              <span class="log-type log-type-{{ .LogType }}">{{ .LogType }}</span>
+              <span class="log-date">{{ .LoggedAt.Format "Jan 2, 2006 3:04 PM" }}</span>
+              <a href="/contact/{{ .ContactID }}" class="log-contact">{{ .ContactName }}</a>
+            </div>
+            {{ with .Subject }}
+              <div class="log-content"><strong>{{ . }}</strong></div>
+            {{ end }}
+            {{ with .Content }}
+              <div class="log-content">{{ . }}</div>
+            {{ end }}
+          </div>
+        {{ end }}
+      </div>
+    {{ end }}
+
+    {{ if .Notes }}
+      <div class="log-list">
+        {{ range .Notes }}
+          <div class="log-entry">
+            <div class="log-header">
+              <span class="log-type log-type-zettel">Note</span>
+              <span class="log-date">{{ .Timestamp.Format "15:04:05" }}</span>
+              <a href="/zk/{{ .ID }}" class="log-contact">{{ .Title }}</a>
+            </div>
+          </div>
+        {{ end }}
+      </div>
+    {{ end }}
+
+    {{ if .QSOs }}
+      <div class="log-list">
+        {{ range .QSOs }}
+          <div class="log-entry">
+            <div class="log-header">
+              <span class="log-type log-type-qsl">QSL</span>
+              <span class="log-date">{{ .QSODate.Format "Jan 2, 2006" }} {{ .FormatTime }}</span>
+              <a href="/qsl/{{ .ID }}" class="log-contact">{{ .Call }}</a>
+              {{ if .Band }}<span class="muted-text">{{ .Band }}</span>{{ end }}
+              <span class="muted-text">{{ .Mode }}</span>
+            </div>
+            {{ if .Country }}
+              <div class="log-content">{{ .Country }}</div>
+            {{ end }}
+          </div>
+        {{ end }}
+      </div>
+    {{ end }}
+
+    {{ if and (not .Journal) (not .Followups) (not .Logs) (not .Notes) (not .QSOs) }}
+      <p class="muted-text">No activity recorded.</p>
+    {{ end }}
+  {{ end }}
+{{ else }}
+  <p class="muted-text">No timeline activity yet.</p>
+{{ end }}
+
+{{ template "foot" . }}

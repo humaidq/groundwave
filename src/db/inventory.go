@@ -19,7 +19,12 @@ func ListInventoryItems(ctx context.Context, status ...InventoryStatus) ([]Inven
 	}
 
 	var query string
-	var rows interface{ Next() bool; Scan(dest ...any) error; Close(); Err() error }
+	var rows interface {
+		Next() bool
+		Scan(dest ...any) error
+		Close()
+		Err() error
+	}
 	var err error
 
 	if len(status) > 0 && status[0] != "" {

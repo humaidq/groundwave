@@ -107,6 +107,10 @@ func GetZKConfig() (*ZettelkastenConfig, error) {
 	}, nil
 }
 
+func getZKDailyBaseURL(config *ZettelkastenConfig) string {
+	return strings.TrimSuffix(config.BaseURL, "/") + "/daily/"
+}
+
 // newZKHTTPClient creates an HTTP client for WebDAV operations
 func newZKHTTPClient(config *ZettelkastenConfig) *http.Client {
 	transport := http.DefaultTransport
@@ -161,6 +165,41 @@ func FetchOrgFile(ctx context.Context, filename string) (string, error) {
 	return string(body), nil
 }
 
+// FetchDailyOrgFile fetches a daily journal org file from WebDAV.
+func FetchDailyOrgFile(ctx context.Context, filename string) (string, error) {
+	config, err := GetZKConfig()
+	if err != nil {
+		return "", err
+	}
+
+	httpClient := newZKHTTPClient(config)
+	dailyBaseURL := getZKDailyBaseURL(config)
+
+	fileURL := dailyBaseURL + filename
+
+	req, err := http.NewRequestWithContext(ctx, "GET", fileURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch file %s: %w", filename, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to fetch file %s: HTTP %d", filename, resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file content: %w", err)
+	}
+
+	return string(body), nil
+}
+
 // ListOrgFiles lists all .org files in the WebDAV directory
 func ListOrgFiles(ctx context.Context) ([]string, error) {
 	config, err := GetZKConfig()
@@ -188,6 +227,43 @@ func ListOrgFiles(ctx context.Context) ([]string, error) {
 	for _, info := range fileInfos {
 		if !info.IsDir && strings.HasSuffix(info.Path, ".org") {
 			// Extract just the filename from the path
+			parts := strings.Split(strings.TrimPrefix(info.Path, "/"), "/")
+			filename := parts[len(parts)-1]
+			orgFiles = append(orgFiles, filename)
+		}
+	}
+
+	return orgFiles, nil
+}
+
+// ListDailyOrgFiles lists .org files in the WebDAV daily journal directory.
+func ListDailyOrgFiles(ctx context.Context) ([]string, error) {
+	config, err := GetZKConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	httpClient := newZKHTTPClient(config)
+	dailyBaseURL := getZKDailyBaseURL(config)
+
+	client, err := webdav.NewClient(httpClient, dailyBaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create WebDAV client: %w", err)
+	}
+
+	fileInfos, err := client.ReadDir(ctx, ".", false)
+	if err != nil {
+		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found") {
+			return []string{}, nil
+		}
+		return nil, fmt.Errorf("failed to list daily directory: %w", err)
+	}
+
+	log.Printf("Found %d items in WebDAV daily directory %s", len(fileInfos), dailyBaseURL)
+
+	var orgFiles []string
+	for _, info := range fileInfos {
+		if !info.IsDir && strings.HasSuffix(info.Path, ".org") {
 			parts := strings.Split(strings.TrimPrefix(info.Path, "/"), "/")
 			filename := parts[len(parts)-1]
 			orgFiles = append(orgFiles, filename)

@@ -27,12 +27,15 @@
 </div>
 
 {{ if .Profiles }}
-<div class="entry-list">
+<div class="list-card-list">
   {{ range .Profiles }}
-  <div class="entry">
-    <a href="/health/{{ .ID }}" class="entry-main-link">
-      <div class="entry-title">{{ .Name }}</div>
-      <div class="entry-meta">
+  <div class="list-card">
+    <a href="/health/{{ .ID }}" class="list-card-link">
+      <div class="list-card-title">
+        {{ .Name }}
+        {{ if .IsPrimary }}<span class="badge ml-half">Primary</span>{{ end }}
+      </div>
+      <div class="list-card-meta">
         <span class="muted-text">
           {{ .FollowupCount }} follow-up{{ if ne .FollowupCount 1 }}s{{ end }}
           {{ if .LastFollowupDate }}

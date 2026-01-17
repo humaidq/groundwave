@@ -87,18 +87,18 @@
 <input type="text" id="serviceSearch" placeholder="Search services..." class="search-input">
 
 {{ if .ServiceContacts }}
-<div class="entry-list" id="serviceList">
+<div class="list-card-list" id="serviceList">
   {{ range .ServiceContacts }}
-    <div class="entry" data-org="{{ if .Organization }}{{ .Organization }}{{ end }}" data-name="{{ .NameDisplay }}">
-      <a href="/contact/{{ .ID }}" class="entry-main-link">
-        <div class="entry-title">
+    <div class="list-card" data-org="{{ if .Organization }}{{ .Organization }}{{ end }}" data-name="{{ .NameDisplay }}">
+      <a href="/contact/{{ .ID }}" class="list-card-link">
+        <div class="list-card-title">
           {{ if .Organization }}
             <strong>{{ .Organization }}</strong> — {{ .NameDisplay }}{{ if .Title }} ({{ .Title }}){{ end }}
           {{ else }}
             {{ .NameDisplay }}{{ if .Title }} - {{ .Title }}{{ end }}
           {{ end }}
         </div>
-        <div class="entry-meta">
+        <div class="list-card-meta">
           {{ if or .PrimaryPhone .PrimaryEmail }}
           <span class="muted-text">
             {{ if .PrimaryPhone }}{{ .PrimaryPhone }}{{ end }}
@@ -131,7 +131,7 @@
   const serviceList = document.getElementById('serviceList');
 
   if (searchInput && serviceList) {
-    const entries = Array.from(serviceList.getElementsByClassName('entry'));
+    const entries = Array.from(serviceList.getElementsByClassName('list-card'));
     const headers = Array.from(serviceList.getElementsByClassName('service-group-header'));
 
     searchInput.addEventListener('input', function(e) {

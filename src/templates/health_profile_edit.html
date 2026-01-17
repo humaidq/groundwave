@@ -44,8 +44,8 @@
     <label for="gender" class="item-title">Gender</label>
     <select id="gender" name="gender" class="form-item">
       <option value="">-- Not specified --</option>
-      <option value="Male" {{ if and .Profile.Gender (eq (printf "%s" .Profile.Gender) "Male") }}selected{{ end }}>Male</option>
-      <option value="Female" {{ if and .Profile.Gender (eq (printf "%s" .Profile.Gender) "Female") }}selected{{ end }}>Female</option>
+      <option value="Male" {{ if eq .GenderValue "Male" }}selected{{ end }}>Male</option>
+      <option value="Female" {{ if eq .GenderValue "Female" }}selected{{ end }}>Female</option>
     </select>
     <small class="muted-text">Used for gender-based reference ranges</small>
   </div>
@@ -54,6 +54,13 @@
     <label for="description" class="item-title">Description</label>
     <textarea id="description" name="description" class="form-item" rows="3">{{ if .Profile.Description }}{{ .Profile.Description }}{{ end }}</textarea>
     <small class="muted-text">Optional notes about health baseline, included in AI analysis context</small>
+  </div>
+
+  <div class="form-group">
+    <label class="checkbox-label">
+      <input type="checkbox" name="is_primary" {{ if .Profile.IsPrimary }}checked{{ end }}> Primary profile
+    </label>
+    <small class="muted-text">Primary profile appears in the timeline</small>
   </div>
 
   <div class="form-group">

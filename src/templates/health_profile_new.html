@@ -57,6 +57,13 @@
   </div>
 
   <div class="form-group">
+    <label class="checkbox-label">
+      <input type="checkbox" name="is_primary" {{ if and .FormData (eq (index .FormData "is_primary") "on") }}checked{{ end }}> Primary profile
+    </label>
+    <small class="muted-text">Primary profile appears in the timeline</small>
+  </div>
+
+  <div class="form-group">
     <button type="submit" class="btn">Create Profile</button>
     <a href="/health" class="btn">Cancel</a>
   </div>

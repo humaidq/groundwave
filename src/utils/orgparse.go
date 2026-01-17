@@ -9,6 +9,7 @@ import (
 	"html"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/niklasfasching/go-org/org"
 )
@@ -119,4 +120,20 @@ func ValidateUUID(id string) error {
 	}
 
 	return nil
+}
+
+// ExtractDateDirective extracts a date from a #+DATE: directive.
+func ExtractDateDirective(content string) (time.Time, bool) {
+	re := regexp.MustCompile(`(?im)^\s*#\+DATE:\s*<?(\d{4}-\d{2}-\d{2})`)
+	matches := re.FindStringSubmatch(content)
+	if len(matches) < 2 {
+		return time.Time{}, false
+	}
+
+	parsed, err := time.Parse("2006-01-02", matches[1])
+	if err != nil {
+		return time.Time{}, false
+	}
+
+	return parsed, true
 }

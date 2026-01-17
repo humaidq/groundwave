@@ -79,21 +79,21 @@
 {{ if .Items }}
 <input type="text" id="inventorySearch" placeholder="Search inventory..." class="search-input">
 
-<div class="entry-list" id="inventoryList">
+<div class="list-card-list" id="inventoryList">
   {{ range .Items }}
-  <div class="entry">
-    <a href="/inventory/{{ .InventoryID }}" class="entry-main-link">
-      <div class="entry-title">
+  <div class="list-card">
+    <a href="/inventory/{{ .InventoryID }}" class="list-card-link">
+      <div class="list-card-title">
         <span class="inventory-id">{{ .InventoryID }}</span> - {{ .Name }}
         {{ if ne .Status "active" }}<span class="status-badge status-{{ .Status }}">{{ .Status }}</span>{{ end }}
       </div>
       {{ if or .Location .Description }}
-      <div class="entry-meta">
+      <div class="list-card-meta">
         {{ with .Location }}
-        <span class="entry-location">📍 {{ . }}</span>
+        <span class="list-card-location">📍 {{ . }}</span>
         {{ end }}
         {{ with .Description }}
-        <span class="entry-description">{{ . }}</span>
+        <span class="list-card-description">{{ . }}</span>
         {{ end }}
       </div>
       {{ end }}
@@ -110,7 +110,7 @@
 (function() {
   const searchInput = document.getElementById('inventorySearch');
   const inventoryList = document.getElementById('inventoryList');
-  const entries = inventoryList.getElementsByClassName('entry');
+  const entries = inventoryList.getElementsByClassName('list-card');
 
   if (searchInput && entries) {
     searchInput.addEventListener('input', function(e) {

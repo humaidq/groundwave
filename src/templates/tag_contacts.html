@@ -26,9 +26,9 @@
 {{ end }}
 
 {{ if .Contacts }}
-<div class="entry-list">
+<div class="list-card-list">
   {{ range .Contacts }}
-  <div class="entry">
+  <div class="list-card">
     <a href="/contact/{{ .ID }}">
       <div>{{ .NameDisplay }}</div>
       {{ if .Organization }}

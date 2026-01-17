@@ -30,9 +30,9 @@
   </div>
 </div>
 
-<div class="contact-detail">
+<div class="detail-layout">
   <!-- Profile Details -->
-  <div class="contact-section">
+  <div class="detail-section">
     <h3>Profile Information</h3>
     <div class="detail-item">
       <span class="detail-label">Name:</span>
@@ -66,19 +66,19 @@
   </div>
 
   <!-- Follow-ups Section -->
-  <div class="contact-section">
+  <div class="detail-section">
     <h3>Medical Follow-ups</h3>
     <div class="section-actions">
       <a href="/health/{{ .Profile.ID }}/followup/new" class="btn">Add Follow-up</a>
     </div>
 
     {{ if .Followups }}
-    <div class="entry-list">
+    <div class="list-card-list">
       {{ range .Followups }}
-      <div class="entry">
-        <a href="/health/{{ $.Profile.ID }}/followup/{{ .ID }}" class="entry-main-link">
-          <div class="entry-title">{{ .FollowupDate.Format "Jan 2, 2006" }} - {{ .HospitalName }}</div>
-          <div class="entry-meta">
+      <div class="list-card">
+        <a href="/health/{{ $.Profile.ID }}/followup/{{ .ID }}" class="list-card-link">
+          <div class="list-card-title">{{ .FollowupDate.Format "Jan 2, 2006" }} - {{ .HospitalName }}</div>
+          <div class="list-card-meta">
             <span class="muted-text">
               {{ .ResultCount }} test result{{ if ne .ResultCount 1 }}s{{ end }}
               {{ if .Notes }}
@@ -97,7 +97,7 @@
 
   <!-- Lab Trends Charts Section -->
   {{ if .ChartCategories }}
-  <div class="contact-section">
+  <div class="detail-section">
     <h3>Lab Test Trends</h3>
 
     {{ range .ChartCategories }}
