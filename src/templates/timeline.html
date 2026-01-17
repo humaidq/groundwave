@@ -70,6 +70,7 @@
         {{ range .Logs }}
           <div class="log-entry">
             <div class="log-header">
+              <span class="log-type">Contact</span>
               <span class="log-type log-type-{{ .LogType }}">{{ .LogType }}</span>
               <span class="log-date">{{ .LoggedAt.Format "Jan 2, 2006 3:04 PM" }}</span>
               <a href="/contact/{{ .ContactID }}" class="log-contact">{{ .ContactName }}</a>

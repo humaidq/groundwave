@@ -204,6 +204,8 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Get("/todo", routes.Todo)
 		f.Get("/timeline", routes.Timeline)
 		f.Get("/journal/{date}", routes.ViewJournalEntry)
+		f.Post("/journal/{date}/location", routes.AddJournalLocation)
+		f.Post("/journal/{date}/location/{location_id}/delete", routes.DeleteJournalLocation)
 		f.Get("/logout", routes.Logout)
 		f.Post("/private-mode/toggle", routes.TogglePrivateMode)
 		f.Get("/contacts", routes.Home)

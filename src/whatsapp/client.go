@@ -284,6 +284,8 @@ func (c *Client) handleMessage(evt *events.Message) {
 	// Get the JID of the other party
 	jid := evt.Info.Chat.User
 
+	log.Printf("WhatsApp message info: fromMe=%v chat=%v sender=%v recipientAlt=%v deviceSentMeta=%v id=%s type=%s", evt.Info.IsFromMe, evt.Info.Chat, evt.Info.Sender, evt.Info.RecipientAlt, evt.Info.DeviceSentMeta, evt.Info.ID, evt.Info.Type)
+
 	// Determine if this is an outgoing message
 	isOutgoing := evt.Info.IsFromMe
 

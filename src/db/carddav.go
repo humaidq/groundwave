@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -615,19 +614,8 @@ func CreateCardDAVContact(ctx context.Context, contact *ContactDetail) (string, 
 	// Convert to vCard 4.0
 	vcard.ToV4(card)
 
-	// Determine the path for the new contact
-	// Parse the URL to extract just the path portion
-	parsedURL, err := url.Parse(config.URL)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse CardDAV URL: %w", err)
-	}
-
-	basePath := strings.TrimSuffix(parsedURL.Path, "/")
-	// Remove any trailing filename if present (e.g., .vcf)
-	if strings.HasSuffix(basePath, ".vcf") {
-		basePath = basePath[:strings.LastIndex(basePath, "/")]
-	}
-	path := fmt.Sprintf("%s/%s.vcf", basePath, newUUID)
+	// Path is relative to the collection URL (just the filename)
+	path := fmt.Sprintf("%s.vcf", newUUID)
 
 	// Create the contact on the server using PUT
 	_, err = client.PutAddressObject(ctx, path, card)
@@ -658,17 +646,8 @@ func UpdateCardDAVContact(ctx context.Context, contact *ContactDetail) error {
 
 	existingUUID := *contact.CardDAVUUID
 
-	// Determine the path for the contact
-	parsedURL, err := url.Parse(config.URL)
-	if err != nil {
-		return fmt.Errorf("failed to parse CardDAV URL: %w", err)
-	}
-
-	basePath := strings.TrimSuffix(parsedURL.Path, "/")
-	if strings.HasSuffix(basePath, ".vcf") {
-		basePath = basePath[:strings.LastIndex(basePath, "/")]
-	}
-	path := fmt.Sprintf("%s/%s.vcf", basePath, existingUUID)
+	// Path is relative to the collection URL (just the filename)
+	path := fmt.Sprintf("%s.vcf", existingUUID)
 
 	// Fetch the existing vCard to preserve fields we don't manage
 	existingObj, err := client.GetAddressObject(ctx, path)

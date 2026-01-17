@@ -582,6 +582,16 @@ type ContactDue struct {
 	IsDue           bool       `db:"is_due"`
 }
 
+// JournalDayLocation represents a location attached to a daily journal entry.
+type JournalDayLocation struct {
+	ID          uuid.UUID `db:"id"`
+	Day         time.Time `db:"day"`
+	LocationLat float64   `db:"location_lat"`
+	LocationLon float64   `db:"location_lon"`
+	CreatedAt   time.Time `db:"created_at"`
+	UpdatedAt   time.Time `db:"updated_at"`
+}
+
 // ZettelComment represents a temporary comment on a zettelkasten note
 type ZettelComment struct {
 	ID        uuid.UUID `db:"id"`

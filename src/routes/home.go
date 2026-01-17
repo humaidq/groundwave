@@ -8,12 +8,15 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/flamego/flamego"
 	"github.com/flamego/session"
 	"github.com/flamego/template"
 
+	"github.com/google/uuid"
 	"github.com/humaidq/groundwave/db"
 	"github.com/humaidq/groundwave/whatsapp"
 )
@@ -381,5 +384,116 @@ func ViewJournalEntry(c flamego.Context, t template.Template, data template.Data
 	}
 	data["PageTitle"] = "Journal " + entry.DateString
 
+	locations, err := db.ListJournalDayLocations(c.Request().Context(), entry.Date)
+	if err != nil {
+		log.Printf("Error fetching journal day locations: %v", err)
+		locations = []db.JournalDayLocation{}
+	}
+	data["Locations"] = locations
+
 	t.HTML(http.StatusOK, "journal_entry")
+}
+
+// AddJournalLocation handles adding a location to a journal day.
+func AddJournalLocation(c flamego.Context, s session.Session) {
+	date := c.Param("date")
+	if date == "" {
+		SetErrorFlash(s, "Date is required")
+		c.Redirect("/timeline", http.StatusSeeOther)
+		return
+	}
+
+	if _, exists := db.GetJournalEntryByDate(date); !exists {
+		SetErrorFlash(s, "Journal entry not found")
+		c.Redirect("/timeline", http.StatusSeeOther)
+		return
+	}
+
+	if err := c.Request().ParseForm(); err != nil {
+		log.Printf("Error parsing form: %v", err)
+		SetErrorFlash(s, "Failed to parse form")
+		c.Redirect("/journal/"+date, http.StatusSeeOther)
+		return
+	}
+
+	latStr := strings.TrimSpace(c.Request().Form.Get("location_lat"))
+	lonStr := strings.TrimSpace(c.Request().Form.Get("location_lon"))
+	if latStr == "" || lonStr == "" {
+		SetErrorFlash(s, "Latitude and longitude are required")
+		c.Redirect("/journal/"+date, http.StatusSeeOther)
+		return
+	}
+
+	lat, err := strconv.ParseFloat(latStr, 64)
+	if err != nil {
+		SetErrorFlash(s, "Latitude must be a number")
+		c.Redirect("/journal/"+date, http.StatusSeeOther)
+		return
+	}
+
+	lon, err := strconv.ParseFloat(lonStr, 64)
+	if err != nil {
+		SetErrorFlash(s, "Longitude must be a number")
+		c.Redirect("/journal/"+date, http.StatusSeeOther)
+		return
+	}
+
+	if lat < -90 || lat > 90 {
+		SetErrorFlash(s, "Latitude must be between -90 and 90")
+		c.Redirect("/journal/"+date, http.StatusSeeOther)
+		return
+	}
+
+	if lon < -180 || lon > 180 {
+		SetErrorFlash(s, "Longitude must be between -180 and 180")
+		c.Redirect("/journal/"+date, http.StatusSeeOther)
+		return
+	}
+
+	day, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		SetErrorFlash(s, "Invalid date format")
+		c.Redirect("/journal/"+date, http.StatusSeeOther)
+		return
+	}
+
+	ctx := c.Request().Context()
+	if err := db.CreateJournalDayLocation(ctx, day, lat, lon); err != nil {
+		log.Printf("Error creating journal day location: %v", err)
+		SetErrorFlash(s, "Failed to add location")
+		c.Redirect("/journal/"+date, http.StatusSeeOther)
+		return
+	}
+
+	SetSuccessFlash(s, "Location added")
+	c.Redirect("/journal/"+date, http.StatusSeeOther)
+}
+
+// DeleteJournalLocation handles removing a location from a journal day.
+func DeleteJournalLocation(c flamego.Context, s session.Session) {
+	date := c.Param("date")
+	locationID := c.Param("location_id")
+	if date == "" || locationID == "" {
+		SetErrorFlash(s, "Invalid request")
+		c.Redirect("/timeline", http.StatusSeeOther)
+		return
+	}
+
+	parsedID, err := uuid.Parse(locationID)
+	if err != nil {
+		SetErrorFlash(s, "Invalid location ID")
+		c.Redirect("/journal/"+date, http.StatusSeeOther)
+		return
+	}
+
+	ctx := c.Request().Context()
+	if err := db.DeleteJournalDayLocation(ctx, parsedID); err != nil {
+		log.Printf("Error deleting journal day location: %v", err)
+		SetErrorFlash(s, "Failed to delete location")
+		c.Redirect("/journal/"+date, http.StatusSeeOther)
+		return
+	}
+
+	SetSuccessFlash(s, "Location removed")
+	c.Redirect("/journal/"+date, http.StatusSeeOther)
 }

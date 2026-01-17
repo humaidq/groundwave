@@ -29,6 +29,137 @@
   <div class="zk-content">
     {{ .Entry.HTMLBody }}
   </div>
+
+  <div class="detail-section">
+    <h3>Locations</h3>
+    {{ if .Locations }}
+    <div class="log-list">
+      {{ range .Locations }}
+      <div class="log-entry">
+        <div class="log-header">
+          <span class="log-type log-type-note">location</span>
+          <span class="log-date">{{ .CreatedAt.Format "Jan 2, 2006 3:04 PM" }}</span>
+          <form method="POST" action="/journal/{{ $.Entry.DateString }}/location/{{ .ID }}/delete" class="log-delete-form" onsubmit="return confirm('Delete this location?');">
+            <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
+            <button type="submit" class="btn-delete" title="Delete">×</button>
+          </form>
+        </div>
+        <div class="log-content">
+          {{ printf "%.6f" .LocationLat }}, {{ printf "%.6f" .LocationLon }}
+        </div>
+      </div>
+      {{ end }}
+    </div>
+    {{ else }}
+    <p class="no-comments">No locations yet.</p>
+    {{ end }}
+
+    <details class="add-item-details">
+      <summary class="add-item-summary">+ Add Location</summary>
+      <form method="POST" action="/journal/{{ .Entry.DateString }}/location" class="add-item-form">
+        <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+        <div class="form-group">
+          <button type="button" id="location-fetch-btn" class="btn">Use Current Location</button>
+          <p id="location-fetch-status" class="muted-text"></p>
+        </div>
+        <div class="form-group">
+          <label for="location_lat" class="item-title">Latitude <span class="required">*</span></label>
+          <input type="number" step="0.00000000000001" id="location_lat" name="location_lat" class="form-item" required
+                 placeholder="e.g., 25.204849">
+        </div>
+        <div class="form-group">
+          <label for="location_lon" class="item-title">Longitude <span class="required">*</span></label>
+          <input type="number" step="0.00000000000001" id="location_lon" name="location_lon" class="form-item" required
+                 placeholder="e.g., 55.270782">
+        </div>
+        <button type="submit" class="btn">Save Location</button>
+      </form>
+    </details>
+  </div>
+
+  <script>
+    (function() {
+      const button = document.getElementById("location-fetch-btn");
+      const status = document.getElementById("location-fetch-status");
+      const latInput = document.getElementById("location_lat");
+      const lonInput = document.getElementById("location_lon");
+      if (!button || !status || !latInput || !lonInput) {
+        return;
+      }
+
+      const defaultLabel = button.textContent;
+
+      function setStatus(message) {
+        status.textContent = message;
+      }
+
+      function maybeSplitLatLon(value) {
+        const match = value.match(/^\s*([+-]?(?:\d+\.?\d*|\.\d+))\s*,\s*([+-]?(?:\d+\.?\d*|\.\d+))\s*$/);
+        if (!match) {
+          return false;
+        }
+        latInput.value = match[1];
+        lonInput.value = match[2];
+        return true;
+      }
+
+      latInput.addEventListener("input", function() {
+        maybeSplitLatLon(latInput.value);
+      });
+
+      latInput.addEventListener("paste", function(event) {
+        if (!event.clipboardData) {
+          return;
+        }
+        const pastedText = event.clipboardData.getData("text");
+        if (!pastedText) {
+          return;
+        }
+        if (maybeSplitLatLon(pastedText)) {
+          event.preventDefault();
+        }
+      });
+
+      button.addEventListener("click", function() {
+        if (!navigator.geolocation) {
+          setStatus("Geolocation is not supported by this browser.");
+          return;
+        }
+
+        button.disabled = true;
+        button.textContent = "Fetching...";
+        setStatus("");
+
+        navigator.geolocation.getCurrentPosition(
+          function(position) {
+            latInput.value = position.coords.latitude.toFixed(6);
+            lonInput.value = position.coords.longitude.toFixed(6);
+            setStatus("Location captured.");
+            button.disabled = false;
+            button.textContent = defaultLabel;
+          },
+          function(error) {
+            let message = "Unable to retrieve location.";
+            if (error.code === error.PERMISSION_DENIED) {
+              message = "Location permission was denied.";
+            } else if (error.code === error.POSITION_UNAVAILABLE) {
+              message = "Location information is unavailable.";
+            } else if (error.code === error.TIMEOUT) {
+              message = "Location request timed out.";
+            }
+            setStatus(message);
+            button.disabled = false;
+            button.textContent = defaultLabel;
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 60000,
+          },
+        );
+      });
+    })();
+  </script>
 {{ end }}
 
 {{ template "foot" . }}
