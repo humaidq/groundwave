@@ -649,11 +649,16 @@ func UpdateCardDAVContact(ctx context.Context, contact *ContactDetail) error {
 	// Path is relative to the collection URL (just the filename)
 	path := fmt.Sprintf("%s.vcf", existingUUID)
 
+	fmt.Printf("[DEBUG] Attempting to fetch CardDAV contact at path: %s (UUID: %s)\n", path, existingUUID)
+	fmt.Printf("[DEBUG] CardDAV base URL: %s\n", config.URL)
+
 	// Fetch the existing vCard to preserve fields we don't manage
 	existingObj, err := client.GetAddressObject(ctx, path)
 	if err != nil {
+		fmt.Printf("[DEBUG] Failed to fetch CardDAV contact: %v\n", err)
 		return fmt.Errorf("failed to fetch existing CardDAV contact: %w", err)
 	}
+	fmt.Printf("[DEBUG] Successfully fetched CardDAV contact\n")
 	card := existingObj.Card
 
 	// Update name fields, preserving components we don't manage (prefix, suffix, middle name)
