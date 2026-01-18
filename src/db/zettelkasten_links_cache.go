@@ -19,6 +19,8 @@ import (
 )
 
 // Global cache for backlinks
+const DailyBacklinkPrefix = "daily:"
+
 var (
 	backlinkCache    = make(map[string][]string) // target ID -> slice of source IDs
 	forwardLinkCache = make(map[string][]string) // source ID -> slice of target IDs
@@ -83,13 +85,35 @@ func ExtractLinksFromContent(content string) []string {
 // BuildBacklinkCache scans all .org files and builds the backlink index
 // This function is designed to be called periodically by a background worker
 func BuildBacklinkCache(ctx context.Context) error {
+	// List all .org files
+	orgFiles, err := ListOrgFiles(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list org files: %w", err)
+	}
+
+	dailyFiles, err := ListDailyOrgFiles(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list daily org files: %w", err)
+	}
+
+	return buildBacklinkCacheFromFiles(ctx, orgFiles, dailyFiles)
+}
+
+func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []string) error {
 	log.Println("Building backlink cache...")
 	startTime := time.Now()
 
-	// List all .org files
-	files, err := ListOrgFiles(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to list org files: %w", err)
+	type orgFile struct {
+		Name    string
+		IsDaily bool
+	}
+
+	files := make([]orgFile, 0, len(orgFiles)+len(dailyFiles))
+	for _, file := range orgFiles {
+		files = append(files, orgFile{Name: file})
+	}
+	for _, file := range dailyFiles {
+		files = append(files, orgFile{Name: file, IsDaily: true})
 	}
 
 	// Build temporary cache
@@ -101,9 +125,15 @@ func BuildBacklinkCache(ctx context.Context) error {
 	// Scan each file
 	for _, file := range files {
 		// Fetch file content
-		content, err := FetchOrgFile(ctx, file)
+		var content string
+		var err error
+		if file.IsDaily {
+			content, err = FetchDailyOrgFile(ctx, file.Name)
+		} else {
+			content, err = FetchOrgFile(ctx, file.Name)
+		}
 		if err != nil {
-			log.Printf("Skipping unreadable file %s: %v", file, err)
+			log.Printf("Skipping unreadable file %s: %v", file.Name, err)
 			filesSkipped++
 			continue
 		}
@@ -111,9 +141,18 @@ func BuildBacklinkCache(ctx context.Context) error {
 		// Extract source ID (the note's own ID)
 		sourceID, err := utils.ExtractIDProperty(content)
 		if err != nil {
-			// File doesn't have an ID property, skip it
-			filesSkipped++
-			continue
+			if file.IsDaily {
+				dateString := strings.TrimSuffix(file.Name, ".org")
+				if _, parseErr := time.Parse("2006-01-02", dateString); parseErr != nil {
+					filesSkipped++
+					continue
+				}
+				sourceID = DailyBacklinkPrefix + dateString
+			} else {
+				// File doesn't have an ID property, skip it
+				filesSkipped++
+				continue
+			}
 		}
 
 		// Extract all link targets from this note
@@ -157,13 +196,17 @@ func BuildBacklinkCache(ctx context.Context) error {
 
 // BuildJournalCache scans daily journal entries and caches them for the timeline.
 func BuildJournalCache(ctx context.Context) error {
-	log.Println("Building journal cache...")
-	startTime := time.Now()
-
 	files, err := ListDailyOrgFiles(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list daily org files: %w", err)
 	}
+
+	return buildJournalCacheFromFiles(ctx, files)
+}
+
+func buildJournalCacheFromFiles(ctx context.Context, files []string) error {
+	log.Println("Building journal cache...")
+	startTime := time.Now()
 
 	tempCache := make(map[string]JournalEntry)
 	filesProcessed := 0
@@ -237,13 +280,17 @@ func BuildJournalCache(ctx context.Context) error {
 
 // BuildZKTimelineNotesCache scans zettelkasten notes and caches them for timeline display.
 func BuildZKTimelineNotesCache(ctx context.Context) error {
-	log.Println("Building zettelkasten timeline note cache...")
-	startTime := time.Now()
-
 	files, err := ListOrgFiles(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list org files: %w", err)
 	}
+
+	return buildZKTimelineNotesCacheFromFiles(ctx, files)
+}
+
+func buildZKTimelineNotesCacheFromFiles(ctx context.Context, files []string) error {
+	log.Println("Building zettelkasten timeline note cache...")
+	startTime := time.Now()
 
 	config, err := GetZKConfig()
 	if err != nil {
@@ -493,23 +540,48 @@ func GetLastCacheBuildTime() time.Time {
 	return lastCacheBuild
 }
 
-// StartBacklinkRefreshWorker starts a background goroutine that periodically
-// refreshes the backlink cache
-func StartBacklinkRefreshWorker(ctx context.Context) {
+// RebuildZettelkastenCaches performs a single sweep to rebuild all cache layers.
+func RebuildZettelkastenCaches(ctx context.Context) error {
+	log.Println("Rebuilding zettelkasten caches...")
+	startTime := time.Now()
+
+	orgFiles, err := ListOrgFiles(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list org files: %w", err)
+	}
+
+	dailyFiles, err := ListDailyOrgFiles(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list daily org files: %w", err)
+	}
+
+	log.Printf("Cache rebuild scan: %d org files, %d daily files", len(orgFiles), len(dailyFiles))
+
+	if err := buildBacklinkCacheFromFiles(ctx, orgFiles, dailyFiles); err != nil {
+		return err
+	}
+	if err := buildJournalCacheFromFiles(ctx, dailyFiles); err != nil {
+		return err
+	}
+	if err := buildZKTimelineNotesCacheFromFiles(ctx, orgFiles); err != nil {
+		return err
+	}
+
+	log.Printf("Cache rebuild completed in %v", time.Since(startTime))
+	return nil
+}
+
+// StartRebuildCacheWorker starts a background goroutine that periodically
+// refreshes zettelkasten-related caches.
+func StartRebuildCacheWorker(ctx context.Context) {
 	go func() {
 		// Initial delay to let the application start up
-		log.Println("Backlink refresh worker starting in 30 seconds...")
-		time.Sleep(30 * time.Second)
+		log.Println("Cache rebuild worker starting in 5 seconds...")
+		time.Sleep(5 * time.Second)
 
 		// Initial cache build
-		if err := BuildBacklinkCache(ctx); err != nil {
-			log.Printf("Error building initial backlink cache: %v", err)
-		}
-		if err := BuildJournalCache(ctx); err != nil {
-			log.Printf("Error building initial journal cache: %v", err)
-		}
-		if err := BuildZKTimelineNotesCache(ctx); err != nil {
-			log.Printf("Error building initial zettelkasten note cache: %v", err)
+		if err := RebuildZettelkastenCaches(ctx); err != nil {
+			log.Printf("Error building initial caches: %v", err)
 		}
 
 		// Periodic refresh every 10 minutes
@@ -519,17 +591,11 @@ func StartBacklinkRefreshWorker(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("Backlink refresh worker shutting down")
+				log.Println("Cache rebuild worker shutting down")
 				return
 			case <-ticker.C:
-				if err := BuildBacklinkCache(ctx); err != nil {
-					log.Printf("Error refreshing backlink cache: %v", err)
-				}
-				if err := BuildJournalCache(ctx); err != nil {
-					log.Printf("Error refreshing journal cache: %v", err)
-				}
-				if err := BuildZKTimelineNotesCache(ctx); err != nil {
-					log.Printf("Error refreshing zettelkasten note cache: %v", err)
+				if err := RebuildZettelkastenCaches(ctx); err != nil {
+					log.Printf("Error refreshing caches: %v", err)
 				}
 			}
 		}

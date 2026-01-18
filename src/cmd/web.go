@@ -75,8 +75,8 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	}
 	log.Println("Database schema synced successfully")
 
-	// Start backlink cache refresh worker
-	db.StartBacklinkRefreshWorker(context.Background())
+	// Start cache rebuild worker
+	db.StartRebuildCacheWorker(context.Background())
 
 	// Sync CardDAV contacts
 	log.Println("Syncing contacts from CardDAV...")
@@ -265,7 +265,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Post("/zk/{id}/comment", routes.AddZettelComment)
 		f.Post("/zk/{id}/comment/{comment_id}/delete", routes.DeleteZettelComment)
 		f.Get("/zettel-inbox", routes.ZettelCommentsInbox)
-		f.Post("/zk/refresh-links", routes.RefreshBacklinks)
+		f.Post("/rebuild-cache", routes.RebuildCache)
 
 		// Inventory routes
 		f.Get("/inventory", routes.InventoryList)

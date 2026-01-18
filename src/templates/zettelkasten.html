@@ -42,7 +42,7 @@
       <p class="backlinks-description">Notes that link to this page:</p>
       <ul class="backlinks-list">
         {{ range .Backlinks }}
-        <li><a href="/zk/{{ .ID }}">{{ .Title }}</a></li>
+        <li><a href="{{ .URL }}">{{ .Title }}</a></li>
         {{ end }}
       </ul>
     </div>
@@ -55,7 +55,7 @@
       {{ else }}
       <small>Links last updated: {{ .LastCacheUpdate.Format "Jan 2, 2006 3:04 PM" }}</small>
       {{ end }}
-      <form method="POST" action="/zk/refresh-links" class="inline-form" onsubmit="return confirm('This will scan all notes and may take a minute. Continue?');">
+      <form method="POST" action="/rebuild-cache" class="inline-form" onsubmit="return confirm('This will rebuild caches and may take a minute. Continue?');">
         <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
         <button type="submit" class="btn-small">Refresh Now</button>
       </form>

@@ -5,6 +5,7 @@
 package routes
 
 import (
+	"context"
 	"encoding/gob"
 	"encoding/json"
 	"log"
@@ -25,6 +26,12 @@ type ZKHistoryItem struct {
 	ID        string
 	Title     string
 	IsCurrent bool
+}
+
+type Backlink struct {
+	ID    string
+	Title string
+	URL   string
 }
 
 const zkHistoryKey = "zk_history"
@@ -91,6 +98,37 @@ func prepareZKHistoryForTemplate(history []ZKHistoryItem, currentID string) []ZK
 	return result
 }
 
+func buildBacklinks(ctx context.Context, backlinkIDs []string) []Backlink {
+	backlinks := make([]Backlink, 0, len(backlinkIDs))
+	for _, backlinkID := range backlinkIDs {
+		if strings.HasPrefix(backlinkID, db.DailyBacklinkPrefix) {
+			dateString := strings.TrimPrefix(backlinkID, db.DailyBacklinkPrefix)
+			title := dateString
+			if entry, ok := db.GetJournalEntryByDate(dateString); ok && entry.Title != "" {
+				title = entry.Title
+			}
+			backlinks = append(backlinks, Backlink{
+				ID:    backlinkID,
+				Title: title,
+				URL:   "/journal/" + dateString,
+			})
+			continue
+		}
+
+		backlinkNote, err := db.GetNoteByID(ctx, backlinkID)
+		if err != nil {
+			log.Printf("Error fetching backlink note %s: %v", backlinkID, err)
+			continue
+		}
+		backlinks = append(backlinks, Backlink{
+			ID:    backlinkID,
+			Title: backlinkNote.Title,
+			URL:   "/zk/" + backlinkID,
+		})
+	}
+	return backlinks
+}
+
 // ZettelkastenIndex renders the zettelkasten index page
 func ZettelkastenIndex(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	ctx := c.Request().Context()
@@ -121,23 +159,7 @@ func ZettelkastenIndex(c flamego.Context, s session.Session, t template.Template
 		backlinkIDs = db.GetBacklinksFromCache(note.ID)
 	}
 
-	// Enrich backlinks with note titles
-	type Backlink struct {
-		ID    string
-		Title string
-	}
-	backlinks := make([]Backlink, 0, len(backlinkIDs))
-	for _, backlinkID := range backlinkIDs {
-		backlinkNote, err := db.GetNoteByID(ctx, backlinkID)
-		if err != nil {
-			log.Printf("Error fetching backlink note %s: %v", backlinkID, err)
-			continue
-		}
-		backlinks = append(backlinks, Backlink{
-			ID:    backlinkID,
-			Title: backlinkNote.Title,
-		})
-	}
+	backlinks := buildBacklinks(ctx, backlinkIDs)
 
 	// Get last cache build time
 	lastCacheUpdate := db.GetLastCacheBuildTime()
@@ -195,24 +217,7 @@ func ViewZKNote(c flamego.Context, s session.Session, t template.Template, data 
 	// Fetch backlinks for this zettel
 	backlinkIDs := db.GetBacklinksFromCache(noteID)
 
-	// Enrich backlinks with note titles
-	type Backlink struct {
-		ID    string
-		Title string
-	}
-	backlinks := make([]Backlink, 0, len(backlinkIDs))
-	for _, backlinkID := range backlinkIDs {
-		backlinkNote, err := db.GetNoteByID(ctx, backlinkID)
-		if err != nil {
-			log.Printf("Error fetching backlink note %s: %v", backlinkID, err)
-			// Skip this backlink if we can't fetch it
-			continue
-		}
-		backlinks = append(backlinks, Backlink{
-			ID:    backlinkID,
-			Title: backlinkNote.Title,
-		})
-	}
+	backlinks := buildBacklinks(ctx, backlinkIDs)
 
 	// Get last cache build time
 	lastCacheUpdate := db.GetLastCacheBuildTime()
@@ -478,20 +483,20 @@ func DeleteZettelComment(c flamego.Context, s session.Session, t template.Templa
 	c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
 }
 
-// RefreshBacklinks manually triggers a backlink cache rebuild
-func RefreshBacklinks(c flamego.Context, s session.Session) {
+// RebuildCache manually triggers a full cache rebuild.
+func RebuildCache(c flamego.Context, s session.Session) {
 	// Trigger cache rebuild asynchronously to avoid blocking the HTTP request
 	go func() {
-		if err := db.BuildBacklinkCache(c.Request().Context()); err != nil {
-			log.Printf("[ERROR] Manual backlink cache refresh failed: %v", err)
+		if err := db.RebuildZettelkastenCaches(c.Request().Context()); err != nil {
+			log.Printf("[ERROR] Manual cache rebuild failed: %v", err)
 		} else {
-			log.Println("[INFO] Manual backlink cache refresh completed successfully")
+			log.Println("[INFO] Manual cache rebuild completed successfully")
 		}
 	}()
 
 	// Immediately redirect back to the zettelkasten index with info message
 	// Cache will be rebuilt in the background
-	SetInfoFlash(s, "Backlink cache refresh started in background")
+	SetInfoFlash(s, "Cache rebuild started in background")
 	c.Redirect("/zk", http.StatusSeeOther)
 }
 

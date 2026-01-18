@@ -297,12 +297,17 @@ func (c *Client) handleMessage(evt *events.Message) {
 
 func resolveOtherPartyJID(info types.MessageInfo) types.JID {
 	if info.IsFromMe {
+		// For outgoing messages, use the recipient
 		if !info.RecipientAlt.IsEmpty() {
 			return info.RecipientAlt.ToNonAD()
 		}
 		return info.Chat.ToNonAD()
 	}
 
+	// For incoming messages, use the sender directly
+	if !info.Sender.IsEmpty() {
+		return info.Sender.ToNonAD()
+	}
 	if !info.SenderAlt.IsEmpty() {
 		return info.SenderAlt.ToNonAD()
 	}
