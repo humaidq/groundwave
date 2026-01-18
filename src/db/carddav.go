@@ -626,6 +626,34 @@ func CreateCardDAVContact(ctx context.Context, contact *ContactDetail) (string, 
 	return newUUID, nil
 }
 
+// findCardDAVContactPath queries the CardDAV server to find the path of a contact by its UID
+func findCardDAVContactPath(ctx context.Context, client *carddav.Client, uuid string) (string, error) {
+	// Query the address book for the contact with matching UID
+	query := carddav.AddressBookQuery{
+		DataRequest: carddav.AddressDataRequest{
+			Props: []string{vcard.FieldUID},
+		},
+	}
+
+	results, err := client.QueryAddressBook(ctx, "", &query)
+	if err != nil {
+		return "", fmt.Errorf("failed to query address book: %w", err)
+	}
+
+	// Find the contact with matching UID
+	uuidLower := strings.ToLower(uuid)
+	for _, obj := range results {
+		if obj.Card != nil {
+			cardUID := obj.Card.Value(vcard.FieldUID)
+			if strings.ToLower(cardUID) == uuidLower {
+				return obj.Path, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("contact with UID %s not found in CardDAV server", uuid)
+}
+
 // UpdateCardDAVContact updates an existing contact on the CardDAV server
 // This fetches the existing vCard first, updates only the fields we manage,
 // and preserves all other fields (notes, photo, birthday, addresses, etc.)
@@ -646,11 +674,13 @@ func UpdateCardDAVContact(ctx context.Context, contact *ContactDetail) error {
 
 	existingUUID := *contact.CardDAVUUID
 
-	// Path is relative to the collection URL (just the filename)
-	path := fmt.Sprintf("%s.vcf", existingUUID)
+	// Query the server to find the actual path for this contact
+	path, err := findCardDAVContactPath(ctx, client, existingUUID)
+	if err != nil {
+		return fmt.Errorf("failed to find CardDAV contact path: %w", err)
+	}
 
-	fmt.Printf("[DEBUG] Attempting to fetch CardDAV contact at path: %s (UUID: %s)\n", path, existingUUID)
-	fmt.Printf("[DEBUG] CardDAV base URL: %s\n", config.URL)
+	fmt.Printf("[DEBUG] Found CardDAV contact at path: %s (UUID: %s)\n", path, existingUUID)
 
 	// Fetch the existing vCard to preserve fields we don't manage
 	existingObj, err := client.GetAddressObject(ctx, path)

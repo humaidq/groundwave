@@ -17,6 +17,7 @@ import (
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
+	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
 )
@@ -281,8 +282,7 @@ func (c *Client) handleMessage(evt *events.Message) {
 		return
 	}
 
-	// Get the JID of the other party
-	jid := evt.Info.Chat.User
+	otherParty := resolveOtherPartyJID(evt.Info)
 
 	log.Printf("WhatsApp message info: fromMe=%v chat=%v sender=%v recipientAlt=%v deviceSentMeta=%v id=%s type=%s", evt.Info.IsFromMe, evt.Info.Chat, evt.Info.Sender, evt.Info.RecipientAlt, evt.Info.DeviceSentMeta, evt.Info.ID, evt.Info.Type)
 
@@ -291,8 +291,22 @@ func (c *Client) handleMessage(evt *events.Message) {
 
 	// Call the message handler
 	if c.onMessage != nil {
-		c.onMessage(jid, evt.Info.Timestamp, isOutgoing, messageText)
+		c.onMessage(otherParty.User, evt.Info.Timestamp, isOutgoing, messageText)
 	}
+}
+
+func resolveOtherPartyJID(info types.MessageInfo) types.JID {
+	if info.IsFromMe {
+		if !info.RecipientAlt.IsEmpty() {
+			return info.RecipientAlt.ToNonAD()
+		}
+		return info.Chat.ToNonAD()
+	}
+
+	if !info.SenderAlt.IsEmpty() {
+		return info.SenderAlt.ToNonAD()
+	}
+	return info.Chat.ToNonAD()
 }
 
 func extractMessageText(evt *events.Message) string {
