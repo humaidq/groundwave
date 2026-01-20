@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -58,6 +59,9 @@ type ZKChatNote struct {
 var (
 	idToFilenameCache = make(map[string]string)
 	cacheMutex        sync.RWMutex
+
+	noteLinkPattern  = regexp.MustCompile(`<a([^>]*?)href="(/note/([a-f0-9\-]+))"([^>]*)>`)
+	classAttrPattern = regexp.MustCompile(`\sclass="([^"]*)"`)
 )
 
 // GetZKConfig loads zettelkasten configuration from environment variables
@@ -383,6 +387,40 @@ func GetZKNoteLinks(id string) []string {
 	return GetForwardLinksFromCache(id)
 }
 
+func annotateRestrictedNoteLinks(htmlContent string) string {
+	if GetLastCacheBuildTime().IsZero() {
+		return htmlContent
+	}
+
+	return noteLinkPattern.ReplaceAllStringFunc(htmlContent, func(link string) string {
+		matches := noteLinkPattern.FindStringSubmatch(link)
+		if len(matches) < 4 {
+			return link
+		}
+		noteID := matches[3]
+		if IsPublicNoteFromCache(noteID) {
+			return link
+		}
+
+		if classAttrPattern.MatchString(link) {
+			return classAttrPattern.ReplaceAllStringFunc(link, func(classAttr string) string {
+				classMatches := classAttrPattern.FindStringSubmatch(classAttr)
+				if len(classMatches) < 2 {
+					return classAttr
+				}
+				for _, existing := range strings.Fields(classMatches[1]) {
+					if existing == "restricted-link" {
+						return classAttr
+					}
+				}
+				return fmt.Sprintf(` class="%s restricted-link"`, classMatches[1])
+			})
+		}
+
+		return strings.Replace(link, "<a", `<a class="restricted-link"`, 1)
+	})
+}
+
 // GetNoteByID fetches and parses a note by its ID
 func GetNoteByID(ctx context.Context, id string) (*ZKNote, error) {
 	return GetNoteByIDWithBasePath(ctx, id, "/zk")
@@ -403,6 +441,11 @@ func GetNoteByIDWithBasePath(ctx context.Context, id string, basePath string) (*
 	html, err := utils.ParseOrgToHTMLWithBasePath(content, basePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse org-mode content: %w", err)
+	}
+
+	trimmedBase := strings.TrimRight(strings.TrimSpace(basePath), "/")
+	if trimmedBase == "/note" {
+		html = annotateRestrictedNoteLinks(html)
 	}
 
 	title := utils.ExtractTitle(content)

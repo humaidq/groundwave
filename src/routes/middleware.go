@@ -16,3 +16,16 @@ func CSRFInjector() flamego.Handler {
 		data["csrf_token"] = x.Token()
 	}
 }
+
+// NoCacheHeaders disables caching for all GET responses.
+func NoCacheHeaders() flamego.Handler {
+	return func(c flamego.Context) {
+		if c.Request().Method == "GET" {
+			header := c.ResponseWriter().Header()
+			header.Set("Cache-Control", "no-store, max-age=0")
+			header.Set("Pragma", "no-cache")
+			header.Set("Expires", "0")
+		}
+		c.Next()
+	}
+}

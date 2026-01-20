@@ -6,9 +6,9 @@
   {{ range $i, $h := .ZKHistory }}
     {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
     {{ if $h.IsCurrent }}
-      <span class="breadcrumb-current">{{ $h.Title }}</span>
+      <span class="breadcrumb-current">{{ truncateBreadcrumb $h.Title }}</span>
     {{ else }}
-      <a href="/note/{{ $h.ID }}" class="breadcrumb-item">{{ $h.Title }}</a>
+      <a href="/note/{{ $h.ID }}" class="breadcrumb-item">{{ truncateBreadcrumb $h.Title }}</a>
     {{ end }}
   {{ end }}
 </nav>

@@ -5,9 +5,9 @@
   {{ range $i, $b := .Breadcrumbs }}
     {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
     {{ if $b.IsCurrent }}
-      <span class="breadcrumb-current">{{ $b.Name }}</span>
+      <span class="breadcrumb-current">{{ truncateBreadcrumb $b.Name }}</span>
     {{ else }}
-      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ truncateBreadcrumb $b.Name }}</a>
     {{ end }}
   {{ end }}
 </nav>

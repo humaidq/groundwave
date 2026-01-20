@@ -24,6 +24,7 @@ const DailyBacklinkPrefix = "daily:"
 var (
 	backlinkCache    = make(map[string][]string) // target ID -> slice of source IDs
 	forwardLinkCache = make(map[string][]string) // source ID -> slice of target IDs
+	publicNoteCache  = make(map[string]bool)     // note ID -> public access
 	backlinkMutex    sync.RWMutex
 	lastCacheBuild   time.Time
 )
@@ -119,6 +120,7 @@ func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []str
 	// Build temporary cache
 	tempBacklinkCache := make(map[string][]string)
 	tempForwardCache := make(map[string][]string)
+	tempPublicCache := make(map[string]bool)
 	filesProcessed := 0
 	filesSkipped := 0
 
@@ -155,6 +157,7 @@ func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []str
 				filesSkipped++
 				continue
 			}
+			tempPublicCache[sourceID] = utils.IsPublicAccess(content)
 		}
 
 		// Extract all link targets from this note
@@ -186,6 +189,7 @@ func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []str
 	backlinkMutex.Lock()
 	backlinkCache = tempBacklinkCache
 	forwardLinkCache = tempForwardCache
+	publicNoteCache = tempPublicCache
 	lastCacheBuild = time.Now()
 	backlinkMutex.Unlock()
 
@@ -539,6 +543,19 @@ func GetForwardLinksFromCache(sourceID string) []string {
 	result := make([]string, len(links))
 	copy(result, links)
 	return result
+}
+
+// IsPublicNoteFromCache returns true when a note is marked public.
+func IsPublicNoteFromCache(noteID string) bool {
+	backlinkMutex.RLock()
+	defer backlinkMutex.RUnlock()
+
+	isPublic, exists := publicNoteCache[noteID]
+	if !exists {
+		return false
+	}
+
+	return isPublic
 }
 
 // GetLastCacheBuildTime returns the timestamp of the last cache build

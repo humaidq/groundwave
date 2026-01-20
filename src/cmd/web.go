@@ -58,6 +58,11 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		return fmt.Errorf("database-url is required (set via --database-url or DATABASE_URL env var)")
 	}
 
+	csrfSecret := os.Getenv("CSRF_SECRET")
+	if csrfSecret == "" {
+		return fmt.Errorf("CSRF_SECRET is required")
+	}
+
 	// Set DATABASE_URL for db package
 	os.Setenv("DATABASE_URL", databaseURL)
 
@@ -129,6 +134,17 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 			}
 			return filter
 		},
+		"truncateBreadcrumb": func(title string) string {
+			const maxLength = 40
+			if title == "" {
+				return title
+			}
+			runes := []rune(title)
+			if len(runes) <= maxLength {
+				return title
+			}
+			return string(runes[:maxLength]) + "..."
+		},
 	}
 	// Configure PostgreSQL session store with 30-day expiry
 	f.Use(session.Sessioner(session.Options{
@@ -143,12 +159,15 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 			SameSite: http.SameSiteLaxMode,
 		},
 	}))
-	f.Use(csrf.Csrfer())
+	f.Use(csrf.Csrfer(csrf.Options{
+		Secret: csrfSecret,
+	}))
 	f.Use(flamegoTemplate.Templater(flamegoTemplate.Options{
 		FileSystem: fs,
 		FuncMaps:   []template.FuncMap{funcMap},
 	}))
 	f.Use(routes.CSRFInjector())
+	f.Use(routes.NoCacheHeaders())
 	// Flash message middleware - retrieve flash from session and pass to templates
 	f.Use(func(data flamegoTemplate.Data, flash session.Flash) {
 		if msg, ok := flash.(routes.FlashMessage); ok {

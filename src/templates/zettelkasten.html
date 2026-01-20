@@ -5,9 +5,9 @@
   {{ range $i, $h := .ZKHistory }}
     {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
     {{ if $h.IsCurrent }}
-      <span class="breadcrumb-current">{{ $h.Title }}</span>
+      <span class="breadcrumb-current">{{ truncateBreadcrumb $h.Title }}</span>
     {{ else }}
-      <a href="/zk/{{ $h.ID }}" class="breadcrumb-item">{{ $h.Title }}</a>
+      <a href="/zk/{{ $h.ID }}" class="breadcrumb-item">{{ truncateBreadcrumb $h.Title }}</a>
     {{ end }}
   {{ end }}
 </nav>
@@ -31,8 +31,10 @@
       </div>
       {{ if and .Note.IsPublic .PublishPath }}
       <div class="zk-published" data-publish-path="{{ .PublishPath }}">
-        <span class="zk-published-badge">Published</span>
-        <button type="button" class="btn-small zk-copy-link">Copy public link</button>
+        <div class="btn-pill">
+          <span class="btn-pill-label">Published</span>
+          <button type="button" class="btn-pill-action zk-copy-link">Copy Link</button>
+        </div>
         <span class="zk-copy-status" aria-live="polite"></span>
       </div>
       {{ end }}

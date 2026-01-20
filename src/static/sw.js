@@ -38,31 +38,57 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Only cache and serve static assets and pages
-  event.respondWith(
-    caches.match(event.request).then((cached) =>
-      fetch(event.request)
-        .then((response) => {
-          // Only cache successful responses
-          if (response.status === 200) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => {
-          // Network failed, try to serve from cache
-          if (cached) return cached;
+  if (url.origin === self.location.origin && STATIC_ASSETS.includes(url.pathname)) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        const fetchPromise = fetch(event.request, { cache: 'no-store' })
+          .then((response) => {
+            if (response.ok) {
+              const responseClone = response.clone();
+              event.waitUntil(
+                caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone))
+              );
+            }
+            return response;
+          })
+          .catch(() => cached || new Response('', { status: 503 }));
 
-          // Only for uncached navigation requests, return minimal offline page
-          if (event.request.mode === 'navigate') {
-            return new Response('<!DOCTYPE html><html><body><p>Page not available offline</p></body></html>', {
-              status: 503,
-              headers: { 'Content-Type': 'text/html' }
-            });
-          }
-          return new Response('', { status: 503 });
-        })
-    )
+        if (cached) {
+          event.waitUntil(fetchPromise.catch(() => undefined));
+          return cached;
+        }
+
+        return fetchPromise;
+      })
+    );
+    return;
+  }
+
+  const acceptHeader = event.request.headers.get('accept') || '';
+  const isPageRequest = event.request.mode === 'navigate' || acceptHeader.includes('text/html');
+  if (!isPageRequest) {
+    return;
+  }
+
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok) {
+          const responseClone = response.clone();
+          event.waitUntil(
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone))
+          );
+        }
+        return response;
+      })
+      .catch(() =>
+        caches.match(event.request).then((cached) =>
+          cached ||
+          new Response('<!DOCTYPE html><html><body><p>Page not available offline</p></body></html>', {
+            status: 503,
+            headers: { 'Content-Type': 'text/html' }
+          })
+        )
+      )
   );
 });

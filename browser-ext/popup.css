@@ -20,7 +20,7 @@ body {
 .status-dot {
   width: 10px;
   height: 10px;
-  border-radius: 50%;
+  border-radius: 0;
   background: #b0b0b0;
 }
 
@@ -40,7 +40,7 @@ body {
 .auth-button {
   width: 100%;
   border: none;
-  border-radius: 999px;
+  border-radius: 0;
   padding: 8px 12px;
   font-size: 13px;
   font-weight: 600;
