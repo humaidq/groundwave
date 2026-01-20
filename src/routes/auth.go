@@ -17,6 +17,7 @@ import (
 
 // LoginForm renders the login page
 func LoginForm(c flamego.Context, t template.Template, data template.Data) {
+	data["HeaderOnly"] = true
 	t.HTML(http.StatusOK, "login")
 }
 
@@ -24,6 +25,7 @@ func LoginForm(c flamego.Context, t template.Template, data template.Data) {
 func Login(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	username := c.Request().FormValue("username")
 	password := c.Request().FormValue("password")
+	data["HeaderOnly"] = true
 
 	// Get credentials from environment variables
 	envUsername := os.Getenv("AUTH_USERNAME")

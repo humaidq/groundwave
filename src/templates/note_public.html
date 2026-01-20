@@ -1,0 +1,35 @@
+
+{{ template "head" . }}
+
+{{ if .ZKHistory }}
+<nav class="breadcrumb" aria-label="Navigation history">
+  {{ range $i, $h := .ZKHistory }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $h.IsCurrent }}
+      <span class="breadcrumb-current">{{ $h.Title }}</span>
+    {{ else }}
+      <a href="/note/{{ $h.ID }}" class="breadcrumb-item">{{ $h.Title }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+<div class="zk-note">
+  <div class="zk-content">
+    {{ .Note.HTMLBody }}
+  </div>
+
+  {{ if .Backlinks }}
+  <div class="backlinks-section">
+    <h3>Backlinks ({{ len .Backlinks }})</h3>
+    <p class="backlinks-description">Notes that link to this page:</p>
+    <ul class="backlinks-list">
+      {{ range .Backlinks }}
+      <li><a href="{{ .URL }}">{{ .Title }}</a></li>
+      {{ end }}
+    </ul>
+  </div>
+  {{ end }}
+</div>
+
+{{ template "foot" . }}

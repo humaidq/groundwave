@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#1a1a1a" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="csrf-token" content="{{ .csrf_token }}" />
     <link rel="stylesheet" href="/normalize-8.0.1.min.css" />
     <link rel="stylesheet" href="/main.css" />
     <link rel="manifest" href="/manifest.json" />
@@ -37,16 +38,20 @@
         window.addEventListener('offline', function() { setOffline(true); });
       })();
     </script>
+    {{ if or (not .HideNav) .HeaderOnly }}
     <header class="groundwave-header">
       <div id="offline-bar" class="offline-bar">You are offline</div>
       <div class="header-container">
         <a href="/" class="header-logo">Groundwave</a>
+        {{ if and (not .HideNav) (not .HeaderOnly) }}
         <button class="nav-hamburger" aria-label="Toggle navigation menu" onclick="this.classList.toggle('active');document.querySelector('.nav-menu').classList.toggle('active')">
           <span></span>
           <span></span>
           <span></span>
         </button>
+        {{ end }}
       </div>
+      {{ if and (not .HideNav) (not .HeaderOnly) }}
       <nav class="navbar">
         <div class="nav-menu">
           <a href="/"{{ if .IsWelcome }} class="nav-active"{{ end }}>Home</a>
@@ -59,7 +64,9 @@
           <a href="/health"{{ if .IsHealth }} class="nav-active"{{ end }}>Health</a>
         </div>
       </nav>
+      {{ end }}
     </header>
+    {{ end }}
     <main>
       {{ if .Flash }}
         {{ $flash := .Flash }}

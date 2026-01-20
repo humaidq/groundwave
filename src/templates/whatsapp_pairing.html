@@ -44,7 +44,7 @@
     <p class="success-message">WhatsApp is connected and tracking messages.</p>
     <p>When you send or receive messages on WhatsApp, the corresponding contact's "last contact" timestamp will be automatically updated.</p>
     <form method="POST" action="/whatsapp/disconnect" class="whatsapp-form">
-      <input type="hidden" name="_csrf" value="{{ .CSRFToken }}" />
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
       <button type="submit" class="btn btn-danger">Disconnect WhatsApp</button>
     </form>
   </div>
@@ -66,7 +66,7 @@
     <p>Connect WhatsApp to automatically track message activity with your contacts.</p>
     <p>When you send or receive WhatsApp messages, the app will automatically update the "last contact" timestamp for matching contacts, helping keep your overdue list accurate.</p>
     <form method="POST" action="/whatsapp/connect" class="whatsapp-form">
-      <input type="hidden" name="_csrf" value="{{ .CSRFToken }}" />
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
       <button type="submit" class="btn">Connect WhatsApp</button>
     </form>
   </div>

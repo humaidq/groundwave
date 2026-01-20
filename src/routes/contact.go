@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/flamego/flamego"
 	"github.com/flamego/session"
@@ -69,17 +70,8 @@ func CreateContact(c flamego.Context, s session.Session, t template.Template, da
 
 	form := c.Request().Form
 
-	// Helper to get optional string
-	getOptionalString := func(key string) *string {
-		val := strings.TrimSpace(form.Get(key))
-		if val == "" {
-			return nil
-		}
-		return &val
-	}
-
 	// Check if this is a CardDAV import
-	cardDAVUUID := getOptionalString("carddav_uuid")
+	cardDAVUUID := getOptionalString(form.Get("carddav_uuid"))
 	var nameGiven string
 	var nameFamily *string
 	var organization *string
@@ -125,9 +117,9 @@ func CreateContact(c flamego.Context, s session.Session, t template.Template, da
 			t.HTML(http.StatusBadRequest, "contact_new")
 			return
 		}
-		nameFamily = getOptionalString("name_family")
-		organization = getOptionalString("organization")
-		title = getOptionalString("title")
+		nameFamily = getOptionalString(form.Get("name_family"))
+		organization = getOptionalString(form.Get("organization"))
+		title = getOptionalString(form.Get("title"))
 	}
 
 	// Get tier, default to C
@@ -146,9 +138,9 @@ func CreateContact(c flamego.Context, s session.Session, t template.Template, da
 		NameFamily:   nameFamily,
 		Organization: organization,
 		Title:        title,
-		Email:        getOptionalString("email"),
-		Phone:        getOptionalString("phone"),
-		CallSign:     getOptionalString("call_sign"),
+		Email:        getOptionalString(form.Get("email")),
+		Phone:        getOptionalString(form.Get("phone")),
+		CallSign:     getOptionalString(form.Get("call_sign")),
 		CardDAVUUID:  cardDAVUUID,
 		IsService:    isService,
 		Tier:         tier,
@@ -374,6 +366,76 @@ func AddContactChat(c flamego.Context, s session.Session) {
 	c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
 }
 
+// GenerateContactChatSummary summarizes recent chat history for a contact.
+func GenerateContactChatSummary(c flamego.Context, s session.Session) {
+	c.ResponseWriter().Header().Set("Content-Type", "application/json")
+
+	contactID := c.Param("id")
+	if contactID == "" {
+		c.ResponseWriter().WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "contact ID is required"})
+		return
+	}
+
+	ctx := c.Request().Context()
+
+	contact, err := db.GetContact(ctx, contactID)
+	if err != nil {
+		log.Printf("Error fetching contact %s: %v", contactID, err)
+		c.ResponseWriter().WriteHeader(http.StatusNotFound)
+		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "contact not found"})
+		return
+	}
+
+	if contact.IsService {
+		c.ResponseWriter().WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "service contacts have no chat summary"})
+		return
+	}
+
+	if pm := s.Get("private_mode"); pm != nil {
+		if pm.(bool) {
+			c.ResponseWriter().WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "private mode is enabled"})
+			return
+		}
+	}
+
+	since := time.Now().Add(-48 * time.Hour)
+	chats, err := db.GetContactChatsSince(ctx, contactID, since)
+	if err != nil {
+		log.Printf("Error fetching chats for contact %s: %v", contactID, err)
+		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "failed to load chat history"})
+		return
+	}
+
+	if len(chats) == 0 {
+		json.NewEncoder(c.ResponseWriter()).Encode(map[string]interface{}{"summary": "No recent chats", "empty": true})
+		return
+	}
+
+	var summaryBuilder strings.Builder
+	if err := db.StreamContactChatSummary(ctx, &contact.Contact, chats, func(chunk string) error {
+		summaryBuilder.WriteString(chunk)
+		return nil
+	}); err != nil {
+		log.Printf("Error generating chat summary: %v", err)
+		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "failed to generate summary"})
+		return
+	}
+
+	summary := strings.TrimSpace(summaryBuilder.String())
+	isEmpty := false
+	if summary == "" {
+		summary = "No recent chats"
+		isEmpty = true
+	}
+
+	json.NewEncoder(c.ResponseWriter()).Encode(map[string]interface{}{"summary": summary, "empty": isEmpty})
+}
+
 func parseChatPlatform(value string) db.ChatPlatform {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case string(db.ChatPlatformEmail):
@@ -471,15 +533,6 @@ func UpdateContact(c flamego.Context, s session.Session, t template.Template, da
 		return
 	}
 
-	// Helper to get optional string
-	getOptionalString := func(key string) *string {
-		val := strings.TrimSpace(form.Get(key))
-		if val == "" {
-			return nil
-		}
-		return &val
-	}
-
 	// Get tier, default to C
 	tierStr := form.Get("tier")
 	if tierStr == "" {
@@ -500,10 +553,10 @@ func UpdateContact(c flamego.Context, s session.Session, t template.Template, da
 	input := db.UpdateContactInput{
 		ID:           contactID,
 		NameGiven:    nameGiven,
-		NameFamily:   getOptionalString("name_family"),
-		Organization: getOptionalString("organization"),
-		Title:        getOptionalString("title"),
-		CallSign:     getOptionalString("call_sign"),
+		NameFamily:   getOptionalString(form.Get("name_family")),
+		Organization: getOptionalString(form.Get("organization")),
+		Title:        getOptionalString(form.Get("title")),
+		CallSign:     getOptionalString(form.Get("call_sign")),
 		Tier:         tier,
 	}
 
@@ -717,20 +770,12 @@ func AddURL(c flamego.Context) {
 		urlType = db.URLWebsite
 	}
 
-	getOptionalString := func(key string) *string {
-		val := strings.TrimSpace(form.Get(key))
-		if val == "" {
-			return nil
-		}
-		return &val
-	}
-
 	input := db.AddURLInput{
 		ContactID: contactID,
 		URL:       url,
 		URLType:   urlType,
-		Label:     getOptionalString("label"),
-		Username:  getOptionalString("username"),
+		Label:     getOptionalString(form.Get("label")),
+		Username:  getOptionalString(form.Get("username")),
 	}
 
 	err := db.AddURL(c.Request().Context(), input)
@@ -961,15 +1006,6 @@ func AddLog(c flamego.Context) {
 
 	form := c.Request().Form
 
-	// Get optional string helper
-	getOptionalString := func(key string) *string {
-		val := strings.TrimSpace(form.Get(key))
-		if val == "" {
-			return nil
-		}
-		return &val
-	}
-
 	logType := db.LogType(form.Get("log_type"))
 	if logType == "" {
 		logType = db.LogGeneral
@@ -978,9 +1014,9 @@ func AddLog(c flamego.Context) {
 	input := db.AddLogInput{
 		ContactID: contactID,
 		LogType:   logType,
-		LoggedAt:  getOptionalString("logged_at"),
-		Subject:   getOptionalString("subject"),
-		Content:   getOptionalString("content"),
+		LoggedAt:  getOptionalString(form.Get("logged_at")),
+		Subject:   getOptionalString(form.Get("subject")),
+		Content:   getOptionalString(form.Get("content")),
 	}
 
 	err := db.AddLog(c.Request().Context(), input)
@@ -1192,19 +1228,10 @@ func AddNote(c flamego.Context) {
 		return
 	}
 
-	// Get optional string helper
-	getOptionalString := func(key string) *string {
-		val := strings.TrimSpace(form.Get(key))
-		if val == "" {
-			return nil
-		}
-		return &val
-	}
-
 	input := db.AddNoteInput{
 		ContactID: contactID,
 		Content:   content,
-		NotedAt:   getOptionalString("noted_at"),
+		NotedAt:   getOptionalString(form.Get("noted_at")),
 	}
 
 	err := db.AddNote(c.Request().Context(), input)
@@ -1388,21 +1415,13 @@ func BulkAddLog(c flamego.Context, s session.Session) {
 	}
 
 	// Get form fields
-	getOptionalString := func(key string) *string {
-		val := strings.TrimSpace(form.Get(key))
-		if val == "" {
-			return nil
-		}
-		return &val
-	}
-
 	logType := db.LogType(form.Get("log_type"))
 	if logType == "" {
 		logType = db.LogGeneral
 	}
 
-	loggedAt := getOptionalString("logged_at")
-	content := getOptionalString("content")
+	loggedAt := getOptionalString(form.Get("logged_at"))
+	content := getOptionalString(form.Get("content"))
 
 	// Track successes and failures
 	successCount := 0

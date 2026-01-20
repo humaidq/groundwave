@@ -1,40 +1,32 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <link rel="stylesheet" href="/normalize-8.0.1.min.css" />
-    <link rel="stylesheet" href="/main.css" />
-    <title>Login</title>
-    <link rel="icon" href="/favicon.ico" />
-  </head>
-  <body>
-    <div class="login-container">
-      <div class="login-box">
-        <h1>Login</h1>
+{{ template "head" . }}
 
-        {{ if .Error }}
-        <div class="error-message">
-          {{ .Error }}
-        </div>
-        {{ end }}
+<div class="page-header">
+  <h2>Login</h2>
+</div>
 
-        <form method="POST" action="/login">
-          <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+{{ if .Error }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Error</h5>
+  <p>{{ .Error }}</p>
+</div>
+{{ end }}
 
-          <div class="form-group">
-            <label for="username">Username</label>
-            <input type="text" id="username" name="username" required autofocus />
-          </div>
+<form method="POST" action="/login">
+  <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
 
-          <div class="form-group">
-            <label for="password">Password</label>
-            <input type="password" id="password" name="password" required />
-          </div>
+  <div class="form-group">
+    <label for="username" class="item-title">Username</label>
+    <input type="text" id="username" name="username" class="form-item" required autofocus autocomplete="username" />
+  </div>
 
-          <button type="submit" class="btn-primary">Login</button>
-        </form>
-      </div>
-    </div>
-  </body>
-</html>
+  <div class="form-group">
+    <label for="password" class="item-title">Password</label>
+    <input type="password" id="password" name="password" class="form-item" required autocomplete="current-password" />
+  </div>
+
+  <div class="form-group">
+    <button type="submit" class="btn">Login</button>
+  </div>
+</form>
+
+{{ template "foot" . }}

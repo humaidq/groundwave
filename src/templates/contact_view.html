@@ -126,6 +126,7 @@
       <summary class="add-item-summary">+ Add Contact Log</summary>
       <form method="POST" action="/contact/{{ .Contact.ID }}/log" class="add-item-form">
         <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+        <input type="hidden" id="chat-summary-csrf" value="{{ .csrf_token }}" />
         <div class="add-item-field">
           <select name="log_type" id="log_type" class="form-item">
             <option value="general">General</option>
@@ -145,6 +146,10 @@
         </div>
         <div class="add-item-field">
           <textarea name="content" id="content" class="form-item" rows="3" placeholder="Details (optional)"></textarea>
+        </div>
+        <div class="add-item-field">
+          <button type="button" id="chat-summary-btn" class="btn">Summarize last 48h chats</button>
+          <span id="chat-summary-status" class="muted-text"></span>
         </div>
         <button type="submit" class="btn">Add Log Entry</button>
       </form>
@@ -570,6 +575,49 @@ document.addEventListener('DOMContentLoaded', function() {
       urlTypeSelect.value = detectedType;
     }
   });
+
+  var summaryButton = document.getElementById('chat-summary-btn');
+  var summaryStatus = document.getElementById('chat-summary-status');
+  var summaryTarget = document.getElementById('content');
+  var summaryToken = document.getElementById('chat-summary-csrf');
+
+  if (summaryButton && summaryStatus && summaryTarget && summaryToken) {
+    summaryButton.addEventListener('click', async function() {
+      summaryButton.disabled = true;
+      summaryButton.textContent = 'Summarizing...';
+      summaryStatus.textContent = '';
+
+      try {
+        var response = await fetch('/contact/{{ .Contact.ID }}/chat-summary', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': summaryToken.value
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Server returned ' + response.status);
+        }
+
+        var data = await response.json();
+        if (data.summary) {
+          summaryTarget.value = data.summary;
+        }
+
+        if (data.empty) {
+          summaryStatus.textContent = 'No recent chats found.';
+        } else {
+          summaryStatus.textContent = 'Summary added to the log entry.';
+        }
+      } catch (err) {
+        summaryStatus.textContent = 'Failed to summarize chats: ' + err.message;
+      } finally {
+        summaryButton.disabled = false;
+        summaryButton.textContent = 'Summarize last 48h chats';
+      }
+    });
+  }
 });
 </script>
 

@@ -130,30 +130,23 @@ func buildLabSummaryPrompt(profile *HealthProfile, followup *HealthFollowup, res
 	return sb.String()
 }
 
-// StreamLabSummary calls Ollama to generate a summary of lab results with streaming response.
-// The onChunk callback is called for each chunk of text received.
-// Returns an error if the request fails.
-func StreamLabSummary(ctx context.Context, profile *HealthProfile, followup *HealthFollowup, results []LabResultSummary, onChunk func(string) error) error {
+func streamChatCompletion(ctx context.Context, systemPrompt string, userPrompt string, onChunk func(string) error) error {
 	config, err := GetOllamaConfig()
 	if err != nil {
 		return err
 	}
 
-	// Build the prompt
-	prompt := buildLabSummaryPrompt(profile, followup, results)
-
-	// Create the streaming request
 	reqBody := chatRequest{
 		Model:  config.Model,
 		Stream: true,
 		Messages: []chatMessage{
 			{
 				Role:    "system",
-				Content: "You are a helpful medical assistant. Provide concise, clear summaries of lab results. Highlight any abnormal values and their potential significance. Be informative but not alarmist. Never mention consult a healthcare professional, this is shown separately in UI. Use basic markdown (italic, bold, etc), but don't use headings in your response.",
+				Content: systemPrompt,
 			},
 			{
 				Role:    "user",
-				Content: prompt,
+				Content: userPrompt,
 			},
 		},
 	}
@@ -163,7 +156,6 @@ func StreamLabSummary(ctx context.Context, profile *HealthProfile, followup *Hea
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Make the request to Ollama's OpenAI-compatible endpoint
 	endpoint := strings.TrimSuffix(config.URL, "/") + "/v1/chat/completions"
 	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(jsonBody))
 	if err != nil {
@@ -172,7 +164,7 @@ func StreamLabSummary(ctx context.Context, profile *HealthProfile, followup *Hea
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{
-		Timeout: 300 * time.Second, // 5 minutes for streaming
+		Timeout: 300 * time.Second,
 	}
 
 	resp, err := client.Do(req)
@@ -186,7 +178,6 @@ func StreamLabSummary(ctx context.Context, profile *HealthProfile, followup *Hea
 		return fmt.Errorf("Ollama returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Read streaming response line by line
 	reader := bufio.NewReader(resp.Body)
 	for {
 		line, err := reader.ReadBytes('\n')
@@ -197,27 +188,22 @@ func StreamLabSummary(ctx context.Context, profile *HealthProfile, followup *Hea
 			return fmt.Errorf("failed to read stream: %w", err)
 		}
 
-		// Skip empty lines
 		lineStr := strings.TrimSpace(string(line))
 		if lineStr == "" {
 			continue
 		}
 
-		// SSE format: "data: {...}"
 		if !strings.HasPrefix(lineStr, "data: ") {
 			continue
 		}
 
 		data := strings.TrimPrefix(lineStr, "data: ")
-
-		// Check for stream end
 		if data == "[DONE]" {
 			break
 		}
 
 		var chatResp chatResponse
 		if err := json.Unmarshal([]byte(data), &chatResp); err != nil {
-			// Skip malformed chunks
 			continue
 		}
 
@@ -236,4 +222,16 @@ func StreamLabSummary(ctx context.Context, profile *HealthProfile, followup *Hea
 	}
 
 	return nil
+}
+
+// StreamLabSummary calls Ollama to generate a summary of lab results with streaming response.
+// The onChunk callback is called for each chunk of text received.
+// Returns an error if the request fails.
+func StreamLabSummary(ctx context.Context, profile *HealthProfile, followup *HealthFollowup, results []LabResultSummary, onChunk func(string) error) error {
+	// Build the prompt
+	prompt := buildLabSummaryPrompt(profile, followup, results)
+
+	systemPrompt := "You are a helpful medical assistant. Provide concise, clear summaries of lab results. Highlight any abnormal values and their potential significance. Be informative but not alarmist. Never mention consult a healthcare professional, this is shown separately in UI. Use basic markdown (italic, bold, etc), but don't use headings in your response."
+
+	return streamChatCompletion(ctx, systemPrompt, prompt, onChunk)
 }

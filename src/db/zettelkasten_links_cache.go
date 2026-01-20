@@ -139,16 +139,18 @@ func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []str
 		}
 
 		// Extract source ID (the note's own ID)
-		sourceID, err := utils.ExtractIDProperty(content)
-		if err != nil {
-			if file.IsDaily {
-				dateString := strings.TrimSuffix(file.Name, ".org")
-				if _, parseErr := time.Parse("2006-01-02", dateString); parseErr != nil {
-					filesSkipped++
-					continue
-				}
-				sourceID = DailyBacklinkPrefix + dateString
-			} else {
+		sourceID := ""
+		if file.IsDaily {
+			dateString := strings.TrimSuffix(file.Name, ".org")
+			if _, parseErr := time.Parse("2006-01-02", dateString); parseErr != nil {
+				filesSkipped++
+				continue
+			}
+			sourceID = DailyBacklinkPrefix + dateString
+		} else {
+			var err error
+			sourceID, err = utils.ExtractIDProperty(content)
+			if err != nil {
 				// File doesn't have an ID property, skip it
 				filesSkipped++
 				continue
@@ -403,6 +405,12 @@ func buildJournalPreview(content string, maxParagraphs, maxChars int) (string, b
 		}
 		if strings.HasPrefix(strings.ToUpper(trimmed), "#+TITLE:") {
 			continue
+		}
+		if strings.HasPrefix(trimmed, "*") {
+			stripped := strings.TrimLeft(trimmed, "*")
+			if strings.HasPrefix(stripped, " ") {
+				continue
+			}
 		}
 
 		if trimmed == "" {

@@ -80,11 +80,23 @@ import { marked } from 'https://cdnjs.cloudflare.com/ajax/libs/marked/16.3.0/lib
     history.scrollTop = history.scrollHeight;
   }
 
+  function normalizeZkLinks(text) {
+    if (!text) {
+      return text;
+    }
+
+    let normalized = text;
+    normalized = normalized.replace(/\[\[id:([a-f0-9-]+)\]\[([^\]]+)\]\]/gi, '[$2](/zk/$1)');
+    normalized = normalized.replace(/\[\[id:([a-f0-9-]+)\]\]/gi, '[id:$1](/zk/$1)');
+    normalized = normalized.replace(/\]\(id:([a-f0-9-]+)\)/gi, '](/zk/$1)');
+    return normalized;
+  }
+
   function addMessage(role, content, asMarkdown) {
     const message = document.createElement('div');
     message.className = `zk-chat-message zk-chat-message-${role}`;
     if (asMarkdown) {
-      message.innerHTML = marked.parse(content || '');
+      message.innerHTML = marked.parse(normalizeZkLinks(content || ''));
     } else {
       message.textContent = content;
     }
@@ -395,7 +407,7 @@ import { marked } from 'https://cdnjs.cloudflare.com/ajax/libs/marked/16.3.0/lib
               return;
             } else if (currentEvent === 'chunk') {
               fullText += data;
-              assistantMessage.innerHTML = marked.parse(fullText);
+              assistantMessage.innerHTML = marked.parse(normalizeZkLinks(fullText));
               scrollHistory();
             } else if (currentEvent === 'done') {
               return;

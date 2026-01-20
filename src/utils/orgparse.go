@@ -16,26 +16,30 @@ import (
 
 // ParseOrgToHTML converts org-mode content to HTML
 func ParseOrgToHTML(content string) (string, error) {
+	return ParseOrgToHTMLWithBasePath(content, "/zk")
+}
+
+// ParseOrgToHTMLWithBasePath converts org-mode content to HTML using a base path for id links.
+func ParseOrgToHTMLWithBasePath(content string, basePath string) (string, error) {
 	config := org.New()
 
 	config.DefaultSettings["TODO"] = "TODO PROJ STRT WAIT HOLD | DONE KILL"
 
+	trimmedBase := strings.TrimRight(strings.TrimSpace(basePath), "/")
+	if trimmedBase == "" {
+		trimmedBase = "/zk"
+	}
+
 	// Custom link resolver for org-roam ID links
 	config.ResolveLink = func(protocol string, description []org.Node, link string) org.Node {
-		// Handle id: protocol links (org-roam)
 		if protocol == "id" {
-			// Strip "id:" prefix if it's included in the link parameter
-			// (some org parsers include the protocol in the link)
 			cleanLink := strings.TrimPrefix(link, "id:")
-
-			// Convert [[id:uuid][Title]] to /zk/uuid
 			return org.RegularLink{
 				Protocol:    "",
 				Description: description,
-				URL:         fmt.Sprintf("/zk/%s", cleanLink),
+				URL:         fmt.Sprintf("%s/%s", trimmedBase, cleanLink),
 			}
 		}
-		// Return nil for default handling of other protocols
 		return nil
 	}
 
@@ -48,7 +52,6 @@ func ParseOrgToHTML(content string) (string, error) {
 	// Render to HTML
 	writer := org.NewHTMLWriter()
 	writer.HighlightCodeBlock = func(source, lang string, inline bool, params map[string]string) string {
-		// Simple code block rendering without syntax highlighting
 		if inline {
 			return `<code class="inline-code">` + html.EscapeString(source) + `</code>`
 		}
@@ -61,6 +64,12 @@ func ParseOrgToHTML(content string) (string, error) {
 	}
 
 	return renderedHTML, nil
+}
+
+// IsPublicAccess checks for #+access: public in org content.
+func IsPublicAccess(content string) bool {
+	re := regexp.MustCompile(`(?im)^\s*#\+access:\s*public\s*$`)
+	return re.MatchString(content)
 }
 
 // ExtractIDProperty extracts the :ID: property from org-mode content

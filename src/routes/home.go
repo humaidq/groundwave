@@ -191,13 +191,14 @@ func Overdue(c flamego.Context, t template.Template, data template.Data) {
 
 // TimelineDay groups journal entries and logs for a single day.
 type TimelineDay struct {
-	Date       time.Time
-	DateString string
-	Journal    *db.JournalEntry
-	Followups  []db.HealthFollowupSummary
-	Logs       []db.ContactLogTimelineEntry
-	Notes      []db.ZKTimelineNote
-	QSOs       []db.QSOListItem
+	Date            time.Time
+	DateString      string
+	Journal         *db.JournalEntry
+	Followups       []db.HealthFollowupSummary
+	Logs            []db.ContactLogTimelineEntry
+	Notes           []db.ZKTimelineNote
+	QSOCount        int
+	QSOCountryCount int
 }
 
 // Timeline renders the unified journal/contact log timeline.
@@ -240,13 +241,14 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 		entry := &journalEntries[i]
 		dateString := entry.DateString
 		dayMap[dateString] = &TimelineDay{
-			Date:       entry.Date,
-			DateString: dateString,
-			Journal:    entry,
-			Followups:  []db.HealthFollowupSummary{},
-			Logs:       []db.ContactLogTimelineEntry{},
-			Notes:      []db.ZKTimelineNote{},
-			QSOs:       []db.QSOListItem{},
+			Date:            entry.Date,
+			DateString:      dateString,
+			Journal:         entry,
+			Followups:       []db.HealthFollowupSummary{},
+			Logs:            []db.ContactLogTimelineEntry{},
+			Notes:           []db.ZKTimelineNote{},
+			QSOCount:        0,
+			QSOCountryCount: 0,
 		}
 	}
 
@@ -262,12 +264,13 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 		day, exists := dayMap[dateString]
 		if !exists {
 			day = &TimelineDay{
-				Date:       entryDate,
-				DateString: dateString,
-				Followups:  []db.HealthFollowupSummary{},
-				Logs:       []db.ContactLogTimelineEntry{},
-				Notes:      []db.ZKTimelineNote{},
-				QSOs:       []db.QSOListItem{},
+				Date:            entryDate,
+				DateString:      dateString,
+				Followups:       []db.HealthFollowupSummary{},
+				Logs:            []db.ContactLogTimelineEntry{},
+				Notes:           []db.ZKTimelineNote{},
+				QSOCount:        0,
+				QSOCountryCount: 0,
 			}
 			dayMap[dateString] = day
 		}
@@ -282,12 +285,13 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 		day, exists := dayMap[date]
 		if !exists {
 			day = &TimelineDay{
-				Date:       entryDate,
-				DateString: date,
-				Followups:  []db.HealthFollowupSummary{},
-				Logs:       []db.ContactLogTimelineEntry{},
-				Notes:      []db.ZKTimelineNote{},
-				QSOs:       []db.QSOListItem{},
+				Date:            entryDate,
+				DateString:      date,
+				Followups:       []db.HealthFollowupSummary{},
+				Logs:            []db.ContactLogTimelineEntry{},
+				Notes:           []db.ZKTimelineNote{},
+				QSOCount:        0,
+				QSOCountryCount: 0,
 			}
 			dayMap[date] = day
 		}
@@ -306,18 +310,20 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 		day, exists := dayMap[dateString]
 		if !exists {
 			day = &TimelineDay{
-				Date:       entryDate,
-				DateString: dateString,
-				Followups:  []db.HealthFollowupSummary{},
-				Logs:       []db.ContactLogTimelineEntry{},
-				Notes:      []db.ZKTimelineNote{},
-				QSOs:       []db.QSOListItem{},
+				Date:            entryDate,
+				DateString:      dateString,
+				Followups:       []db.HealthFollowupSummary{},
+				Logs:            []db.ContactLogTimelineEntry{},
+				Notes:           []db.ZKTimelineNote{},
+				QSOCount:        0,
+				QSOCountryCount: 0,
 			}
 			dayMap[dateString] = day
 		}
 		day.Logs = append(day.Logs, logEntry)
 	}
 
+	qsoCountries := make(map[string]map[string]struct{})
 	for _, qso := range qsos {
 		entryDate := time.Date(
 			qso.QSODate.Year(),
@@ -330,16 +336,29 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 		day, exists := dayMap[dateString]
 		if !exists {
 			day = &TimelineDay{
-				Date:       entryDate,
-				DateString: dateString,
-				Followups:  []db.HealthFollowupSummary{},
-				Logs:       []db.ContactLogTimelineEntry{},
-				Notes:      []db.ZKTimelineNote{},
-				QSOs:       []db.QSOListItem{},
+				Date:            entryDate,
+				DateString:      dateString,
+				Followups:       []db.HealthFollowupSummary{},
+				Logs:            []db.ContactLogTimelineEntry{},
+				Notes:           []db.ZKTimelineNote{},
+				QSOCount:        0,
+				QSOCountryCount: 0,
 			}
 			dayMap[dateString] = day
 		}
-		day.QSOs = append(day.QSOs, qso)
+		day.QSOCount++
+		if qso.Country != nil {
+			country := strings.TrimSpace(*qso.Country)
+			if country != "" {
+				countries := qsoCountries[dateString]
+				if countries == nil {
+					countries = make(map[string]struct{})
+					qsoCountries[dateString] = countries
+				}
+				countries[country] = struct{}{}
+				day.QSOCountryCount = len(countries)
+			}
+		}
 	}
 
 	days := make([]TimelineDay, 0, len(dayMap))

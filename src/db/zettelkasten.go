@@ -35,6 +35,7 @@ type ZKNote struct {
 	ID       string
 	Title    string
 	Filename string
+	IsPublic bool
 	HTMLBody template.HTML
 }
 
@@ -384,31 +385,34 @@ func GetZKNoteLinks(id string) []string {
 
 // GetNoteByID fetches and parses a note by its ID
 func GetNoteByID(ctx context.Context, id string) (*ZKNote, error) {
-	// Find the file
+	return GetNoteByIDWithBasePath(ctx, id, "/zk")
+}
+
+// GetNoteByIDWithBasePath fetches and parses a note by its ID using a base path for id links.
+func GetNoteByIDWithBasePath(ctx context.Context, id string, basePath string) (*ZKNote, error) {
 	filename, err := FindFileByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	// Fetch the content
 	content, err := FetchOrgFile(ctx, filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch note: %w", err)
 	}
 
-	// Parse to HTML
-	html, err := utils.ParseOrgToHTML(content)
+	html, err := utils.ParseOrgToHTMLWithBasePath(content, basePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse org-mode content: %w", err)
 	}
 
-	// Extract title
 	title := utils.ExtractTitle(content)
+	isPublic := utils.IsPublicAccess(content)
 
 	return &ZKNote{
 		ID:       id,
 		Title:    title,
 		Filename: filename,
+		IsPublic: isPublic,
 		HTMLBody: template.HTML(html),
 	}, nil
 }
@@ -420,28 +424,25 @@ func GetIndexNote(ctx context.Context) (*ZKNote, error) {
 		return nil, err
 	}
 
-	// Fetch the index file
 	content, err := FetchOrgFile(ctx, config.IndexFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch index note: %w", err)
 	}
 
-	// Parse to HTML
-	html, err := utils.ParseOrgToHTML(content)
+	html, err := utils.ParseOrgToHTMLWithBasePath(content, "/zk")
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse org-mode content: %w", err)
 	}
 
-	// Extract title
 	title := utils.ExtractTitle(content)
-
-	// Try to extract ID (optional for index file)
 	id, _ := utils.ExtractIDProperty(content)
+	isPublic := utils.IsPublicAccess(content)
 
 	return &ZKNote{
 		ID:       id,
 		Title:    title,
 		Filename: config.IndexFile,
+		IsPublic: isPublic,
 		HTMLBody: template.HTML(html),
 	}, nil
 }

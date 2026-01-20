@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 )
 
 // ContactListItem represents a contact in the list view
@@ -1048,6 +1049,40 @@ func GetContactChats(ctx context.Context, contactID string) ([]ContactChat, erro
 		ORDER BY sent_at DESC, created_at DESC
 	`
 	rows, err := pool.Query(ctx, query, contactID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query chats: %w", err)
+	}
+	defer rows.Close()
+
+	var chats []ContactChat
+	for rows.Next() {
+		var chat ContactChat
+		if err := rows.Scan(&chat.ID, &chat.ContactID, &chat.Platform, &chat.Sender, &chat.Message, &chat.SentAt, &chat.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan chat: %w", err)
+		}
+		chats = append(chats, chat)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate chats: %w", err)
+	}
+
+	return chats, nil
+}
+
+// GetContactChatsSince returns chat history for a contact after a timestamp.
+func GetContactChatsSince(ctx context.Context, contactID string, since time.Time) ([]ContactChat, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		SELECT id, contact_id, platform, sender, message, sent_at, created_at
+		FROM contact_chats
+		WHERE contact_id = $1 AND sent_at >= $2
+		ORDER BY sent_at ASC, created_at ASC
+	`
+	rows, err := pool.Query(ctx, query, contactID, since)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query chats: %w", err)
 	}

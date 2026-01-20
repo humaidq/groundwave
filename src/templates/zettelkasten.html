@@ -29,6 +29,13 @@
         <a href="/zk/chat" class="btn">Chat</a>
         <a href="/zettel-inbox" class="btn">Comments Inbox</a>
       </div>
+      {{ if and .Note.IsPublic .PublishPath }}
+      <div class="zk-published" data-publish-path="{{ .PublishPath }}">
+        <span class="zk-published-badge">Published</span>
+        <button type="button" class="btn-small zk-copy-link">Copy public link</button>
+        <span class="zk-copy-status" aria-live="polite"></span>
+      </div>
+      {{ end }}
     </header>
 
     <div class="zk-content">
@@ -98,6 +105,35 @@
       </div>
     </div>
   </div>
+{{ end }}
+
+{{ if and .Note.IsPublic .PublishPath }}
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const container = document.querySelector(".zk-published");
+    if (!container) {
+      return;
+    }
+    const button = container.querySelector(".zk-copy-link");
+    const status = container.querySelector(".zk-copy-status");
+    const path = container.getAttribute("data-publish-path");
+    if (!button || !status || !path) {
+      return;
+    }
+    button.addEventListener("click", function() {
+      const url = new URL(path, window.location.origin);
+      if (!navigator.clipboard) {
+        status.textContent = "Clipboard unavailable";
+        return;
+      }
+      navigator.clipboard.writeText(url.toString()).then(function() {
+        status.textContent = "Copied";
+      }).catch(function() {
+        status.textContent = "Copy failed";
+      });
+    });
+  });
+</script>
 {{ end }}
 
 {{ template "foot" . }}

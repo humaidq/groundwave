@@ -92,15 +92,7 @@ func UpdateTag(c flamego.Context, s session.Session) {
 		return
 	}
 
-	getOptionalString := func(key string) *string {
-		val := strings.TrimSpace(form.Get(key))
-		if val == "" {
-			return nil
-		}
-		return &val
-	}
-
-	err := db.RenameTag(c.Request().Context(), tagID, name, getOptionalString("description"))
+	err := db.RenameTag(c.Request().Context(), tagID, name, getOptionalString(form.Get("description")))
 	if err != nil {
 		log.Printf("Error updating tag: %v", err)
 		SetErrorFlash(s, "Failed to update tag")

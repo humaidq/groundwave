@@ -35,6 +35,7 @@ type Backlink struct {
 }
 
 const zkHistoryKey = "zk_history"
+const zkPublicHistoryKey = "zk_public_history"
 const zkHistoryMaxItems = 4
 
 func init() {
@@ -44,7 +45,11 @@ func init() {
 
 // getZKHistory retrieves the navigation history from session
 func getZKHistory(s session.Session) []ZKHistoryItem {
-	val := s.Get(zkHistoryKey)
+	return getZKHistoryWithKey(s, zkHistoryKey)
+}
+
+func getZKHistoryWithKey(s session.Session, key string) []ZKHistoryItem {
+	val := s.Get(key)
 	if val == nil {
 		return []ZKHistoryItem{}
 	}
@@ -57,9 +62,12 @@ func getZKHistory(s session.Session) []ZKHistoryItem {
 
 // updateZKHistory adds a new item to the history (FIFO, max 4 items)
 func updateZKHistory(s session.Session, noteID, noteTitle string) []ZKHistoryItem {
-	history := getZKHistory(s)
+	return updateZKHistoryWithKey(s, zkHistoryKey, noteID, noteTitle)
+}
 
-	// Remove any existing entry for this note (avoid duplicates)
+func updateZKHistoryWithKey(s session.Session, key string, noteID, noteTitle string) []ZKHistoryItem {
+	history := getZKHistoryWithKey(s, key)
+
 	filtered := make([]ZKHistoryItem, 0, len(history))
 	for _, item := range history {
 		if item.ID != noteID {
@@ -68,19 +76,16 @@ func updateZKHistory(s session.Session, noteID, noteTitle string) []ZKHistoryIte
 	}
 	history = filtered
 
-	// Add new item at the end
 	history = append(history, ZKHistoryItem{
 		ID:    noteID,
 		Title: noteTitle,
 	})
 
-	// Keep only the last N items (FIFO)
 	if len(history) > zkHistoryMaxItems {
 		history = history[len(history)-zkHistoryMaxItems:]
 	}
 
-	// Save to session
-	s.Set(zkHistoryKey, history)
+	s.Set(key, history)
 
 	return history
 }
@@ -98,10 +103,17 @@ func prepareZKHistoryForTemplate(history []ZKHistoryItem, currentID string) []ZK
 	return result
 }
 
-func buildBacklinks(ctx context.Context, backlinkIDs []string) []Backlink {
+func buildBacklinks(ctx context.Context, backlinkIDs []string, basePath string, publicOnly bool) []Backlink {
 	backlinks := make([]Backlink, 0, len(backlinkIDs))
+	trimmedBase := strings.TrimRight(basePath, "/")
+	if trimmedBase == "" {
+		trimmedBase = "/zk"
+	}
 	for _, backlinkID := range backlinkIDs {
 		if strings.HasPrefix(backlinkID, db.DailyBacklinkPrefix) {
+			if publicOnly {
+				continue
+			}
 			dateString := strings.TrimPrefix(backlinkID, db.DailyBacklinkPrefix)
 			title := dateString
 			if entry, ok := db.GetJournalEntryByDate(dateString); ok && entry.Title != "" {
@@ -115,15 +127,18 @@ func buildBacklinks(ctx context.Context, backlinkIDs []string) []Backlink {
 			continue
 		}
 
-		backlinkNote, err := db.GetNoteByID(ctx, backlinkID)
+		backlinkNote, err := db.GetNoteByIDWithBasePath(ctx, backlinkID, trimmedBase)
 		if err != nil {
 			log.Printf("Error fetching backlink note %s: %v", backlinkID, err)
+			continue
+		}
+		if publicOnly && !backlinkNote.IsPublic {
 			continue
 		}
 		backlinks = append(backlinks, Backlink{
 			ID:    backlinkID,
 			Title: backlinkNote.Title,
-			URL:   "/zk/" + backlinkID,
+			URL:   trimmedBase + "/" + backlinkID,
 		})
 	}
 	return backlinks
@@ -159,7 +174,7 @@ func ZettelkastenIndex(c flamego.Context, s session.Session, t template.Template
 		backlinkIDs = db.GetBacklinksFromCache(note.ID)
 	}
 
-	backlinks := buildBacklinks(ctx, backlinkIDs)
+	backlinks := buildBacklinks(ctx, backlinkIDs, "/zk", false)
 
 	// Get last cache build time
 	lastCacheUpdate := db.GetLastCacheBuildTime()
@@ -179,6 +194,9 @@ func ZettelkastenIndex(c flamego.Context, s session.Session, t template.Template
 	data["LastCacheUpdate"] = lastCacheUpdate
 	data["IsZettelkasten"] = true
 	data["ZKHistory"] = history
+	if note.ID != "" {
+		data["PublishPath"] = "/note/" + note.ID
+	}
 
 	t.HTML(http.StatusOK, "zettelkasten")
 }
@@ -217,7 +235,7 @@ func ViewZKNote(c flamego.Context, s session.Session, t template.Template, data 
 	// Fetch backlinks for this zettel
 	backlinkIDs := db.GetBacklinksFromCache(noteID)
 
-	backlinks := buildBacklinks(ctx, backlinkIDs)
+	backlinks := buildBacklinks(ctx, backlinkIDs, "/zk", false)
 
 	// Get last cache build time
 	lastCacheUpdate := db.GetLastCacheBuildTime()
@@ -234,8 +252,51 @@ func ViewZKNote(c flamego.Context, s session.Session, t template.Template, data 
 	data["LastCacheUpdate"] = lastCacheUpdate
 	data["IsZettelkasten"] = true
 	data["ZKHistory"] = history
+	data["PublishPath"] = "/note/" + noteID
 
 	t.HTML(http.StatusOK, "zettelkasten")
+}
+
+func renderPrivateNote(t template.Template, data template.Data) {
+	data["IsZettelkasten"] = true
+	data["HideNav"] = true
+	t.HTML(http.StatusNotFound, "note_private")
+}
+
+// ViewPublicNote renders a published note without authentication
+func ViewPublicNote(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+	noteID := c.Param("id")
+	if noteID == "" {
+		renderPrivateNote(t, data)
+		return
+	}
+
+	noteID = strings.TrimPrefix(noteID, "id:")
+	ctx := c.Request().Context()
+
+	note, err := db.GetNoteByIDWithBasePath(ctx, noteID, "/note")
+	if err != nil || !note.IsPublic {
+		if err != nil {
+			log.Printf("Error fetching public note %s: %v", noteID, err)
+		}
+		renderPrivateNote(t, data)
+		return
+	}
+
+	backlinkIDs := db.GetBacklinksFromCache(noteID)
+	backlinks := buildBacklinks(ctx, backlinkIDs, "/note", true)
+
+	history := updateZKHistoryWithKey(s, zkPublicHistoryKey, noteID, note.Title)
+	history = prepareZKHistoryForTemplate(history, noteID)
+
+	data["Note"] = note
+	data["NoteID"] = noteID
+	data["Backlinks"] = backlinks
+	data["IsZettelkasten"] = true
+	data["ZKHistory"] = history
+	data["HideNav"] = true
+
+	t.HTML(http.StatusOK, "note_public")
 }
 
 type zkChatRequest struct {

@@ -30,20 +30,19 @@
 
     {{ if .Journal }}
       <div class="timeline-entry">
-        <a href="/journal/{{ .Journal.DateString }}" class="timeline-entry-link">
-          <div class="timeline-entry-header">
-            <span class="timeline-entry-type">Journal</span>
-            <span class="log-date">{{ .Journal.DateString }}</span>
-          </div>
-          <div class="timeline-entry-content">
-            {{ if .Journal.Preview }}
-              {{ .Journal.Preview }}
-            {{ else }}
-              <p class="muted-text">No preview available.</p>
-            {{ end }}
-            {{ if .Journal.HasMore }}<span class="timeline-ellipsis">...</span>{{ end }}
-          </div>
-        </a>
+        <a href="/journal/{{ .Journal.DateString }}" class="entry-link-overlay" aria-label="View journal entry"></a>
+        <div class="timeline-entry-header">
+          <span class="timeline-entry-type">Journal</span>
+          <span class="log-date">{{ .Journal.DateString }}</span>
+        </div>
+        <div class="timeline-entry-content">
+          {{ if .Journal.Preview }}
+            {{ .Journal.Preview }}
+          {{ else }}
+            <p class="muted-text">No preview available.</p>
+          {{ end }}
+          {{ if .Journal.HasMore }}<span class="timeline-ellipsis">...</span>{{ end }}
+        </div>
       </div>
     {{ end }}
 
@@ -51,10 +50,11 @@
       <div class="log-list">
         {{ range .Followups }}
           <div class="log-entry">
+            <a href="/health/{{ .ProfileID }}/followup/{{ .ID }}" class="entry-link-overlay" aria-label="View health followup"></a>
             <div class="log-header">
               <span class="log-type log-type-health">Health</span>
               <span class="log-date">{{ .FollowupDate.Format "Jan 2, 2006" }}</span>
-              <a href="/health/{{ .ProfileID }}/followup/{{ .ID }}" class="log-contact">{{ .HospitalName }}</a>
+              <span class="log-contact">{{ .HospitalName }}</span>
               {{ if $.PrimaryHealthProfileName }}<span class="muted-text">{{ $.PrimaryHealthProfileName }}</span>{{ end }}
             </div>
             <div class="log-content">
@@ -69,11 +69,12 @@
       <div class="log-list">
         {{ range .Logs }}
           <div class="log-entry">
+            <a href="/contact/{{ .ContactID }}" class="entry-link-overlay" aria-label="View contact"></a>
             <div class="log-header">
               <span class="log-type">Contact</span>
               <span class="log-type log-type-{{ .LogType }}">{{ .LogType }}</span>
               <span class="log-date">{{ .LoggedAt.Format "Jan 2, 2006 3:04 PM" }}</span>
-              <a href="/contact/{{ .ContactID }}" class="log-contact">{{ .ContactName }}</a>
+              <span class="log-contact">{{ .ContactName }}</span>
             </div>
             {{ with .Subject }}
               <div class="log-content"><strong>{{ . }}</strong></div>
@@ -90,36 +91,33 @@
       <div class="log-list">
         {{ range .Notes }}
           <div class="log-entry">
+            <a href="/zk/{{ .ID }}" class="entry-link-overlay" aria-label="View note"></a>
             <div class="log-header">
               <span class="log-type log-type-zettel">Note</span>
               <span class="log-date">{{ .Timestamp.Format "15:04:05" }}</span>
-              <a href="/zk/{{ .ID }}" class="log-contact">{{ .Title }}</a>
+              <span class="log-contact">{{ .Title }}</span>
             </div>
           </div>
         {{ end }}
       </div>
     {{ end }}
 
-    {{ if .QSOs }}
+    {{ if gt .QSOCount 0 }}
       <div class="log-list">
-        {{ range .QSOs }}
-          <div class="log-entry">
-            <div class="log-header">
-              <span class="log-type log-type-qsl">QSL</span>
-              <span class="log-date">{{ .QSODate.Format "Jan 2, 2006" }} {{ .FormatTime }}</span>
-              <a href="/qsl/{{ .ID }}" class="log-contact">{{ .Call }}</a>
-              {{ if .Band }}<span class="muted-text">{{ .Band }}</span>{{ end }}
-              <span class="muted-text">{{ .Mode }}</span>
-            </div>
-            {{ if .Country }}
-              <div class="log-content">{{ .Country }}</div>
-            {{ end }}
+        <div class="log-entry">
+          <a href="/qsl" class="entry-link-overlay" aria-label="View QSL"></a>
+          <div class="log-header">
+            <span class="log-type log-type-qsl">QSL</span>
+            <span class="log-date">{{ .Date.Format "Jan 2, 2006" }}</span>
+            <span class="log-contact">
+              {{ .QSOCount }} QSO{{ if ne .QSOCount 1 }}s{{ end }} over {{ .QSOCountryCount }} countr{{ if ne .QSOCountryCount 1 }}ies{{ else }}y{{ end }}
+            </span>
           </div>
-        {{ end }}
+        </div>
       </div>
     {{ end }}
 
-    {{ if and (not .Journal) (not .Followups) (not .Logs) (not .Notes) (not .QSOs) }}
+    {{ if and (not .Journal) (not .Followups) (not .Logs) (not .Notes) (eq .QSOCount 0) }}
       <p class="muted-text">No activity recorded.</p>
     {{ end }}
   {{ end }}
