@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2025 Humaid Alqasimi
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # AGENTS.md
 
 This file guides coding agents working in this repository.

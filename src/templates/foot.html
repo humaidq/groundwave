@@ -19,6 +19,90 @@
     </script>
     {{ end }}
     <script>
+      document.addEventListener("DOMContentLoaded", function() {
+        const timestamps = document.querySelectorAll("span.timestamp");
+        if (!timestamps.length) {
+          return;
+        }
+
+        function parseTimestamp(text) {
+          const match = text.match(/<\s*(\d{4})-(\d{2})-(\d{2})(?:\s+\w{3})?(?:\s+(\d{2}):(\d{2}))?.*>/);
+          if (!match) {
+            return null;
+          }
+          const year = parseInt(match[1], 10);
+          const month = parseInt(match[2], 10) - 1;
+          const day = parseInt(match[3], 10);
+          const hasTime = match[4] && match[5];
+          const hour = hasTime ? parseInt(match[4], 10) : 23;
+          const minute = hasTime ? parseInt(match[5], 10) : 59;
+          return new Date(year, month, day, hour, minute, 0);
+        }
+
+        function formatDuration(ms) {
+          const absMs = Math.abs(ms);
+          const totalMinutes = Math.floor(absMs / 60000);
+          const days = Math.floor(totalMinutes / 1440);
+          const hours = Math.floor((totalMinutes % 1440) / 60);
+          const minutes = totalMinutes % 60;
+          const parts = [];
+          if (days > 0) {
+            parts.push(days + "d");
+          }
+          if (days > 0 || hours > 0) {
+            parts.push(hours + "h");
+          }
+          parts.push(minutes + "m");
+          return parts.join(" ");
+        }
+
+        function updateCountdown(entry) {
+          const now = new Date();
+          const diff = entry.target - now;
+          const label = diff >= 0 ? "in " + formatDuration(diff) : "elapsed " + formatDuration(diff);
+          entry.element.textContent = label;
+          entry.element.classList.remove("countdown-future", "countdown-soon", "countdown-past");
+          if (diff < 0) {
+            entry.element.classList.add("countdown-past");
+            return;
+          }
+          if (diff <= 24 * 60 * 60 * 1000) {
+            entry.element.classList.add("countdown-soon");
+          } else {
+            entry.element.classList.add("countdown-future");
+          }
+        }
+
+        const entries = [];
+        timestamps.forEach(function(node) {
+          if (node.dataset.countdownAttached) {
+            return;
+          }
+          const target = parseTimestamp(node.textContent || "");
+          if (!target) {
+            return;
+          }
+          node.dataset.countdownAttached = "true";
+          const countdown = document.createElement("span");
+          countdown.className = "timestamp-countdown";
+          node.insertAdjacentElement("afterend", countdown);
+          entries.push({
+            target: target,
+            element: countdown,
+          });
+          updateCountdown(entries[entries.length - 1]);
+        });
+
+        if (!entries.length) {
+          return;
+        }
+
+        setInterval(function() {
+          entries.forEach(updateCountdown);
+        }, 60000);
+      });
+    </script>
+    <script>
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js');
       }

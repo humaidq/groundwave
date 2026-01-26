@@ -1,10 +1,15 @@
+<!--
+SPDX-FileCopyrightText: 2025 Humaid Alqasimi
+SPDX-License-Identifier: Apache-2.0
+-->
+
 ## Overview
 
 Groundwave is a single‑user, self‑hosted personal operating system built for one person: me. It’s not a SaaS platform, not a multi‑tenant tool, and not a generalized product. It exists to unify the systems I actually live in — relationships, knowledge, tasks, inventory, health, and ham radio — into one coherent ecosystem that reflects how I think and operate day to day. Every feature is purpose‑built for this niche and required for my workflow, with no compromises for broader audiences. The application is intentionally “vibe‑coded,” favoring clarity, continuity, and personal memory over generic enterprise patterns. This document is written in maximal detail so humans, LLMs, and agents can fully understand the intent, scope, and interconnected nature of the system.
 
 ## Contacts
 
-Contacts are the heart of Groundwave, giving you a rich, structured profile for every person or organization you care about. You can capture names, roles, organizations, call signs, and tiers, then expand each profile with emails, phones, addresses, and links so everything you need sits in one place. Profiles also support dedicated URLs and identity links (GitHub, LinkedIn, ORCID, and more), making each contact a complete hub rather than a scattered set of handles.
+Contacts are the heart of Groundwave, giving you a rich, structured profile for every person or organization you care about. You can capture names, roles, organizations, call signs, and tiers, then expand each profile with emails, phones, addresses, and links so everything you need sits in one place. Profiles also support dedicated URLs and identity links (GitHub, LinkedIn, ORCID, Google Scholar, and more), making each contact a complete hub rather than a scattered set of handles.
 
 You can build your contact list manually or import from CardDAV and link profiles directly to your address book. Linked contacts stay in sync, updating names, organizations, emails, and phone numbers while keeping your local edits intact. CardDAV notes are also surfaced separately alongside your local notes, so external context is always visible without losing your own history.
 

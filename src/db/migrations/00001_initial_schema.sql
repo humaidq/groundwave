@@ -47,7 +47,7 @@ DO $$ BEGIN
     CREATE TYPE url_type AS ENUM (
         'website', 'blog',
         'twitter', 'mastodon', 'bluesky', 'threads', 'facebook', 'instagram',
-        'linkedin', 'github', 'gitlab', 'codeberg',
+        'linkedin', 'google_scholar', 'github', 'gitlab', 'codeberg',
         'youtube', 'twitch', 'tiktok',
         'signal', 'telegram', 'whatsapp', 'matrix',
         'qrz',  -- amateur radio profile

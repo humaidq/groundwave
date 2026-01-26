@@ -40,7 +40,11 @@ func ParseOrgToHTMLWithBasePath(content string, basePath string) (string, error)
 				URL:         fmt.Sprintf("%s/%s", trimmedBase, cleanLink),
 			}
 		}
-		return nil
+		return org.RegularLink{
+			Protocol:    protocol,
+			Description: description,
+			URL:         link,
+		}
 	}
 
 	// Parse the org-mode content

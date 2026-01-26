@@ -14,7 +14,7 @@ func buildContactChatSummaryPrompt(contact *Contact, chats []ContactChat) string
 	var sb strings.Builder
 
 	sb.WriteString("Summarize the following conversation history from the last 48 hours. ")
-	sb.WriteString("Write a concise single-paragraph summary suitable for a CRM contact log entry.\n\n")
+	sb.WriteString("Write a concise single-paragraph summary.\n\n")
 	sb.WriteString(fmt.Sprintf("Contact: %s\n\n", contact.NameDisplay))
 	sb.WriteString("Conversation:\n")
 
@@ -36,7 +36,7 @@ func buildContactChatSummaryPrompt(contact *Contact, chats []ContactChat) string
 // StreamContactChatSummary summarizes recent chat history for a contact using Ollama.
 func StreamContactChatSummary(ctx context.Context, contact *Contact, chats []ContactChat, onChunk func(string) error) error {
 	prompt := buildContactChatSummaryPrompt(contact, chats)
-	systemPrompt := "You summarize conversation histories for a personal CRM. Provide a concise single-paragraph summary for a contact log entry. Do not use headings or bullet points."
+	systemPrompt := "You summarize conversation histories. Provide a concise single-paragraph summary for a chat history. Do not use headings or bullet points. Maximum 150 words."
 
 	return streamChatCompletion(ctx, systemPrompt, prompt, onChunk)
 }

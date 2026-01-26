@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2025 Humaid Alqasimi
+-- SPDX-License-Identifier: Apache-2.0
+
 -- Personal CRM Schema
 -- Inspired by Derek Sivers' approach: PostgreSQL as the brain
 -- Compatible with vCard 4.0 (RFC 6350)
@@ -37,7 +40,7 @@ DO $$ BEGIN
     CREATE TYPE url_type AS ENUM (
         'website', 'blog',
         'twitter', 'mastodon', 'bluesky', 'threads', 'facebook', 'instagram',
-        'linkedin', 'orcid', 'github', 'gitlab', 'codeberg',
+        'linkedin', 'orcid', 'google_scholar', 'github', 'gitlab', 'codeberg',
         'youtube', 'twitch', 'tiktok',
         'signal', 'telegram', 'whatsapp', 'matrix',
         'qrz',  -- amateur radio profile

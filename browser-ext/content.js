@@ -1,3 +1,8 @@
+/*
+SPDX-FileCopyrightText: 2025 Humaid Alqasimi
+SPDX-License-Identifier: Apache-2.0
+*/
+
 const TOKEN_KEY = "gwToken";
 const HEADER_NAME = "X-Groundwave-Token";
 

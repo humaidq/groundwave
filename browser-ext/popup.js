@@ -1,3 +1,8 @@
+/*
+SPDX-FileCopyrightText: 2025 Humaid Alqasimi
+SPDX-License-Identifier: Apache-2.0
+*/
+
 function resolveBaseUrl() {
   if (typeof globalThis.GW_BASE_URL !== "string") {
     return "";

@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2025 Humaid Alqasimi
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Database Migrations
 
 This project uses [goose](https://github.com/pressly/goose) for database migrations with **embedded migrations** for production deployment.

@@ -274,6 +274,12 @@ func ViewPublicNote(c flamego.Context, s session.Session, t template.Template, d
 	noteID = strings.TrimPrefix(noteID, "id:")
 	ctx := c.Request().Context()
 
+	lastCacheUpdate := db.GetLastCacheBuildTime()
+	if !lastCacheUpdate.IsZero() && !db.IsPublicNoteFromCache(noteID) {
+		renderPrivateNote(t, data)
+		return
+	}
+
 	note, err := db.GetNoteByIDWithBasePath(ctx, noteID, "/note")
 	if err != nil || !note.IsPublic {
 		if err != nil {

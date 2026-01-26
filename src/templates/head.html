@@ -67,7 +67,7 @@
       {{ end }}
     </header>
     {{ end }}
-    <main>
+    <main{{ if and .HideNav (not .HeaderOnly) }} class="main-no-header"{{ end }}>
       {{ if .Flash }}
         {{ $flash := .Flash }}
         {{ if eq $flash.Type "error" }}
