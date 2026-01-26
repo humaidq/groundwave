@@ -1,3 +1,4 @@
+-- +goose Up
 -- +goose StatementBegin
 ALTER TYPE url_type ADD VALUE IF NOT EXISTS 'google_scholar';
 -- +goose StatementEnd
