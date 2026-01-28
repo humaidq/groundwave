@@ -170,7 +170,14 @@ func Home(c flamego.Context, s session.Session, t template.Template, data templa
 }
 
 // Overdue renders the overdue contacts list
-func Overdue(c flamego.Context, t template.Template, data template.Data) {
+func Overdue(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+	// Check private mode from session
+	privateMode := false
+	if pm := s.Get("private_mode"); pm != nil {
+		privateMode = pm.(bool)
+	}
+	data["PrivateMode"] = privateMode
+
 	// Fetch overdue contacts from database
 	contacts, err := db.GetOverdueContacts(c.Request().Context())
 	if err != nil {

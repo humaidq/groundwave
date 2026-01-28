@@ -16,6 +16,7 @@ import (
 	"github.com/emersion/go-vcard"
 	"github.com/emersion/go-webdav/carddav"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // CardDAVConfig holds the CardDAV server configuration
@@ -48,14 +49,16 @@ type CardDAVContact struct {
 
 // CardDAVEmail represents an email from CardDAV
 type CardDAVEmail struct {
-	Email string
-	Type  string
+	Email     string
+	Type      string
+	Preferred bool
 }
 
 // CardDAVPhone represents a phone number from CardDAV
 type CardDAVPhone struct {
-	Phone string
-	Type  string
+	Phone     string
+	Type      string
+	Preferred bool
 }
 
 // CardDAVAddress represents an address from CardDAV
@@ -242,22 +245,25 @@ func parseVCard(card vcard.Card) CardDAVContact {
 	}
 
 	// Get emails
+	preferredEmail := card.Preferred(vcard.FieldEmail)
 	if emailFields, ok := card[vcard.FieldEmail]; ok {
 		for _, field := range emailFields {
 			emailType := "other"
 			if field.Params.HasType("work") {
 				emailType = "work"
 			} else if field.Params.HasType("home") {
-				emailType = "personal"
+				emailType = "home"
 			}
 			contact.Emails = append(contact.Emails, CardDAVEmail{
-				Email: field.Value,
-				Type:  emailType,
+				Email:     field.Value,
+				Type:      emailType,
+				Preferred: field == preferredEmail,
 			})
 		}
 	}
 
-	// Get phones
+	// Get phone numbers
+	preferredPhone := card.Preferred(vcard.FieldTelephone)
 	if phoneFields, ok := card[vcard.FieldTelephone]; ok {
 		for _, field := range phoneFields {
 			phoneType := "other"
@@ -271,8 +277,9 @@ func parseVCard(card vcard.Card) CardDAVContact {
 				phoneType = "fax"
 			}
 			contact.Phones = append(contact.Phones, CardDAVPhone{
-				Phone: field.Value,
-				Type:  phoneType,
+				Phone:     field.Value,
+				Type:      phoneType,
+				Preferred: field == preferredPhone,
 			})
 		}
 	}
@@ -305,10 +312,152 @@ func parseVCard(card vcard.Card) CardDAVContact {
 
 	// Get photo URL
 	if photoField := card.Get(vcard.FieldPhoto); photoField != nil {
-		contact.PhotoURL = photoField.Value
+		contact.PhotoURL = normalizeCardDAVPhoto(photoField)
 	}
 
 	return contact
+}
+
+func normalizeCardDAVPhoto(photoField *vcard.Field) string {
+	if photoField == nil {
+		return ""
+	}
+
+	value := strings.TrimSpace(photoField.Value)
+	if value == "" {
+		return ""
+	}
+
+	lower := strings.ToLower(value)
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") || strings.HasPrefix(lower, "data:") {
+		return value
+	}
+
+	mediaType := strings.TrimSpace(photoField.Params.Get(vcard.ParamMediaType))
+	if mediaType == "" {
+		mediaType = mediaTypeFromPhotoParams(photoField.Params)
+	}
+	if mediaType == "" {
+		mediaType = "image/jpeg"
+	}
+
+	value = strings.Join(strings.Fields(value), "")
+	return fmt.Sprintf("data:%s;base64,%s", mediaType, value)
+}
+
+func mediaTypeFromPhotoParams(params vcard.Params) string {
+	for _, paramType := range params.Types() {
+		paramType = strings.ToLower(strings.TrimSpace(paramType))
+		if paramType == "" {
+			continue
+		}
+		if strings.Contains(paramType, "/") {
+			return paramType
+		}
+		switch paramType {
+		case "png":
+			return "image/png"
+		case "jpg", "jpeg":
+			return "image/jpeg"
+		case "gif":
+			return "image/gif"
+		case "bmp":
+			return "image/bmp"
+		case "webp":
+			return "image/webp"
+		}
+	}
+
+	return ""
+}
+
+func preferredEmailValue(emails []CardDAVEmail) string {
+	for _, email := range emails {
+		if email.Preferred {
+			return email.Email
+		}
+	}
+
+	return ""
+}
+
+func preferredPhoneValue(phones []CardDAVPhone) string {
+	for _, phone := range phones {
+		if phone.Preferred {
+			return phone.Phone
+		}
+	}
+
+	return ""
+}
+
+func normalizeCardDAVEmail(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	lower := strings.ToLower(value)
+	if strings.HasPrefix(lower, "mailto:") {
+		value = value[len("mailto:"):]
+	}
+	return strings.TrimSpace(value)
+}
+
+func normalizeCardDAVPhone(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	lower := strings.ToLower(value)
+	if strings.HasPrefix(lower, "tel:") {
+		value = value[len("tel:"):]
+	}
+	value = strings.TrimSpace(value)
+	return value
+}
+
+func selectPrimaryEmail(preferredEmail string, insertedEmails []string) string {
+	if preferredEmail != "" {
+		for _, email := range insertedEmails {
+			if strings.EqualFold(email, preferredEmail) {
+				return preferredEmail
+			}
+		}
+	}
+
+	if len(insertedEmails) > 0 {
+		return insertedEmails[0]
+	}
+
+	return ""
+}
+
+func selectPrimaryPhone(preferredPhone string, insertedPhones []string) string {
+	if preferredPhone != "" {
+		for _, phone := range insertedPhones {
+			if phone == preferredPhone {
+				return preferredPhone
+			}
+		}
+	}
+
+	if len(insertedPhones) > 0 {
+		return insertedPhones[0]
+	}
+
+	return ""
+}
+
+func isCardDAVEmailAvailable(ctx context.Context, contactID, email string) (bool, error) {
+	var existingContactID string
+	err := pool.QueryRow(ctx, `SELECT contact_id FROM contact_emails WHERE lower(email) = lower($1) LIMIT 1`, email).Scan(&existingContactID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return true, nil
+		}
+		return false, err
+	}
+	return existingContactID == contactID, nil
 }
 
 // parseDateString parses various date formats from vCard
@@ -378,6 +527,11 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 		titlePtr = &cardDAVContact.Title
 	}
 
+	var photoURLPtr *string
+	if cardDAVContact.PhotoURL != "" {
+		photoURLPtr = &cardDAVContact.PhotoURL
+	}
+
 	// Update the contact in the database
 	query := `
 		UPDATE contacts SET
@@ -386,8 +540,9 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 			name_family = $3,
 			organization = $4,
 			title = $5,
+			photo_url = $6,
 			updated_at = now()
-		WHERE id = $6
+		WHERE id = $7
 	`
 	_, err = pool.Exec(ctx, query,
 		nameDisplay,
@@ -395,19 +550,26 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 		nameFamilyPtr,
 		organizationPtr,
 		titlePtr,
+		photoURLPtr,
 		contactID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update contact from CardDAV: %w", err)
 	}
 
-	// Sync emails: delete existing CardDAV emails, then insert new ones
-	_, err = pool.Exec(ctx, `DELETE FROM contact_emails WHERE contact_id = $1 AND source = 'carddav'`, contactID)
+	// Sync emails: delete existing cached emails, then insert new ones
+	_, err = pool.Exec(ctx, `DELETE FROM contact_emails WHERE contact_id = $1`, contactID)
 	if err != nil {
-		return fmt.Errorf("failed to delete existing CardDAV emails: %w", err)
+		return fmt.Errorf("failed to delete existing contact emails: %w", err)
 	}
 
-	for i, email := range cardDAVContact.Emails {
+	preferredEmail := normalizeCardDAVEmail(preferredEmailValue(cardDAVContact.Emails))
+	var insertedEmails []string
+	for _, email := range cardDAVContact.Emails {
+		normalizedEmail := normalizeCardDAVEmail(email.Email)
+		if normalizedEmail == "" {
+			continue
+		}
 		// Map CardDAV email type to database enum
 		emailType := "other"
 		switch email.Type {
@@ -417,29 +579,54 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 			emailType = "personal"
 		}
 
-		// First email from CardDAV is primary if no local primary exists
-		isPrimary := i == 0
+		emailAvailable, err := isCardDAVEmailAvailable(ctx, contactID, normalizedEmail)
+		if err != nil {
+			fmt.Printf("Warning: failed to check CardDAV email availability %s: %v\n", normalizedEmail, err)
+			continue
+		}
+		if !emailAvailable {
+			fmt.Printf("Warning: skipped duplicate CardDAV email %s for contact %s\n", normalizedEmail, contactID)
+			continue
+		}
 
 		_, err = pool.Exec(ctx, `
 			INSERT INTO contact_emails (contact_id, email, email_type, is_primary, source)
-			VALUES ($1, $2, $3, $4, 'carddav')
-			ON CONFLICT (contact_id, lower(email)) DO UPDATE SET
-				email_type = EXCLUDED.email_type,
-				source = 'carddav'
-		`, contactID, email.Email, emailType, isPrimary)
+			VALUES ($1, $2, $3, false, 'carddav')
+			ON CONFLICT (contact_id, lower(email)) DO NOTHING
+		`, contactID, normalizedEmail, emailType)
 		if err != nil {
 			// Log but continue - email might fail validation
-			fmt.Printf("Warning: failed to sync CardDAV email %s: %v\n", email.Email, err)
+			fmt.Printf("Warning: failed to sync CardDAV email %s: %v\n", normalizedEmail, err)
+			continue
+		}
+		insertedEmails = append(insertedEmails, normalizedEmail)
+	}
+
+	primaryEmail := selectPrimaryEmail(preferredEmail, insertedEmails)
+	if primaryEmail != "" {
+		_, err = pool.Exec(ctx, `
+			UPDATE contact_emails
+			SET is_primary = CASE WHEN lower(email) = lower($2) THEN true ELSE false END
+			WHERE contact_id = $1
+		`, contactID, primaryEmail)
+		if err != nil {
+			return fmt.Errorf("failed to set primary email: %w", err)
 		}
 	}
 
-	// Sync phones: delete existing CardDAV phones, then insert new ones
-	_, err = pool.Exec(ctx, `DELETE FROM contact_phones WHERE contact_id = $1 AND source = 'carddav'`, contactID)
+	// Sync phones: delete existing cached phones, then insert new ones
+	_, err = pool.Exec(ctx, `DELETE FROM contact_phones WHERE contact_id = $1`, contactID)
 	if err != nil {
-		return fmt.Errorf("failed to delete existing CardDAV phones: %w", err)
+		return fmt.Errorf("failed to delete existing contact phones: %w", err)
 	}
 
-	for i, phone := range cardDAVContact.Phones {
+	preferredPhone := normalizeCardDAVPhone(preferredPhoneValue(cardDAVContact.Phones))
+	var insertedPhones []string
+	for _, phone := range cardDAVContact.Phones {
+		normalizedPhone := normalizeCardDAVPhone(phone.Phone)
+		if normalizedPhone == "" {
+			continue
+		}
 		// Map CardDAV phone type to database enum
 		phoneType := "other"
 		switch phone.Type {
@@ -453,16 +640,27 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 			phoneType = "fax"
 		}
 
-		// First phone from CardDAV is primary if no local primary exists
-		isPrimary := i == 0
-
 		_, err = pool.Exec(ctx, `
 			INSERT INTO contact_phones (contact_id, phone, phone_type, is_primary, source)
-			VALUES ($1, $2, $3, $4, 'carddav')
-		`, contactID, phone.Phone, phoneType, isPrimary)
+			VALUES ($1, $2, $3, false, 'carddav')
+		`, contactID, normalizedPhone, phoneType)
 		if err != nil {
 			// Log but continue
-			fmt.Printf("Warning: failed to sync CardDAV phone %s: %v\n", phone.Phone, err)
+			fmt.Printf("Warning: failed to sync CardDAV phone %s: %v\n", normalizedPhone, err)
+			continue
+		}
+		insertedPhones = append(insertedPhones, normalizedPhone)
+	}
+
+	primaryPhone := selectPrimaryPhone(preferredPhone, insertedPhones)
+	if primaryPhone != "" {
+		_, err = pool.Exec(ctx, `
+			UPDATE contact_phones
+			SET is_primary = CASE WHEN phone = $2 THEN true ELSE false END
+			WHERE contact_id = $1
+		`, contactID, primaryPhone)
+		if err != nil {
+			return fmt.Errorf("failed to set primary phone: %w", err)
 		}
 	}
 
@@ -742,9 +940,13 @@ func UpdateCardDAVContact(ctx context.Context, contact *ContactDetail) error {
 		if email.EmailType == EmailWork {
 			emailType = "work"
 		}
+		params := vcard.Params{vcard.ParamType: []string{emailType}}
+		if email.IsPrimary {
+			params.Set(vcard.ParamPreferred, "1")
+		}
 		card.Add(vcard.FieldEmail, &vcard.Field{
 			Value:  email.Email,
-			Params: vcard.Params{vcard.ParamType: []string{emailType}},
+			Params: params,
 		})
 	}
 
@@ -760,9 +962,13 @@ func UpdateCardDAVContact(ctx context.Context, contact *ContactDetail) error {
 		case PhoneFax:
 			phoneType = "fax"
 		}
+		params := vcard.Params{vcard.ParamType: []string{phoneType}}
+		if phone.IsPrimary {
+			params.Set(vcard.ParamPreferred, "1")
+		}
 		card.Add(vcard.FieldTelephone, &vcard.Field{
 			Value:  phone.Phone,
-			Params: vcard.Params{vcard.ParamType: []string{phoneType}},
+			Params: params,
 		})
 	}
 

@@ -24,6 +24,7 @@ type ContactListItem struct {
 	PrimaryEmail *string `db:"primary_email"`
 	PrimaryPhone *string `db:"primary_phone"`
 	CallSign     *string `db:"call_sign"`
+	PhotoURL     *string `db:"photo_url"`
 	IsService    bool    `db:"is_service"`
 	Tags         []Tag   // Tags associated with this contact
 }
@@ -68,6 +69,7 @@ func ListContacts(ctx context.Context) ([]ContactListItem, error) {
 			c.title,
 			c.tier,
 			c.call_sign,
+			c.photo_url,
 			c.is_service,
 			(SELECT email FROM contact_emails WHERE contact_id = c.id
 			 ORDER BY is_primary DESC, created_at LIMIT 1) AS primary_email,
@@ -107,6 +109,7 @@ func ListContacts(ctx context.Context) ([]ContactListItem, error) {
 			&contact.Title,
 			&contact.Tier,
 			&contact.CallSign,
+			&contact.PhotoURL,
 			&contact.IsService,
 			&contact.PrimaryEmail,
 			&contact.PrimaryPhone,
@@ -200,6 +203,7 @@ func ListContactsWithFilters(ctx context.Context, opts ContactListOptions) ([]Co
 			c.title,
 			c.tier,
 			c.call_sign,
+			c.photo_url,
 			c.is_service,
 			(SELECT email FROM contact_emails WHERE contact_id = c.id
 			 ORDER BY is_primary DESC, created_at LIMIT 1) AS primary_email,
@@ -239,6 +243,7 @@ func ListContactsWithFilters(ctx context.Context, opts ContactListOptions) ([]Co
 			&contact.Title,
 			&contact.Tier,
 			&contact.CallSign,
+			&contact.PhotoURL,
 			&contact.IsService,
 			&contact.PrimaryEmail,
 			&contact.PrimaryPhone,
@@ -500,7 +505,7 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 	}
 
 	// Get URLs
-	urlQuery := `SELECT id, contact_id, url, url_type, label, username, created_at
+	urlQuery := `SELECT id, contact_id, url, url_type, description, created_at
 		FROM contact_urls WHERE contact_id = $1 ORDER BY created_at`
 	urlRows, err := pool.Query(ctx, urlQuery, id)
 	if err != nil {
@@ -510,7 +515,7 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 
 	for urlRows.Next() {
 		var url ContactURL
-		err := urlRows.Scan(&url.ID, &url.ContactID, &url.URL, &url.URLType, &url.Label, &url.Username, &url.CreatedAt)
+		err := urlRows.Scan(&url.ID, &url.ContactID, &url.URL, &url.URLType, &url.Description, &url.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan url: %w", err)
 		}
@@ -657,6 +662,17 @@ func AddEmail(ctx context.Context, input AddEmailInput) error {
 		return fmt.Errorf("database connection not initialized")
 	}
 
+	if !input.IsPrimary {
+		var hasPrimary bool
+		checkQuery := `SELECT EXISTS(SELECT 1 FROM contact_emails WHERE contact_id = $1 AND is_primary = true)`
+		if err := pool.QueryRow(ctx, checkQuery, input.ContactID).Scan(&hasPrimary); err != nil {
+			return fmt.Errorf("failed to check primary email: %w", err)
+		}
+		if !hasPrimary {
+			input.IsPrimary = true
+		}
+	}
+
 	// If setting as primary, clear other primaries first
 	if input.IsPrimary {
 		clearQuery := `UPDATE contact_emails SET is_primary = false WHERE contact_id = $1 AND is_primary = true`
@@ -691,6 +707,17 @@ func AddPhone(ctx context.Context, input AddPhoneInput) error {
 		return fmt.Errorf("database connection not initialized")
 	}
 
+	if !input.IsPrimary {
+		var hasPrimary bool
+		checkQuery := `SELECT EXISTS(SELECT 1 FROM contact_phones WHERE contact_id = $1 AND is_primary = true)`
+		if err := pool.QueryRow(ctx, checkQuery, input.ContactID).Scan(&hasPrimary); err != nil {
+			return fmt.Errorf("failed to check primary phone: %w", err)
+		}
+		if !hasPrimary {
+			input.IsPrimary = true
+		}
+	}
+
 	// If setting as primary, clear other primaries first
 	if input.IsPrimary {
 		clearQuery := `UPDATE contact_phones SET is_primary = false WHERE contact_id = $1 AND is_primary = true`
@@ -713,11 +740,10 @@ func AddPhone(ctx context.Context, input AddPhoneInput) error {
 
 // AddURLInput represents input for adding a URL
 type AddURLInput struct {
-	ContactID string
-	URL       string
-	URLType   URLType
-	Label     *string
-	Username  *string
+	ContactID   string
+	URL         string
+	URLType     URLType
+	Description *string
 }
 
 // AddURL adds a new URL to a contact
@@ -727,10 +753,10 @@ func AddURL(ctx context.Context, input AddURLInput) error {
 	}
 
 	query := `
-		INSERT INTO contact_urls (contact_id, url, url_type, label, username)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO contact_urls (contact_id, url, url_type, description)
+		VALUES ($1, $2, $3, $4)
 	`
-	_, err := pool.Exec(ctx, query, input.ContactID, input.URL, input.URLType, input.Label, input.Username)
+	_, err := pool.Exec(ctx, query, input.ContactID, input.URL, input.URLType, input.Description)
 	if err != nil {
 		return fmt.Errorf("failed to add URL: %w", err)
 	}
@@ -783,6 +809,17 @@ func UpdateEmail(ctx context.Context, input UpdateEmailInput) error {
 		return fmt.Errorf("database connection not initialized")
 	}
 
+	if !input.IsPrimary {
+		var hasOtherPrimary bool
+		checkQuery := `SELECT EXISTS(SELECT 1 FROM contact_emails WHERE contact_id = $1 AND is_primary = true AND id != $2)`
+		if err := pool.QueryRow(ctx, checkQuery, input.ContactID, input.ID).Scan(&hasOtherPrimary); err != nil {
+			return fmt.Errorf("failed to check other primary emails: %w", err)
+		}
+		if !hasOtherPrimary {
+			input.IsPrimary = true
+		}
+	}
+
 	// If setting as primary, clear other primaries first
 	if input.IsPrimary {
 		clearQuery := `UPDATE contact_emails SET is_primary = false WHERE contact_id = $1 AND is_primary = true AND id != $2`
@@ -817,6 +854,17 @@ type UpdatePhoneInput struct {
 func UpdatePhone(ctx context.Context, input UpdatePhoneInput) error {
 	if pool == nil {
 		return fmt.Errorf("database connection not initialized")
+	}
+
+	if !input.IsPrimary {
+		var hasOtherPrimary bool
+		checkQuery := `SELECT EXISTS(SELECT 1 FROM contact_phones WHERE contact_id = $1 AND is_primary = true AND id != $2)`
+		if err := pool.QueryRow(ctx, checkQuery, input.ContactID, input.ID).Scan(&hasOtherPrimary); err != nil {
+			return fmt.Errorf("failed to check other primary phones: %w", err)
+		}
+		if !hasOtherPrimary {
+			input.IsPrimary = true
+		}
 	}
 
 	// If setting as primary, clear other primaries first
@@ -984,6 +1032,59 @@ func ListContactLogsTimeline(ctx context.Context) ([]ContactLogTimelineEntry, er
 	}
 
 	return entries, nil
+}
+
+// ListContactWeeklyActivityCounts returns weekly activity totals for a contact.
+func ListContactWeeklyActivityCounts(ctx context.Context, contactID string, start time.Time, end time.Time) (map[string]int, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		WITH activity AS (
+			SELECT date_trunc('week', logged_at AT TIME ZONE 'UTC') AS week_start, COUNT(*) AS count
+			FROM contact_logs
+			WHERE contact_id = $1 AND logged_at >= $2 AND logged_at < $3
+			GROUP BY week_start
+			UNION ALL
+			SELECT date_trunc('week', (qso_date + time_on) AT TIME ZONE 'UTC') AS week_start, COUNT(*) AS count
+			FROM qsos
+			WHERE contact_id = $1
+				AND (qso_date + time_on) >= ($2 AT TIME ZONE 'UTC')
+				AND (qso_date + time_on) < ($3 AT TIME ZONE 'UTC')
+			GROUP BY week_start
+			UNION ALL
+			SELECT date_trunc('week', sent_at AT TIME ZONE 'UTC') AS week_start, COUNT(*) AS count
+			FROM contact_chats
+			WHERE contact_id = $1 AND sent_at >= $2 AND sent_at < $3
+			GROUP BY week_start
+		)
+		SELECT week_start, SUM(count) AS total_count
+		FROM activity
+		GROUP BY week_start
+		ORDER BY week_start
+	`
+
+	rows, err := pool.Query(ctx, query, contactID, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query contact activity: %w", err)
+	}
+	defer rows.Close()
+
+	counts := make(map[string]int)
+	for rows.Next() {
+		var weekStart time.Time
+		var count int
+		if err := rows.Scan(&weekStart, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan contact activity: %w", err)
+		}
+		counts[weekStart.UTC().Format("2006-01-02")] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate contact activity: %w", err)
+	}
+
+	return counts, nil
 }
 
 // AddChatInput represents input for adding a chat entry
@@ -1270,6 +1371,7 @@ type OverdueContactItem struct {
 	Tier            Tier    `db:"tier"`
 	TierLower       string  // Lowercase tier for CSS classes
 	CallSign        *string `db:"call_sign"`
+	PhotoURL        *string `db:"photo_url"`
 	LastContactDate *string `db:"last_contact_date"`
 	DaysOverdue     int     `db:"days_overdue"`
 	ContactInterval int     `db:"contact_interval"`
@@ -1313,6 +1415,7 @@ func GetOverdueContacts(ctx context.Context) ([]OverdueContactItem, error) {
 			c.title,
 			c.tier,
 			c.call_sign,
+			c.photo_url,
 			TO_CHAR(COALESCE(lc.last_contact_date, c.created_at), 'YYYY-MM-DD') as last_contact_date,
 			CASE
 				WHEN lc.last_contact_date IS NULL THEN
@@ -1361,6 +1464,7 @@ func GetOverdueContacts(ctx context.Context) ([]OverdueContactItem, error) {
 			&contact.Title,
 			&contact.Tier,
 			&contact.CallSign,
+			&contact.PhotoURL,
 			&contact.LastContactDate,
 			&daysSinceContact,
 			&contact.ContactInterval,
@@ -1451,6 +1555,7 @@ func GetRecentContacts(ctx context.Context, limit int) ([]ContactListItem, error
 			c.title,
 			c.tier,
 			c.call_sign,
+			c.photo_url,
 			c.is_service,
 			(SELECT email FROM contact_emails WHERE contact_id = c.id
 			 ORDER BY is_primary DESC, created_at LIMIT 1) AS primary_email,
@@ -1478,6 +1583,7 @@ func GetRecentContacts(ctx context.Context, limit int) ([]ContactListItem, error
 			&contact.Title,
 			&contact.Tier,
 			&contact.CallSign,
+			&contact.PhotoURL,
 			&contact.IsService,
 			&contact.PrimaryEmail,
 			&contact.PrimaryPhone,
@@ -1510,6 +1616,7 @@ func ListServiceContacts(ctx context.Context) ([]ContactListItem, error) {
 			c.title,
 			c.tier,
 			c.call_sign,
+			c.photo_url,
 			c.is_service,
 			(SELECT email FROM contact_emails WHERE contact_id = c.id
 			 ORDER BY is_primary DESC, created_at LIMIT 1) AS primary_email,
@@ -1551,6 +1658,7 @@ func ListServiceContacts(ctx context.Context) ([]ContactListItem, error) {
 			&contact.Title,
 			&contact.Tier,
 			&contact.CallSign,
+			&contact.PhotoURL,
 			&contact.IsService,
 			&contact.PrimaryEmail,
 			&contact.PrimaryPhone,

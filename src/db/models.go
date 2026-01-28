@@ -168,13 +168,12 @@ const (
 
 // ContactURL represents a URL or social media handle for a contact
 type ContactURL struct {
-	ID        uuid.UUID `db:"id"`
-	ContactID uuid.UUID `db:"contact_id"`
-	URL       string    `db:"url"`
-	URLType   URLType   `db:"url_type"`
-	Label     *string   `db:"label"`
-	Username  *string   `db:"username"`
-	CreatedAt time.Time `db:"created_at"`
+	ID          uuid.UUID `db:"id"`
+	ContactID   uuid.UUID `db:"contact_id"`
+	URL         string    `db:"url"`
+	URLType     URLType   `db:"url_type"`
+	Description *string   `db:"description"`
+	CreatedAt   time.Time `db:"created_at"`
 }
 
 // Tag represents a tag that can be applied to contacts

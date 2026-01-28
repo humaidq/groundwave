@@ -1,0 +1,75 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+<div class="page-header">
+  <h2>Zettelkasten Pages</h2>
+  <div class="page-header-actions">
+    {{ template "zk_header_actions" . }}
+  </div>
+</div>
+
+{{ if .Error }}
+<div class="alert alert-red">{{ .Error }}</div>
+{{ end }}
+
+<input type="text" id="zkSearch" placeholder="Search pages..." class="search-input">
+
+{{ if .Notes }}
+<p class="muted-text">{{ .NoteCount }} page{{ if ne .NoteCount 1 }}s{{ end }}</p>
+<div id="zkList" class="list-card-list">
+  {{ range .Notes }}
+  <div class="list-card" data-title="{{ if .Title }}{{ .Title }}{{ else }}{{ .ID }}{{ end }}">
+    <a href="/zk/{{ .ID }}" class="list-card-link">
+      <div class="list-card-content">
+        <div class="list-card-body">
+          <div class="list-card-title">{{ if .Title }}{{ .Title }}{{ else }}{{ .ID }}{{ end }}</div>
+          {{ if .IsPublic }}
+          <div class="list-card-meta">
+            <div class="tag-badges">
+              <span class="tag-badge">Published</span>
+            </div>
+          </div>
+          {{ end }}
+        </div>
+      </div>
+    </a>
+  </div>
+  {{ end }}
+</div>
+{{ else }}
+<p class="muted-text">No pages found.</p>
+{{ end }}
+
+<script>
+(function() {
+  const searchInput = document.getElementById('zkSearch');
+  const list = document.getElementById('zkList');
+
+  if (searchInput && list) {
+    const entries = list.getElementsByClassName('list-card');
+
+    searchInput.addEventListener('input', function(e) {
+      const searchTerm = e.target.value.toLowerCase();
+
+      Array.from(entries).forEach(function(entry) {
+        const title = (entry.dataset.title || '').toLowerCase();
+        entry.style.display = title.includes(searchTerm) ? '' : 'none';
+      });
+    });
+  }
+})();
+</script>
+
+{{ template "foot" . }}

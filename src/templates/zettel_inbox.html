@@ -15,6 +15,9 @@
 
   <div class="page-header">
     <h2>Zettelkasten Comments Inbox</h2>
+    <div class="page-header-actions">
+      {{ template "zk_header_actions" . }}
+    </div>
   </div>
 
   {{ if .Error }}

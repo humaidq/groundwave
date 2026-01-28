@@ -168,12 +168,20 @@
   {{ range .Contacts }}
     <div class="list-card">
       <a href="/contact/{{ .ID }}" class="list-card-link">
-        <div class="list-card-title">{{ .NameDisplay }}</div>
-        {{ if .Organization }}
-        <div class="list-card-meta">
-          <span class="list-card-org muted-text">{{ .Organization }}</span>
+        <div class="list-card-content">
+          {{ $photo := safeImageURL .PhotoURL }}
+          {{ if and $photo (not $.PrivateMode) }}
+          <img src="{{ $photo }}" alt="Photo of {{ .NameDisplay }}" class="contact-avatar contact-avatar-small" loading="lazy">
+          {{ end }}
+          <div class="list-card-body">
+            <div class="list-card-title">{{ .NameDisplay }}</div>
+            {{ if .Organization }}
+            <div class="list-card-meta">
+              <span class="list-card-org muted-text">{{ .Organization }}</span>
+            </div>
+            {{ end }}
+          </div>
         </div>
-        {{ end }}
       </a>
     </div>
   {{ end }}
@@ -190,24 +198,32 @@
     {{ end }}
     <div class="list-card">
       <a href="/contact/{{ .ID }}" class="list-card-link">
-        <div class="list-card-title">{{ .NameDisplay }}</div>
-        {{ if or .Organization .Tags }}
-        <div class="list-card-meta">
-          {{ if .Organization }}
-          <span class="list-card-org muted-text">{{ .Organization }}</span>
+        <div class="list-card-content">
+          {{ $photo := safeImageURL .PhotoURL }}
+          {{ if and $photo (not $.PrivateMode) }}
+          <img src="{{ $photo }}" alt="Photo of {{ .NameDisplay }}" class="contact-avatar contact-avatar-small" loading="lazy">
           {{ end }}
-          {{ if .Tags }}
-          <div class="tag-badges">
-            {{ range .Tags }}
-            <a href="/contacts?tag={{ .ID }}" class="tag-badge"
-               onclick="event.stopPropagation(); event.preventDefault(); window.location.href='/contacts?tag={{ .ID }}';">
-              {{ .Name }}
-            </a>
+          <div class="list-card-body">
+            <div class="list-card-title">{{ .NameDisplay }}</div>
+            {{ if or .Organization .Tags }}
+            <div class="list-card-meta">
+              {{ if .Organization }}
+              <span class="list-card-org muted-text">{{ .Organization }}</span>
+              {{ end }}
+              {{ if .Tags }}
+              <div class="tag-badges">
+                {{ range .Tags }}
+                <a href="/contacts?tag={{ .ID }}" class="tag-badge"
+                   onclick="event.stopPropagation(); event.preventDefault(); window.location.href='/contacts?tag={{ .ID }}';">
+                  {{ .Name }}
+                </a>
+                {{ end }}
+              </div>
+              {{ end }}
+            </div>
             {{ end }}
           </div>
-          {{ end }}
         </div>
-        {{ end }}
       </a>
     </div>
   {{ end }}

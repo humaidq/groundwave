@@ -145,6 +145,124 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 			}
 			return string(runes[:maxLength]) + "..."
 		},
+		"safeImageURL": func(raw *string) template.URL {
+			if raw == nil {
+				return ""
+			}
+			value := strings.TrimSpace(*raw)
+			if value == "" {
+				return ""
+			}
+			lower := strings.ToLower(value)
+			if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") || strings.HasPrefix(lower, "data:image/") {
+				return template.URL(value)
+			}
+			return ""
+		},
+		"urlIconClass": func(urlType db.URLType) string {
+			switch urlType {
+			case db.URLWebsite:
+				return "fa-solid fa-globe"
+			case db.URLBlog:
+				return "fa-solid fa-pen-nib"
+			case db.URLTwitter:
+				return "fa-brands fa-x-twitter"
+			case db.URLMastodon:
+				return "fa-brands fa-mastodon"
+			case db.URLBluesky:
+				return "fa-brands fa-bluesky"
+			case db.URLThreads:
+				return "fa-brands fa-threads"
+			case db.URLFacebook:
+				return "fa-brands fa-facebook"
+			case db.URLInstagram:
+				return "fa-brands fa-instagram"
+			case db.URLLinkedIn:
+				return "fa-brands fa-linkedin"
+			case db.URLOrcid:
+				return "fa-brands fa-orcid"
+			case db.URLGoogleScholar:
+				return "fa-solid fa-graduation-cap"
+			case db.URLGitHub:
+				return "fa-brands fa-github"
+			case db.URLGitLab:
+				return "fa-brands fa-gitlab"
+			case db.URLCodeberg:
+				return "fa-solid fa-code-branch"
+			case db.URLYouTube:
+				return "fa-brands fa-youtube"
+			case db.URLTwitch:
+				return "fa-brands fa-twitch"
+			case db.URLTikTok:
+				return "fa-brands fa-tiktok"
+			case db.URLSignal:
+				return "fa-brands fa-signal-messenger"
+			case db.URLTelegram:
+				return "fa-brands fa-telegram"
+			case db.URLWhatsApp:
+				return "fa-brands fa-whatsapp"
+			case db.URLMatrix:
+				return "fa-solid fa-hashtag"
+			case db.URLQRZ:
+				return "fa-solid fa-tower-broadcast"
+			case db.URLOther:
+				return "fa-solid fa-link"
+			default:
+				return "fa-solid fa-link"
+			}
+		},
+		"urlIconLabel": func(urlType db.URLType) string {
+			switch urlType {
+			case db.URLWebsite:
+				return "Website"
+			case db.URLBlog:
+				return "Blog"
+			case db.URLTwitter:
+				return "X (Twitter)"
+			case db.URLMastodon:
+				return "Mastodon"
+			case db.URLBluesky:
+				return "Bluesky"
+			case db.URLThreads:
+				return "Threads"
+			case db.URLFacebook:
+				return "Facebook"
+			case db.URLInstagram:
+				return "Instagram"
+			case db.URLLinkedIn:
+				return "LinkedIn"
+			case db.URLOrcid:
+				return "ORCID"
+			case db.URLGoogleScholar:
+				return "Google Scholar"
+			case db.URLGitHub:
+				return "GitHub"
+			case db.URLGitLab:
+				return "GitLab"
+			case db.URLCodeberg:
+				return "Codeberg"
+			case db.URLYouTube:
+				return "YouTube"
+			case db.URLTwitch:
+				return "Twitch"
+			case db.URLTikTok:
+				return "TikTok"
+			case db.URLSignal:
+				return "Signal"
+			case db.URLTelegram:
+				return "Telegram"
+			case db.URLWhatsApp:
+				return "WhatsApp"
+			case db.URLMatrix:
+				return "Matrix"
+			case db.URLQRZ:
+				return "QRZ"
+			case db.URLOther:
+				return "Link"
+			default:
+				return "Link"
+			}
+		},
 	}
 	// Configure PostgreSQL session store with 30-day expiry
 	f.Use(session.Sessioner(session.Options{
@@ -285,6 +403,8 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 
 		// Zettelkasten routes
 		f.Get("/zk", routes.ZettelkastenIndex)
+		f.Get("/zk/random", routes.ZettelkastenRandom)
+		f.Get("/zk/list", routes.ZettelkastenList)
 		f.Get("/zk/chat", routes.ZettelkastenChat)
 		f.Post("/zk/chat/links", csrf.Validate, routes.ZettelkastenChatLinks)
 		f.Post("/zk/chat/backlinks", csrf.Validate, routes.ZettelkastenChatBacklinks)

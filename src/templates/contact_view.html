@@ -20,7 +20,24 @@
 {{ end }}
 
 <div class="page-header">
-  <h2>{{ .Contact.NameDisplay }}</h2>
+  <div class="page-header-title">
+    {{ $photo := safeImageURL .Contact.PhotoURL }}
+    {{ if and $photo (not .PrivateMode) }}
+    <img src="{{ $photo }}" alt="Photo of {{ .Contact.NameDisplay }}" class="contact-avatar contact-avatar-large" loading="lazy">
+    {{ end }}
+    <div class="contact-title-block">
+      <h2>{{ .Contact.NameDisplay }}</h2>
+      {{ if .Contact.URLs }}
+      <div class="contact-social-links">
+        {{ range .Contact.URLs }}
+        <a href="{{ .URL }}" target="_blank" rel="noopener" class="contact-social-link" aria-label="{{ if .Description }}{{ .Description }}{{ else }}{{ urlIconLabel .URLType }}{{ end }}" title="{{ if .Description }}{{ .Description }}{{ else }}{{ urlIconLabel .URLType }}{{ end }}">
+          <i class="{{ urlIconClass .URLType }}" aria-hidden="true"></i>
+        </a>
+        {{ end }}
+      </div>
+      {{ end }}
+    </div>
+  </div>
   <div class="page-header-actions">
     <a href="/contact/{{ .Contact.ID }}/edit" class="btn">Edit Contact</a>
     <form method="POST" action="/contact/{{ .Contact.ID }}/delete" class="inline-form" onsubmit="return confirm('Are you sure you want to delete this contact? This action cannot be undone.');">
@@ -107,6 +124,21 @@
   {{ if and (not .Contact.IsService) (not .PrivateMode) }}
   <div class="detail-section">
     <h3>Activity Feed</h3>
+
+    {{ if .ActivityGrid }}
+    <div class="activity-grid">
+      {{ range .ActivityGrid }}
+      <div class="activity-row">
+        <div class="activity-year">{{ .Year }}</div>
+        <div class="activity-weeks">
+          {{ range .Weeks }}
+          <span class="activity-week activity-level-{{ .Level }}" title="{{ .Tooltip }}"></span>
+          {{ end }}
+        </div>
+      </div>
+      {{ end }}
+    </div>
+    {{ end }}
 
     <details class="add-item-details">
       <summary class="add-item-summary">+ Add Note</summary>
@@ -232,7 +264,7 @@
           </div>
           <div class="add-item-field">
             <label class="checkbox-label">
-              <input type="checkbox" name="is_primary" {{ if .IsPrimary }}checked{{ end }}> Primary
+              <input type="checkbox" name="is_primary" {{ if .IsPrimary }}checked disabled{{ end }}> Primary
             </label>
           </div>
           <button type="submit" class="btn">Save</button>
@@ -300,7 +332,7 @@
           </div>
           <div class="add-item-field">
             <label class="checkbox-label">
-              <input type="checkbox" name="is_primary" {{ if .IsPrimary }}checked{{ end }}> Primary
+              <input type="checkbox" name="is_primary" {{ if .IsPrimary }}checked disabled{{ end }}> Primary
             </label>
           </div>
           <button type="submit" class="btn">Save</button>
@@ -368,10 +400,13 @@
     <div class="detail-card">
       <div class="detail-card-content">
         <a href="{{ .URL }}" target="_blank" class="detail-card-value">
-          {{ if .Label }}{{ .Label }}{{ else }}{{ .URL }}{{ end }}
+          {{ if .Description }}{{ .Description }}{{ else }}{{ .URL }}{{ end }}
         </a>
+        {{ if .Description }}
+        <div class="detail-card-subtext">{{ .URL }}</div>
+        {{ end }}
         <div class="detail-card-meta">
-          {{ .URLType }}{{ if .Username }} • @{{ .Username }}{{ end }}
+          {{ urlIconLabel .URLType }}
         </div>
       </div>
       <form method="POST" action="/contact/{{ $.Contact.ID }}/url/{{ .ID }}/delete" class="item-delete-form" onsubmit="return confirm('Delete this link?');">
@@ -412,10 +447,7 @@
           </select>
         </div>
         <div class="add-item-field">
-          <input type="text" name="label" placeholder="Label (optional)" class="form-item">
-        </div>
-        <div class="add-item-field">
-          <input type="text" name="username" placeholder="Username (optional)" class="form-item">
+          <input type="text" name="description" placeholder="Description (optional)" class="form-item">
         </div>
         <button type="submit" class="btn">Add Link</button>
       </form>

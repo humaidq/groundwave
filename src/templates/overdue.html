@@ -31,17 +31,25 @@
 <div class="list-card-list">
   {{ range .OverdueContacts }}
   <div class="list-card">
-    <a href="/contact/{{ .ID }}">
-      <div>
-        {{ .NameDisplay }}
-        {{ if .LastContactDate }}
-        <span class="overdue-badge">{{ .DaysOverdue }} days overdue</span>
-        {{ else }}
-        <span class="overdue-badge overdue-badge-no-log">No log</span>
+    <a href="/contact/{{ .ID }}" class="list-card-link">
+      <div class="list-card-content">
+        {{ $photo := safeImageURL .PhotoURL }}
+        {{ if and $photo (not $.PrivateMode) }}
+        <img src="{{ $photo }}" alt="Photo of {{ .NameDisplay }}" class="contact-avatar contact-avatar-small" loading="lazy">
         {{ end }}
-      </div>
-      <div class="muted-text">
-        {{ if .Organization }}{{ .Organization }} • {{ end }}Tier {{ .Tier }} (every {{ .ContactInterval }} days){{ if .LastContactDate }} • Last contact: {{ .LastContactDate }}{{ end }}
+        <div class="list-card-body">
+          <div class="list-card-title">
+            {{ .NameDisplay }}
+            {{ if .LastContactDate }}
+            <span class="overdue-badge">{{ .DaysOverdue }} days overdue</span>
+            {{ else }}
+            <span class="overdue-badge overdue-badge-no-log">No log</span>
+            {{ end }}
+          </div>
+          <div class="list-card-meta muted-text">
+            {{ if .Organization }}{{ .Organization }} • {{ end }}Tier {{ .Tier }} (every {{ .ContactInterval }} days){{ if .LastContactDate }} • Last contact: {{ .LastContactDate }}{{ end }}
+          </div>
+        </div>
       </div>
     </a>
   </div>

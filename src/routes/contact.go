@@ -29,6 +29,78 @@ func isValidPhone(phone string) bool {
 	return len(digits) >= 7
 }
 
+type ActivityGridWeek struct {
+	WeekStart  time.Time
+	WeekEnd    time.Time
+	WeekNumber int
+	Count      int
+	Level      int
+	Tooltip    string
+}
+
+type ActivityGridYear struct {
+	Year  int
+	Weeks []ActivityGridWeek
+}
+
+func isoWeekStart(year int) time.Time {
+	jan4 := time.Date(year, time.January, 4, 0, 0, 0, 0, time.UTC)
+	weekday := int(jan4.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	return jan4.AddDate(0, 0, -(weekday - 1))
+}
+
+func activityLevel(count int) int {
+	switch {
+	case count == 0:
+		return 0
+	case count <= 2:
+		return 1
+	case count <= 5:
+		return 2
+	case count <= 9:
+		return 3
+	default:
+		return 4
+	}
+}
+
+func activityLabel(count int) string {
+	if count == 1 {
+		return "activity"
+	}
+	return "activities"
+}
+
+func buildActivityGrid(weekCounts map[string]int, currentYear int, yearCount int) []ActivityGridYear {
+	rows := make([]ActivityGridYear, 0, yearCount)
+	startYear := currentYear - yearCount + 1
+	for year := currentYear; year >= startYear; year-- {
+		yearStart := isoWeekStart(year)
+		weeks := make([]ActivityGridWeek, 0, 52)
+		for i := 0; i < 52; i++ {
+			weekStart := yearStart.AddDate(0, 0, 7*i)
+			weekKey := weekStart.Format("2006-01-02")
+			count := weekCounts[weekKey]
+			_, weekNumber := weekStart.ISOWeek()
+			weekEnd := weekStart.AddDate(0, 0, 6)
+			tooltip := fmt.Sprintf("%d-W%02d (%s – %s): %d %s", year, weekNumber, weekStart.Format("Jan 2, 2006"), weekEnd.Format("Jan 2, 2006"), count, activityLabel(count))
+			weeks = append(weeks, ActivityGridWeek{
+				WeekStart:  weekStart,
+				WeekEnd:    weekEnd,
+				WeekNumber: weekNumber,
+				Count:      count,
+				Level:      activityLevel(count),
+				Tooltip:    tooltip,
+			})
+		}
+		rows = append(rows, ActivityGridYear{Year: year, Weeks: weeks})
+	}
+	return rows
+}
+
 // NewContactForm renders the add contact form
 func NewContactForm(c flamego.Context, t template.Template, data template.Data) {
 	data["IsContacts"] = true
@@ -216,6 +288,19 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 	data["IsContacts"] = true
 	data["TierLower"] = strings.ToLower(string(contact.Tier))
 	data["CardDAVContact"] = contact.CardDAVContact
+
+	if !contact.IsService && !privateMode {
+		currentYear := time.Now().UTC().Year()
+		start := isoWeekStart(currentYear - 4)
+		end := isoWeekStart(currentYear + 1)
+		weekCounts, err := db.ListContactWeeklyActivityCounts(c.Request().Context(), contactID, start, end)
+		if err != nil {
+			log.Printf("Error fetching activity grid for contact %s: %v", contactID, err)
+			weekCounts = map[string]int{}
+		}
+		data["ActivityGrid"] = buildActivityGrid(weekCounts, currentYear, 5)
+	}
+
 	if contact.IsService {
 		data["Breadcrumbs"] = []BreadcrumbItem{
 			{Name: "Contacts", URL: "/contacts", IsCurrent: false},
@@ -601,6 +686,7 @@ func AddEmail(c flamego.Context, s session.Session) {
 
 	form := c.Request().Form
 	email := strings.TrimSpace(form.Get("email"))
+	isPrimary := isPrimaryChecked(form.Get("is_primary"))
 	if email == "" {
 		SetErrorFlash(s, "Email address is required")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
@@ -611,8 +697,6 @@ func AddEmail(c flamego.Context, s session.Session) {
 	if emailType == "" {
 		emailType = db.EmailPersonal
 	}
-
-	isPrimary := form.Get("is_primary") == "on"
 
 	// Check if contact is linked to CardDAV first
 	contact, err := db.GetContact(c.Request().Context(), contactID)
@@ -626,6 +710,11 @@ func AddEmail(c flamego.Context, s session.Session) {
 	if contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
 		// For CardDAV-linked contacts, add to contact in memory and push to CardDAV
 		// The sync will bring it back with source='carddav'
+		if isPrimary {
+			for i := range contact.Emails {
+				contact.Emails[i].IsPrimary = false
+			}
+		}
 		newEmail := db.ContactEmail{
 			Email:     email,
 			EmailType: emailType,
@@ -695,7 +784,7 @@ func AddPhone(c flamego.Context, s session.Session) {
 		phoneType = db.PhoneCell
 	}
 
-	isPrimary := form.Get("is_primary") == "on"
+	isPrimary := isPrimaryChecked(form.Get("is_primary"))
 
 	// Check if contact is linked to CardDAV first
 	contact, err := db.GetContact(c.Request().Context(), contactID)
@@ -709,6 +798,11 @@ func AddPhone(c flamego.Context, s session.Session) {
 	if contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
 		// For CardDAV-linked contacts, add to contact in memory and push to CardDAV
 		// The sync will bring it back with source='carddav'
+		if isPrimary {
+			for i := range contact.Phones {
+				contact.Phones[i].IsPrimary = false
+			}
+		}
 		newPhone := db.ContactPhone{
 			Phone:     phone,
 			PhoneType: phoneType,
@@ -771,11 +865,10 @@ func AddURL(c flamego.Context) {
 	}
 
 	input := db.AddURLInput{
-		ContactID: contactID,
-		URL:       url,
-		URLType:   urlType,
-		Label:     getOptionalString(form.Get("label")),
-		Username:  getOptionalString(form.Get("username")),
+		ContactID:   contactID,
+		URL:         url,
+		URLType:     urlType,
+		Description: getOptionalString(form.Get("description")),
 	}
 
 	err := db.AddURL(c.Request().Context(), input)
@@ -860,7 +953,7 @@ func UpdateEmail(c flamego.Context, s session.Session) {
 	form := c.Request().Form
 	email := strings.TrimSpace(form.Get("email"))
 	emailType := db.EmailType(form.Get("email_type"))
-	isPrimary := form.Get("is_primary") == "on"
+	isPrimary := isPrimaryChecked(form.Get("is_primary"))
 
 	if email == "" {
 		SetErrorFlash(s, "Email address is required")
@@ -885,6 +978,18 @@ func UpdateEmail(c flamego.Context, s session.Session) {
 	// If contact is linked to CardDAV, push the update
 	contact, err := db.GetContact(c.Request().Context(), contactID)
 	if err == nil && contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
+		if isPrimary {
+			for i := range contact.Emails {
+				contact.Emails[i].IsPrimary = contact.Emails[i].ID.String() == emailID
+			}
+		} else {
+			for i := range contact.Emails {
+				if contact.Emails[i].ID.String() == emailID {
+					contact.Emails[i].IsPrimary = false
+					break
+				}
+			}
+		}
 		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
 			log.Printf("Error pushing email update to CardDAV: %v", err)
 		}
@@ -913,7 +1018,7 @@ func UpdatePhone(c flamego.Context, s session.Session) {
 	form := c.Request().Form
 	phone := strings.TrimSpace(form.Get("phone"))
 	phoneType := db.PhoneType(form.Get("phone_type"))
-	isPrimary := form.Get("is_primary") == "on"
+	isPrimary := isPrimaryChecked(form.Get("is_primary"))
 
 	if phone == "" {
 		SetErrorFlash(s, "Phone number is required")
@@ -944,6 +1049,18 @@ func UpdatePhone(c flamego.Context, s session.Session) {
 	// If contact is linked to CardDAV, push the update
 	contact, err := db.GetContact(c.Request().Context(), contactID)
 	if err == nil && contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
+		if isPrimary {
+			for i := range contact.Phones {
+				contact.Phones[i].IsPrimary = contact.Phones[i].ID.String() == phoneID
+			}
+		} else {
+			for i := range contact.Phones {
+				if contact.Phones[i].ID.String() == phoneID {
+					contact.Phones[i].IsPrimary = false
+					break
+				}
+			}
+		}
 		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
 			log.Printf("Error pushing phone update to CardDAV: %v", err)
 		}
@@ -1025,6 +1142,11 @@ func AddLog(c flamego.Context) {
 	}
 
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+}
+
+func isPrimaryChecked(value string) bool {
+	value = strings.TrimSpace(strings.ToLower(value))
+	return value == "on" || value == "true" || value == "1"
 }
 
 // DeleteLog handles deleting a contact log

@@ -6,9 +6,11 @@ package routes
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/gob"
 	"encoding/json"
 	"log"
+	"math/big"
 	"net/http"
 	"strings"
 
@@ -303,6 +305,59 @@ func ViewPublicNote(c flamego.Context, s session.Session, t template.Template, d
 	data["HideNav"] = true
 
 	t.HTML(http.StatusOK, "note_public")
+}
+
+// ZettelkastenList renders the list of all zettelkasten notes.
+func ZettelkastenList(c flamego.Context, t template.Template, data template.Data) {
+	ctx := c.Request().Context()
+
+	notes, err := db.ListZKNotes(ctx)
+	if err != nil {
+		log.Printf("Error listing zettelkasten notes: %v", err)
+		data["Error"] = "Failed to load zettelkasten notes"
+	} else {
+		data["Notes"] = notes
+		data["NoteCount"] = len(notes)
+	}
+
+	data["IsZettelkasten"] = true
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "Zettelkasten", URL: "/zk", IsCurrent: false},
+		{Name: "All Pages", URL: "", IsCurrent: true},
+	}
+
+	t.HTML(http.StatusOK, "zettelkasten_list")
+}
+
+// ZettelkastenRandom redirects to a random zettelkasten note.
+func ZettelkastenRandom(c flamego.Context, s session.Session) {
+	ctx := c.Request().Context()
+
+	notes, err := db.ListZKNotes(ctx)
+	if err != nil {
+		log.Printf("Error listing zettelkasten notes: %v", err)
+		SetErrorFlash(s, "Failed to load zettelkasten notes")
+		c.Redirect("/zk", http.StatusSeeOther)
+		return
+	}
+
+	if len(notes) == 0 {
+		SetInfoFlash(s, "No zettelkasten pages available")
+		c.Redirect("/zk", http.StatusSeeOther)
+		return
+	}
+
+	indexMax := big.NewInt(int64(len(notes)))
+	index, err := rand.Int(rand.Reader, indexMax)
+	if err != nil {
+		log.Printf("Error picking random zettelkasten note: %v", err)
+		SetErrorFlash(s, "Failed to pick a random page")
+		c.Redirect("/zk", http.StatusSeeOther)
+		return
+	}
+
+	note := notes[index.Int64()]
+	c.Redirect("/zk/"+note.ID, http.StatusSeeOther)
 }
 
 type zkChatRequest struct {

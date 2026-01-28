@@ -33,8 +33,8 @@ Prefer Nix-based commands when available.
   - `cd src && go build -o ../bin/groundwave`
 - Local run (from Go module):
   - `cd src && go run .`
-- Start web server (built binary):
-  - `./groundwave start --database-url "postgres://user:pass@localhost:5432/groundwave"`
+- Start web server (automatically builds if needed):
+  - `nix run .#default --option builders '' --option substituters '' -- start`
 
 ## Test Commands
 
@@ -74,6 +74,13 @@ Caveat:
 - SQL blocks using dollar-quoted strings (`DO $$ ... $$`) must be wrapped with:
   - `-- +goose StatementBegin`
   - `-- +goose StatementEnd`
+
+Also `-- +goose Up` and `-- +goose Down` are required.
+Before creating a new migration make sure the number used in file is higher
+(+1) more than the previous highest.
+
+Don't rely on initial schema (migration 0001), check all schema migrations that
+touch a specific table/column.
 
 ## Code Style Guidelines (Go)
 

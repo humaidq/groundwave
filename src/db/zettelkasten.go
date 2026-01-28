@@ -43,8 +43,9 @@ type ZKNote struct {
 // ZKNoteSummary represents a lightweight note listing
 // for selection in the zettelkasten chat UI.
 type ZKNoteSummary struct {
-	ID    string
-	Title string
+	ID       string
+	Title    string
+	IsPublic bool
 }
 
 // ZKChatNote represents a note with raw org content
@@ -351,8 +352,9 @@ func ListZKNotes(ctx context.Context) ([]ZKNoteSummary, error) {
 		}
 
 		notes = append(notes, ZKNoteSummary{
-			ID:    id,
-			Title: utils.ExtractTitle(content),
+			ID:       id,
+			Title:    utils.ExtractTitle(content),
+			IsPublic: utils.IsPublicAccess(content),
 		})
 	}
 
