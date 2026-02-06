@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -746,17 +747,65 @@ type AddURLInput struct {
 	Description *string
 }
 
+// NormalizeLinkedInURL normalizes a LinkedIn profile URL to a canonical form.
+// It strips www prefix, ensures https scheme, and extracts just the username.
+// Returns the normalized URL and true if valid, or empty string and false if invalid.
+func NormalizeLinkedInURL(rawURL string) (string, bool) {
+	trimmed := strings.TrimSpace(rawURL)
+	if trimmed == "" {
+		return "", false
+	}
+
+	parsed, err := url.Parse(trimmed)
+	if err != nil || parsed.Host == "" {
+		// Try adding https:// if no scheme present
+		parsed, err = url.Parse("https://" + trimmed)
+		if err != nil {
+			return "", false
+		}
+	}
+
+	host := strings.ToLower(parsed.Host)
+	// Strip www. prefix (handles both www.linkedin.com and linkedin.com)
+	host = strings.TrimPrefix(host, "www.")
+	if host != "linkedin.com" {
+		return "", false
+	}
+
+	path := strings.TrimRight(parsed.Path, "/")
+	path = strings.ToLower(path)
+	if !strings.HasPrefix(path, "/in/") {
+		return "", false
+	}
+
+	// Extract username from path
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 2 || parts[1] == "" {
+		return "", false
+	}
+
+	return "https://linkedin.com/in/" + parts[1], true
+}
+
 // AddURL adds a new URL to a contact
 func AddURL(ctx context.Context, input AddURLInput) error {
 	if pool == nil {
 		return fmt.Errorf("database connection not initialized")
 	}
 
+	// Normalize LinkedIn URLs to ensure consistent storage
+	urlToStore := input.URL
+	if input.URLType == URLLinkedIn {
+		if normalized, ok := NormalizeLinkedInURL(input.URL); ok {
+			urlToStore = normalized
+		}
+	}
+
 	query := `
 		INSERT INTO contact_urls (contact_id, url, url_type, description)
 		VALUES ($1, $2, $3, $4)
 	`
-	_, err := pool.Exec(ctx, query, input.ContactID, input.URL, input.URLType, input.Description)
+	_, err := pool.Exec(ctx, query, input.ContactID, urlToStore, input.URLType, input.Description)
 	if err != nil {
 		return fmt.Errorf("failed to add URL: %w", err)
 	}

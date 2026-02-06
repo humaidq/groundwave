@@ -614,24 +614,48 @@ type ZettelCommentWithNote struct {
 type InventoryStatus string
 
 const (
-	InventoryStatusActive   InventoryStatus = "active"
-	InventoryStatusStored   InventoryStatus = "stored"
-	InventoryStatusDamaged  InventoryStatus = "damaged"
-	InventoryStatusGiven    InventoryStatus = "given"
-	InventoryStatusDisposed InventoryStatus = "disposed"
-	InventoryStatusLost     InventoryStatus = "lost"
+	InventoryStatusActive              InventoryStatus = "active"
+	InventoryStatusStored              InventoryStatus = "stored"
+	InventoryStatusDamaged             InventoryStatus = "damaged"
+	InventoryStatusMaintenanceRequired InventoryStatus = "maintenance_required"
+	InventoryStatusGiven               InventoryStatus = "given"
+	InventoryStatusDisposed            InventoryStatus = "disposed"
+	InventoryStatusLost                InventoryStatus = "lost"
 )
+
+func InventoryStatusLabel(status InventoryStatus) string {
+	switch status {
+	case InventoryStatusActive:
+		return "Active"
+	case InventoryStatusStored:
+		return "Stored"
+	case InventoryStatusDamaged:
+		return "Damaged"
+	case InventoryStatusMaintenanceRequired:
+		return "Maintenance Required"
+	case InventoryStatusGiven:
+		return "Given"
+	case InventoryStatusDisposed:
+		return "Disposed"
+	case InventoryStatusLost:
+		return "Lost"
+	default:
+		return string(status)
+	}
+}
 
 // InventoryItem represents an item in the inventory system
 type InventoryItem struct {
-	ID          int             `db:"id"`           // Numeric ID for DB relationships
-	InventoryID string          `db:"inventory_id"` // Formatted ID (GW-00001)
-	Name        string          `db:"name"`
-	Location    *string         `db:"location"`
-	Description *string         `db:"description"`
-	Status      InventoryStatus `db:"status"`
-	CreatedAt   time.Time       `db:"created_at"`
-	UpdatedAt   time.Time       `db:"updated_at"`
+	ID             int             `db:"id"`           // Numeric ID for DB relationships
+	InventoryID    string          `db:"inventory_id"` // Formatted ID (GW-00001)
+	Name           string          `db:"name"`
+	Location       *string         `db:"location"`
+	Description    *string         `db:"description"`
+	Status         InventoryStatus `db:"status"`
+	InspectionDate *time.Time      `db:"inspection_date"`
+	InspectionDue  bool            `db:"inspection_due"`
+	CreatedAt      time.Time       `db:"created_at"`
+	UpdatedAt      time.Time       `db:"updated_at"`
 }
 
 // InventoryComment represents a comment on an inventory item

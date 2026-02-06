@@ -23,6 +23,7 @@ require (
 	github.com/urfave/cli/v3 v3.6.1
 	go.mau.fi/whatsmeow v0.0.0-20260107124630-ccfa04f8e445
 	golang.org/x/crypto v0.46.0
+	golang.org/x/net v0.48.0
 )
 
 require (
@@ -65,7 +66,6 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/exp v0.0.0-20251209150349-8475f28825e9 // indirect
 	golang.org/x/image v0.28.0 // indirect
-	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.32.0 // indirect

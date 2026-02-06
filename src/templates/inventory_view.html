@@ -20,7 +20,12 @@
 {{ end }}
 
 <div class="page-header">
-  <h2>{{ .Item.InventoryID }} - {{ .Item.Name }} <span class="status-badge status-{{ .Item.Status }}">{{ .Item.Status }}</span></h2>
+  <div class="page-header-stack">
+    <h2>{{ .Item.InventoryID }} - {{ .Item.Name }}</h2>
+    <div class="page-header-meta">
+      <span class="status-badge status-{{ .Item.Status }}">{{ inventoryStatusLabel .Item.Status }}</span>
+    </div>
+  </div>
   <div class="page-header-actions">
     <a href="/inventory/{{ .Item.InventoryID }}/edit" class="btn">Edit</a>
     <form method="POST" action="/inventory/{{ .Item.InventoryID }}/delete" class="inline-form" onsubmit="return confirm('Delete this inventory item? This cannot be undone.');">
@@ -37,6 +42,12 @@
     <div class="detail-item">
       <span class="detail-label">Location:</span>
       <span class="detail-value">{{ . }}</span>
+    </div>
+    {{ end }}
+    {{ with .Item.InspectionDate }}
+    <div class="detail-item">
+      <span class="detail-label">Inspection Date:</span>
+      <span class="detail-value">{{ .Format "Jan 2, 2006" }}{{ if $.Item.InspectionDue }} <span class="status-badge status-inspection_due">Inspection Due</span>{{ end }}</span>
     </div>
     {{ end }}
     <div class="detail-item">
@@ -63,7 +74,7 @@
         <a href="/inventory/{{ $.Item.InventoryID }}/file/{{ .Name }}" class="file-link" target="_blank">
           📄 {{ .Name }}
         </a>
-        <span class="file-meta">{{ .Size }} bytes | {{ .ModTime.Format "Jan 2, 2006" }}</span>
+        <span class="file-meta">{{ formatFileSize .Size }} | {{ .ModTime.Format "Jan 2, 2006" }}</span>
       </li>
       {{ end }}
     </ul>

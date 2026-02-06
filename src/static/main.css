@@ -771,6 +771,24 @@ code:not(pre code) {
   margin-bottom: 1rem;
 }
 
+.page-header-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.page-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.page-header-meta .status-badge {
+  margin-left: 0;
+}
+
 .page-header h2 {
   margin: 0;
 }
@@ -1364,14 +1382,20 @@ code:not(pre code) {
   background-color: #f9f9f9;
 }
 
+.status-badge,
 .contact-tier {
   display: inline-block;
-  padding: 2px 8px;
+  padding: 0.1rem 0.4rem;
   border-radius: 0;
   border: 1px solid transparent;
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: 0.85em;
+  line-height: 1.2;
   text-align: center;
+  vertical-align: middle;
+}
+
+.contact-tier {
   min-width: 25px;
 }
 
@@ -2848,44 +2872,56 @@ code:not(pre code) {
 
 /* Inventory Status Badges */
 .status-badge {
-  display: inline-block;
-  padding: 0.15rem 0.5rem;
-  border-radius: 0;
-  font-size: 0.75rem;
-  font-weight: 600;
   text-transform: capitalize;
   margin-left: 0.5rem;
-  vertical-align: middle;
 }
 
 .status-active {
   background-color: #28a745;
   color: white;
+  border-color: #1e7e34;
 }
 
 .status-stored {
   background-color: #17a2b8;
   color: white;
+  border-color: #117a8b;
 }
 
 .status-damaged {
   background-color: #ffc107;
   color: #333;
+  border-color: #d39e00;
+}
+
+.status-maintenance_required {
+  background-color: #fd7e14;
+  color: #212529;
+  border-color: #d36810;
+}
+
+.status-inspection_due {
+  background-color: #c2410c;
+  color: #fff;
+  border-color: #9a3412;
 }
 
 .status-given {
   background-color: #6f42c1;
   color: white;
+  border-color: #59359c;
 }
 
 .status-disposed {
   background-color: #6c757d;
   color: white;
+  border-color: #565e64;
 }
 
 .status-lost {
   background-color: #dc3545;
   color: white;
+  border-color: #b02a37;
 }
 
 /* Welcome Actions */
@@ -3866,6 +3902,11 @@ code:not(pre code) {
   .status-lost {
     background-color: #bb2d3b;
   }
+
+  .status-inspection_due {
+    background-color: #f97316;
+    color: #1f2937;
+  }
 }
 
 /* Dark mode support for WhatsApp */
@@ -4040,5 +4081,39 @@ code:not(pre code) {
 
   .backlinks-list a {
     color: #acbbf9;
+  }
+}
+
+@media print {
+  body {
+    background-color: #fff;
+  }
+
+  main {
+    background-color: #fff;
+  }
+
+  .navbar,
+  .breadcrumb,
+  .zk-header,
+  .zk-comment-form,
+  .cache-info,
+  .log-delete-form,
+  .btn-delete,
+  .page-header-actions,
+  .add-item-details,
+  .add-item-form,
+  .item-delete-form,
+  .inline-edit-details,
+  .btn-edit,
+  .contact-social-links,
+  .contact-social-link,
+  .tag-pill-delete-form,
+  .tag-pill-delete-btn,
+  .header-container,
+  .groundwave-header,
+  .offline-bar,
+  .alert {
+    display: none !important;
   }
 }

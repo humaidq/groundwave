@@ -59,6 +59,13 @@
       </select>
       <p class="help-text">Current status of this item.</p>
     </div>
+
+    <div class="form-group">
+      <label for="inspection_date" class="item-title">Inspection Date</label>
+      <input type="date" name="inspection_date" id="inspection_date" class="form-item"
+             value="{{ if .FormData }}{{ .FormData.Get "inspection_date" }}{{ end }}">
+      <p class="help-text">Optional. Next inspection due date.</p>
+    </div>
   </div>
 
   <div class="form-actions">

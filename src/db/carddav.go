@@ -622,11 +622,17 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 
 	preferredPhone := normalizeCardDAVPhone(preferredPhoneValue(cardDAVContact.Phones))
 	var insertedPhones []string
+	seenPhones := make(map[string]bool)
 	for _, phone := range cardDAVContact.Phones {
 		normalizedPhone := normalizeCardDAVPhone(phone.Phone)
 		if normalizedPhone == "" {
 			continue
 		}
+		// Skip duplicate phone numbers (vCards can have the same number with different TYPE params)
+		if seenPhones[normalizedPhone] {
+			continue
+		}
+		seenPhones[normalizedPhone] = true
 		// Map CardDAV phone type to database enum
 		phoneType := "other"
 		switch phone.Type {

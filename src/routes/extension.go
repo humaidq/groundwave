@@ -136,7 +136,7 @@ func ExtensionLinkedInLookup(c flamego.Context) {
 
 	normalizedLookup := make(map[string]struct{})
 	for _, rawURL := range request.URLs {
-		normalized, ok := normalizeLinkedInURL(rawURL)
+		normalized, ok := db.NormalizeLinkedInURL(rawURL)
 		if !ok {
 			continue
 		}
@@ -152,7 +152,7 @@ func ExtensionLinkedInLookup(c flamego.Context) {
 
 	storedNormalized := make(map[string]string)
 	for _, entry := range storedURLs {
-		normalized, ok := normalizeLinkedInURL(entry.URL)
+		normalized, ok := db.NormalizeLinkedInURL(entry.URL)
 		if !ok {
 			continue
 		}
@@ -253,7 +253,7 @@ func ExtensionLinkedInAssign(c flamego.Context) {
 		return
 	}
 
-	normalized, ok := normalizeLinkedInURL(request.URL)
+	normalized, ok := db.NormalizeLinkedInURL(request.URL)
 	if !ok {
 		c.ResponseWriter().WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "invalid LinkedIn URL"})
@@ -297,40 +297,6 @@ func generateExtensionToken() (string, error) {
 		return "", fmt.Errorf("failed to generate token: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(buffer), nil
-}
-
-func normalizeLinkedInURL(rawURL string) (string, bool) {
-	trimmed := strings.TrimSpace(rawURL)
-	if trimmed == "" {
-		return "", false
-	}
-
-	parsed, err := url.Parse(trimmed)
-	if err != nil || parsed.Host == "" {
-		parsed, err = url.Parse("https://" + trimmed)
-		if err != nil {
-			return "", false
-		}
-	}
-
-	host := strings.ToLower(parsed.Host)
-	host = strings.TrimPrefix(host, "www.")
-	if host != "linkedin.com" {
-		return "", false
-	}
-
-	path := strings.TrimRight(parsed.Path, "/")
-	path = strings.ToLower(path)
-	if !strings.HasPrefix(path, "/in/") {
-		return "", false
-	}
-
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	if len(parts) < 2 || parts[1] == "" {
-		return "", false
-	}
-
-	return "https://linkedin.com/in/" + parts[1], true
 }
 
 func addExtensionCORSHeaders(c flamego.Context) {

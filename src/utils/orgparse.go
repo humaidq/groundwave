@@ -5,6 +5,7 @@
 package utils
 
 import (
+	"bytes"
 	"fmt"
 	"html"
 	"regexp"
@@ -12,6 +13,8 @@ import (
 	"time"
 
 	"github.com/niklasfasching/go-org/org"
+	nethtml "golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 )
 
 // ParseOrgToHTML converts org-mode content to HTML
@@ -67,7 +70,93 @@ func ParseOrgToHTMLWithBasePath(content string, basePath string) (string, error)
 		return "", fmt.Errorf("failed to render HTML: %w", err)
 	}
 
-	return renderedHTML, nil
+	annotatedHTML, err := addExternalLinkPrefix(renderedHTML)
+	if err != nil {
+		return "", fmt.Errorf("failed to annotate external links: %w", err)
+	}
+
+	return annotatedHTML, nil
+}
+
+var internalLinkPrefixes = []string{"/zk", "/note", "/groundwave"}
+
+func addExternalLinkPrefix(htmlBody string) (string, error) {
+	if strings.TrimSpace(htmlBody) == "" {
+		return htmlBody, nil
+	}
+
+	container := &nethtml.Node{Type: nethtml.ElementNode, Data: "div", DataAtom: atom.Div}
+	nodes, err := nethtml.ParseFragment(strings.NewReader(htmlBody), container)
+	if err != nil {
+		return "", err
+	}
+
+	for _, node := range nodes {
+		container.AppendChild(node)
+	}
+
+	annotateExternalLinks(container)
+
+	var buffer bytes.Buffer
+	for child := container.FirstChild; child != nil; child = child.NextSibling {
+		if err := nethtml.Render(&buffer, child); err != nil {
+			return "", err
+		}
+	}
+
+	return buffer.String(), nil
+}
+
+func annotateExternalLinks(node *nethtml.Node) {
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		if child.Type == nethtml.ElementNode && child.Data == "a" {
+			href := ""
+			for _, attr := range child.Attr {
+				if attr.Key == "href" {
+					href = attr.Val
+					break
+				}
+			}
+
+			if isExternalLink(href) && !linkHasPrefix(child) {
+				prefixNode := &nethtml.Node{Type: nethtml.TextNode, Data: "🗗 "}
+				if child.FirstChild != nil {
+					child.InsertBefore(prefixNode, child.FirstChild)
+				} else {
+					child.AppendChild(prefixNode)
+				}
+			}
+		}
+
+		annotateExternalLinks(child)
+	}
+}
+
+func linkHasPrefix(link *nethtml.Node) bool {
+	if link.FirstChild == nil || link.FirstChild.Type != nethtml.TextNode {
+		return false
+	}
+
+	return strings.HasPrefix(link.FirstChild.Data, "🗗")
+}
+
+func isExternalLink(href string) bool {
+	href = strings.TrimSpace(href)
+	if href == "" {
+		return false
+	}
+
+	if strings.HasPrefix(href, "#") {
+		return false
+	}
+
+	for _, prefix := range internalLinkPrefixes {
+		if strings.HasPrefix(href, prefix) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // IsPublicAccess checks for #+access: public in org content.

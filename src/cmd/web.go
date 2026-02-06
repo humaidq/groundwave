@@ -134,6 +134,23 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 			}
 			return filter
 		},
+		"inventoryStatusLabel": func(status db.InventoryStatus) string {
+			return db.InventoryStatusLabel(status)
+		},
+		"formatFileSize": func(size int64) string {
+			if size < 1000 {
+				return fmt.Sprintf("%d bytes", size)
+			}
+			units := []string{"kB", "MB", "GB", "TB", "PB"}
+			value := float64(size)
+			unitIndex := -1
+			for value >= 1000 && unitIndex < len(units)-1 {
+				value /= 1000
+				unitIndex++
+			}
+			formatted := strings.TrimSuffix(fmt.Sprintf("%.1f", value), ".0")
+			return fmt.Sprintf("%s %s", formatted, units[unitIndex])
+		},
 		"truncateBreadcrumb": func(title string) string {
 			const maxLength = 40
 			if title == "" {

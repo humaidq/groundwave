@@ -85,15 +85,19 @@
     <a href="/inventory/{{ .InventoryID }}" class="list-card-link">
       <div class="list-card-title">
         <span class="inventory-id">{{ .InventoryID }}</span> - {{ .Name }}
-        {{ if ne .Status "active" }}<span class="status-badge status-{{ .Status }}">{{ .Status }}</span>{{ end }}
+        {{ if ne .Status "active" }}<span class="status-badge status-{{ .Status }}">{{ inventoryStatusLabel .Status }}</span>{{ end }}
+        {{ if .InspectionDue }}<span class="status-badge status-inspection_due">Inspection Due</span>{{ end }}
       </div>
-      {{ if or .Location .Description }}
+      {{ if or .Location .Description .InspectionDate }}
       <div class="list-card-meta">
         {{ with .Location }}
         <span class="list-card-location">📍 {{ . }}</span>
         {{ end }}
         {{ with .Description }}
         <span class="list-card-description">{{ . }}</span>
+        {{ end }}
+        {{ with .InspectionDate }}
+        <span class="list-card-description">Inspection: {{ .Format "Jan 2, 2006" }}</span>
         {{ end }}
       </div>
       {{ end }}

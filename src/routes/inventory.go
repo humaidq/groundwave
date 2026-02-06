@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/flamego/flamego"
 	"github.com/flamego/session"
@@ -108,12 +109,13 @@ type InventoryStatusOption struct {
 // getInventoryStatusOptions returns all available inventory status options
 func getInventoryStatusOptions() []InventoryStatusOption {
 	return []InventoryStatusOption{
-		{Value: string(db.InventoryStatusActive), Label: "Active"},
-		{Value: string(db.InventoryStatusStored), Label: "Stored"},
-		{Value: string(db.InventoryStatusDamaged), Label: "Damaged"},
-		{Value: string(db.InventoryStatusGiven), Label: "Given"},
-		{Value: string(db.InventoryStatusDisposed), Label: "Disposed"},
-		{Value: string(db.InventoryStatusLost), Label: "Lost"},
+		{Value: string(db.InventoryStatusActive), Label: db.InventoryStatusLabel(db.InventoryStatusActive)},
+		{Value: string(db.InventoryStatusStored), Label: db.InventoryStatusLabel(db.InventoryStatusStored)},
+		{Value: string(db.InventoryStatusDamaged), Label: db.InventoryStatusLabel(db.InventoryStatusDamaged)},
+		{Value: string(db.InventoryStatusMaintenanceRequired), Label: db.InventoryStatusLabel(db.InventoryStatusMaintenanceRequired)},
+		{Value: string(db.InventoryStatusGiven), Label: db.InventoryStatusLabel(db.InventoryStatusGiven)},
+		{Value: string(db.InventoryStatusDisposed), Label: db.InventoryStatusLabel(db.InventoryStatusDisposed)},
+		{Value: string(db.InventoryStatusLost), Label: db.InventoryStatusLabel(db.InventoryStatusLost)},
 	}
 }
 
@@ -167,10 +169,22 @@ func CreateInventoryItem(c flamego.Context, s session.Session, t template.Templa
 		return
 	}
 
+	var inspectionDate *time.Time
+	inspectionDateStr := strings.TrimSpace(form.Get("inspection_date"))
+	if inspectionDateStr != "" {
+		parsedDate, err := time.Parse("2006-01-02", inspectionDateStr)
+		if err != nil {
+			SetErrorFlash(s, "Invalid inspection date")
+			c.Redirect("/inventory/new", http.StatusSeeOther)
+			return
+		}
+		inspectionDate = &parsedDate
+	}
+
 	ctx := c.Request().Context()
 
 	// Create item
-	inventoryID, err := db.CreateInventoryItem(ctx, name, location, description, status)
+	inventoryID, err := db.CreateInventoryItem(ctx, name, location, description, status, inspectionDate)
 	if err != nil {
 		log.Printf("Error creating inventory item: %v", err)
 		SetErrorFlash(s, "Failed to create inventory item")
@@ -246,9 +260,21 @@ func UpdateInventoryItem(c flamego.Context, s session.Session, t template.Templa
 		return
 	}
 
+	var inspectionDate *time.Time
+	inspectionDateStr := strings.TrimSpace(form.Get("inspection_date"))
+	if inspectionDateStr != "" {
+		parsedDate, err := time.Parse("2006-01-02", inspectionDateStr)
+		if err != nil {
+			SetErrorFlash(s, "Invalid inspection date")
+			c.Redirect("/inventory/"+inventoryID+"/edit", http.StatusSeeOther)
+			return
+		}
+		inspectionDate = &parsedDate
+	}
+
 	ctx := c.Request().Context()
 
-	if err := db.UpdateInventoryItem(ctx, inventoryID, name, location, description, status); err != nil {
+	if err := db.UpdateInventoryItem(ctx, inventoryID, name, location, description, status, inspectionDate); err != nil {
 		log.Printf("Error updating inventory item: %v", err)
 		SetErrorFlash(s, "Failed to update inventory item")
 		c.Redirect("/inventory/"+inventoryID+"/edit", http.StatusSeeOther)
@@ -390,8 +416,9 @@ func isValidFilename(filename string) bool {
 func isValidInventoryStatus(s db.InventoryStatus) bool {
 	switch s {
 	case db.InventoryStatusActive, db.InventoryStatusStored,
-		db.InventoryStatusDamaged, db.InventoryStatusGiven,
-		db.InventoryStatusDisposed, db.InventoryStatusLost:
+		db.InventoryStatusDamaged, db.InventoryStatusMaintenanceRequired,
+		db.InventoryStatusGiven, db.InventoryStatusDisposed,
+		db.InventoryStatusLost:
 		return true
 	}
 	return false
