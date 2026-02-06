@@ -445,6 +445,8 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Get("/inventory/{id}/file/{filename}", routes.DownloadInventoryFile)
 
 		// Health tracking routes
+		f.Get("/health/break-glass", routes.BreakGlassForm)
+		f.Post("/health/break-glass", csrf.Validate, routes.BreakGlass)
 		f.Get("/health", routes.ListHealthProfiles)
 		f.Get("/health/new", routes.NewHealthProfileForm)
 		f.Post("/health/new", csrf.Validate, routes.CreateHealthProfile)
@@ -469,7 +471,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Post("/whatsapp/connect", csrf.Validate, routes.WhatsAppConnect)
 		f.Post("/whatsapp/disconnect", csrf.Validate, routes.WhatsAppDisconnect)
 		f.Get("/whatsapp/status", routes.WhatsAppStatusAPI)
-	}, routes.RequireAuth)
+	}, routes.RequireAuth, routes.RequireHealthReauth)
 
 	port := cmd.String("port")
 

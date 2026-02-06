@@ -27,29 +27,8 @@ func Login(c flamego.Context, s session.Session, t template.Template, data templ
 	password := c.Request().FormValue("password")
 	data["HeaderOnly"] = true
 
-	// Get credentials from environment variables
-	envUsername := os.Getenv("AUTH_USERNAME")
-	envPasswordHash := os.Getenv("AUTH_PASSWORD_HASH")
-
-	// Check if authentication is configured
-	if envUsername == "" || envPasswordHash == "" {
-		log.Println("Warning: AUTH_USERNAME or AUTH_PASSWORD_HASH not set")
-		data["Error"] = "Authentication not configured"
-		t.HTML(http.StatusUnauthorized, "login")
-		return
-	}
-
-	// Verify username
-	if username != envUsername {
-		data["Error"] = "Invalid username or password"
-		t.HTML(http.StatusUnauthorized, "login")
-		return
-	}
-
-	// Verify password against bcrypt hash
-	err := bcrypt.CompareHashAndPassword([]byte(envPasswordHash), []byte(password))
-	if err != nil {
-		data["Error"] = "Invalid username or password"
+	if msg, ok := validateCredentials(username, password); !ok {
+		data["Error"] = msg
 		t.HTML(http.StatusUnauthorized, "login")
 		return
 	}
@@ -66,6 +45,7 @@ func Login(c flamego.Context, s session.Session, t template.Template, data templ
 func Logout(s session.Session, c flamego.Context) {
 	s.Delete("authenticated")
 	s.Delete("username")
+	s.Delete(healthBreakGlassSessionKey)
 	c.Redirect("/login")
 }
 
@@ -77,4 +57,29 @@ func RequireAuth(s session.Session, c flamego.Context) {
 		return
 	}
 	c.Next()
+}
+
+func validateCredentials(username, password string) (string, bool) {
+	// Get credentials from environment variables
+	envUsername := os.Getenv("AUTH_USERNAME")
+	envPasswordHash := os.Getenv("AUTH_PASSWORD_HASH")
+
+	// Check if authentication is configured
+	if envUsername == "" || envPasswordHash == "" {
+		log.Println("Warning: AUTH_USERNAME or AUTH_PASSWORD_HASH not set")
+		return "Authentication not configured", false
+	}
+
+	// Verify username
+	if username != envUsername {
+		return "Invalid username or password", false
+	}
+
+	// Verify password against bcrypt hash
+	err := bcrypt.CompareHashAndPassword([]byte(envPasswordHash), []byte(password))
+	if err != nil {
+		return "Invalid username or password", false
+	}
+
+	return "", true
 }
