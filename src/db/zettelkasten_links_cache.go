@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"html/template"
-	"log"
 	"regexp"
 	"sort"
 	"strings"
@@ -101,7 +100,7 @@ func BuildBacklinkCache(ctx context.Context) error {
 }
 
 func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []string) error {
-	log.Println("Building backlink cache...")
+	logger.Info("Building backlink cache")
 	startTime := time.Now()
 
 	type orgFile struct {
@@ -135,7 +134,7 @@ func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []str
 			content, err = FetchOrgFile(ctx, file.Name)
 		}
 		if err != nil {
-			log.Printf("Skipping unreadable file %s: %v", file.Name, err)
+			logger.Warn("Skipping unreadable file", "file", file.Name, "error", err)
 			filesSkipped++
 			continue
 		}
@@ -194,7 +193,7 @@ func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []str
 	backlinkMutex.Unlock()
 
 	duration := time.Since(startTime)
-	log.Printf("Backlink cache built: %d files processed, %d skipped, %d backlink entries, took %v",
+	logger.Infof("Backlink cache built: %d files processed, %d skipped, %d backlink entries, took %v",
 		filesProcessed, filesSkipped, len(tempBacklinkCache), duration)
 
 	return nil
@@ -211,7 +210,7 @@ func BuildJournalCache(ctx context.Context) error {
 }
 
 func buildJournalCacheFromFiles(ctx context.Context, files []string) error {
-	log.Println("Building journal cache...")
+	logger.Info("Building journal cache")
 	startTime := time.Now()
 
 	tempCache := make(map[string]JournalEntry)
@@ -232,14 +231,14 @@ func buildJournalCacheFromFiles(ctx context.Context, files []string) error {
 
 		content, err := FetchDailyOrgFile(ctx, file)
 		if err != nil {
-			log.Printf("Skipping unreadable journal file %s: %v", file, err)
+			logger.Warn("Skipping unreadable journal file", "file", file, "error", err)
 			filesSkipped++
 			continue
 		}
 
 		htmlBody, err := utils.ParseOrgToHTML(content)
 		if err != nil {
-			log.Printf("Skipping journal file %s due to parse error: %v", file, err)
+			logger.Warn("Skipping journal file due to parse error", "file", file, "error", err)
 			filesSkipped++
 			continue
 		}
@@ -249,7 +248,7 @@ func buildJournalCacheFromFiles(ctx context.Context, files []string) error {
 		if previewContent != "" {
 			previewHTML, err = utils.ParseOrgToHTML(previewContent)
 			if err != nil {
-				log.Printf("Failed to parse journal preview %s: %v", file, err)
+				logger.Warn("Failed to parse journal preview", "file", file, "error", err)
 				previewHTML = ""
 			}
 		}
@@ -278,7 +277,7 @@ func buildJournalCacheFromFiles(ctx context.Context, files []string) error {
 	journalMutex.Unlock()
 
 	duration := time.Since(startTime)
-	log.Printf("Journal cache built: %d files processed, %d skipped, %d entries, took %v",
+	logger.Infof("Journal cache built: %d files processed, %d skipped, %d entries, took %v",
 		filesProcessed, filesSkipped, len(tempCache), duration)
 
 	return nil
@@ -295,7 +294,7 @@ func BuildZKTimelineNotesCache(ctx context.Context) error {
 }
 
 func buildZKTimelineNotesCacheFromFiles(ctx context.Context, files []string) error {
-	log.Println("Building zettelkasten timeline note cache...")
+	logger.Info("Building zettelkasten timeline note cache")
 	startTime := time.Now()
 
 	config, err := GetZKConfig()
@@ -329,7 +328,7 @@ func buildZKTimelineNotesCacheFromFiles(ctx context.Context, files []string) err
 
 		content, err := FetchOrgFile(ctx, file)
 		if err != nil {
-			log.Printf("Skipping unreadable note file %s: %v", file, err)
+			logger.Warn("Skipping unreadable note file", "file", file, "error", err)
 			filesSkipped++
 			continue
 		}
@@ -383,7 +382,7 @@ func buildZKTimelineNotesCacheFromFiles(ctx context.Context, files []string) err
 	zkNoteMutex.Unlock()
 
 	duration := time.Since(startTime)
-	log.Printf("Zettelkasten note cache built: %d files processed, %d skipped, %d dates, took %v",
+	logger.Infof("Zettelkasten note cache built: %d files processed, %d skipped, %d dates, took %v",
 		filesProcessed, filesSkipped, len(tempCache), duration)
 
 	return nil
@@ -567,7 +566,7 @@ func GetLastCacheBuildTime() time.Time {
 
 // RebuildZettelkastenCaches performs a single sweep to rebuild all cache layers.
 func RebuildZettelkastenCaches(ctx context.Context) error {
-	log.Println("Rebuilding zettelkasten caches...")
+	logger.Info("Rebuilding zettelkasten caches")
 	startTime := time.Now()
 
 	orgFiles, err := ListOrgFiles(ctx)
@@ -580,7 +579,7 @@ func RebuildZettelkastenCaches(ctx context.Context) error {
 		return fmt.Errorf("failed to list daily org files: %w", err)
 	}
 
-	log.Printf("Cache rebuild scan: %d org files, %d daily files", len(orgFiles), len(dailyFiles))
+	logger.Infof("Cache rebuild scan: %d org files, %d daily files", len(orgFiles), len(dailyFiles))
 
 	if err := buildBacklinkCacheFromFiles(ctx, orgFiles, dailyFiles); err != nil {
 		return err
@@ -592,7 +591,7 @@ func RebuildZettelkastenCaches(ctx context.Context) error {
 		return err
 	}
 
-	log.Printf("Cache rebuild completed in %v", time.Since(startTime))
+	logger.Infof("Cache rebuild completed in %v", time.Since(startTime))
 	return nil
 }
 
@@ -601,12 +600,12 @@ func RebuildZettelkastenCaches(ctx context.Context) error {
 func StartRebuildCacheWorker(ctx context.Context) {
 	go func() {
 		// Initial delay to let the application start up
-		log.Println("Cache rebuild worker starting in 5 seconds...")
+		logger.Info("Cache rebuild worker starting in 5 seconds")
 		time.Sleep(5 * time.Second)
 
 		// Initial cache build
 		if err := RebuildZettelkastenCaches(ctx); err != nil {
-			log.Printf("Error building initial caches: %v", err)
+			logger.Errorf("Error building initial caches: %v", err)
 		}
 
 		// Periodic refresh every 10 minutes
@@ -616,11 +615,11 @@ func StartRebuildCacheWorker(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("Cache rebuild worker shutting down")
+				logger.Info("Cache rebuild worker shutting down")
 				return
 			case <-ticker.C:
 				if err := RebuildZettelkastenCaches(ctx); err != nil {
-					log.Printf("Error refreshing caches: %v", err)
+					logger.Errorf("Error refreshing caches: %v", err)
 				}
 			}
 		}

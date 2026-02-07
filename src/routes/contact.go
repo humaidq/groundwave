@@ -7,7 +7,6 @@ package routes
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"regexp"
 	"strings"
@@ -122,7 +121,7 @@ func NewContactForm(c flamego.Context, t template.Template, data template.Data) 
 	// Fetch all tags for autocomplete
 	allTags, err := db.ListAllTags(c.Request().Context())
 	if err != nil {
-		log.Printf("Error fetching tags: %v", err)
+		logger.Error("Error fetching tags", "error", err)
 	} else {
 		data["AllTags"] = allTags
 	}
@@ -134,7 +133,7 @@ func NewContactForm(c flamego.Context, t template.Template, data template.Data) 
 func CreateContact(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	// Parse form data
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		data["Error"] = "Failed to parse form data"
 		t.HTML(http.StatusBadRequest, "contact_new")
 		return
@@ -153,7 +152,7 @@ func CreateContact(c flamego.Context, s session.Session, t template.Template, da
 		// Import from CardDAV
 		cardDAVContact, err := db.GetCardDAVContact(c.Request().Context(), *cardDAVUUID)
 		if err != nil {
-			log.Printf("Error fetching CardDAV contact: %v", err)
+			logger.Error("Error fetching CardDAV contact", "error", err)
 			data["Error"] = "Failed to fetch contact from CardDAV: " + err.Error()
 			t.HTML(http.StatusInternalServerError, "contact_new")
 			return
@@ -221,7 +220,7 @@ func CreateContact(c flamego.Context, s session.Session, t template.Template, da
 	// Create contact in database
 	contactID, err := db.CreateContact(c.Request().Context(), input)
 	if err != nil {
-		log.Printf("Error creating contact: %v", err)
+		logger.Error("Error creating contact", "error", err)
 		data["Error"] = "Failed to create contact: " + err.Error()
 		data["FormData"] = form
 		t.HTML(http.StatusInternalServerError, "contact_new")
@@ -233,13 +232,13 @@ func CreateContact(c flamego.Context, s session.Session, t template.Template, da
 	if tagName != "" {
 		err = db.AddTagToContact(c.Request().Context(), contactID, tagName)
 		if err != nil {
-			log.Printf("Error adding tag to contact: %v", err)
+			logger.Error("Error adding tag to contact", "error", err)
 			// Don't fail the whole operation, just log the error
 		}
 	}
 
 	// Redirect to contact view page on success
-	log.Printf("Successfully created contact: %s", contactID)
+	logger.Info("Successfully created contact", "contact_id", contactID)
 	SetSuccessFlash(s, "Contact created successfully")
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 }
@@ -255,7 +254,7 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 
 	contact, err := db.GetContact(c.Request().Context(), contactID)
 	if err != nil {
-		log.Printf("Error fetching contact %s: %v", contactID, err)
+		logger.Error("Error fetching contact", "contact_id", contactID, "error", err)
 		SetErrorFlash(s, "Contact not found")
 		c.Redirect("/contacts", http.StatusSeeOther)
 		return
@@ -265,13 +264,13 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 	if contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
 		err := db.SyncContactFromCardDAV(c.Request().Context(), contactID, *contact.CardDAVUUID)
 		if err != nil {
-			log.Printf("Error syncing contact %s from CardDAV: %v", contactID, err)
+			logger.Error("Error syncing contact from CardDAV", "contact_id", contactID, "error", err)
 			// Continue anyway, just log the error
 		} else {
 			// Reload contact after sync
 			contact, err = db.GetContact(c.Request().Context(), contactID)
 			if err != nil {
-				log.Printf("Error reloading contact %s after sync: %v", contactID, err)
+				logger.Error("Error reloading contact after sync", "contact_id", contactID, "error", err)
 			}
 		}
 	}
@@ -291,7 +290,7 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 		end := isoWeekStart(currentYear + 1)
 		weekCounts, err := db.ListContactWeeklyActivityCounts(c.Request().Context(), contactID, start, end)
 		if err != nil {
-			log.Printf("Error fetching activity grid for contact %s: %v", contactID, err)
+			logger.Error("Error fetching activity grid for contact", "contact_id", contactID, "error", err)
 			weekCounts = map[string]int{}
 		}
 		data["ActivityGrid"] = buildActivityGrid(weekCounts, currentYear, 5)
@@ -314,7 +313,7 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 	if contact.CallSign != nil && *contact.CallSign != "" {
 		qsos, err := db.GetQSOsByCallSign(c.Request().Context(), *contact.CallSign)
 		if err != nil {
-			log.Printf("Error fetching QSOs for call sign %s: %v", *contact.CallSign, err)
+			logger.Error("Error fetching QSOs for call sign", "call_sign", *contact.CallSign, "error", err)
 		} else {
 			data["QSOs"] = qsos
 		}
@@ -323,7 +322,7 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 	// Fetch all tags for autocomplete
 	allTags, err := db.ListAllTags(c.Request().Context())
 	if err != nil {
-		log.Printf("Error fetching tags: %v", err)
+		logger.Error("Error fetching tags", "error", err)
 	} else {
 		data["AllTags"] = allTags
 	}
@@ -342,7 +341,7 @@ func ViewContactChats(c flamego.Context, s session.Session, t template.Template,
 
 	contact, err := db.GetContact(c.Request().Context(), contactID)
 	if err != nil {
-		log.Printf("Error fetching contact %s: %v", contactID, err)
+		logger.Error("Error fetching contact", "contact_id", contactID, "error", err)
 		SetErrorFlash(s, "Contact not found")
 		c.Redirect("/contacts", http.StatusSeeOther)
 		return
@@ -355,13 +354,13 @@ func ViewContactChats(c flamego.Context, s session.Session, t template.Template,
 	}
 
 	if !HasSensitiveAccess(s, time.Now()) {
-		redirectToBreakGlass(c)
+		redirectToBreakGlass(c, s)
 		return
 	}
 
 	chats, err := db.GetContactChats(c.Request().Context(), contactID)
 	if err != nil {
-		log.Printf("Error fetching chats for contact %s: %v", contactID, err)
+		logger.Error("Error fetching chats for contact", "contact_id", contactID, "error", err)
 	}
 
 	data["Contact"] = contact
@@ -387,7 +386,7 @@ func AddContactChat(c flamego.Context, s session.Session) {
 
 	isService, err := db.IsServiceContact(c.Request().Context(), contactID)
 	if err != nil {
-		log.Printf("Error checking service contact %s: %v", contactID, err)
+		logger.Error("Error checking service contact", "contact_id", contactID, "error", err)
 		c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
 		return
 	}
@@ -398,12 +397,12 @@ func AddContactChat(c flamego.Context, s session.Session) {
 	}
 
 	if !HasSensitiveAccess(s, time.Now()) {
-		redirectToBreakGlass(c)
+		redirectToBreakGlass(c, s)
 		return
 	}
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
 		return
 	}
@@ -433,7 +432,7 @@ func AddContactChat(c flamego.Context, s session.Session) {
 	}
 
 	if err := db.AddChat(c.Request().Context(), input); err != nil {
-		log.Printf("Error adding chat entry: %v", err)
+		logger.Error("Error adding chat entry", "error", err)
 	}
 
 	c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
@@ -454,7 +453,7 @@ func GenerateContactChatSummary(c flamego.Context, s session.Session) {
 
 	contact, err := db.GetContact(ctx, contactID)
 	if err != nil {
-		log.Printf("Error fetching contact %s: %v", contactID, err)
+		logger.Error("Error fetching contact", "contact_id", contactID, "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusNotFound)
 		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "contact not found"})
 		return
@@ -475,7 +474,7 @@ func GenerateContactChatSummary(c flamego.Context, s session.Session) {
 	since := time.Now().Add(-48 * time.Hour)
 	chats, err := db.GetContactChatsSince(ctx, contactID, since)
 	if err != nil {
-		log.Printf("Error fetching chats for contact %s: %v", contactID, err)
+		logger.Error("Error fetching chats for contact", "contact_id", contactID, "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "failed to load chat history"})
 		return
@@ -491,7 +490,7 @@ func GenerateContactChatSummary(c flamego.Context, s session.Session) {
 		summaryBuilder.WriteString(chunk)
 		return nil
 	}); err != nil {
-		log.Printf("Error generating chat summary: %v", err)
+		logger.Error("Error generating chat summary", "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "failed to generate summary"})
 		return
@@ -550,7 +549,7 @@ func EditContactForm(c flamego.Context, s session.Session, t template.Template, 
 
 	contact, err := db.GetContact(c.Request().Context(), contactID)
 	if err != nil {
-		log.Printf("Error fetching contact %s: %v", contactID, err)
+		logger.Error("Error fetching contact", "contact_id", contactID, "error", err)
 		SetErrorFlash(s, "Contact not found")
 		c.Redirect("/contacts", http.StatusSeeOther)
 		return
@@ -587,7 +586,7 @@ func UpdateContact(c flamego.Context, s session.Session, t template.Template, da
 
 	// Parse form data
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		data["Error"] = "Failed to parse form data"
 		c.Redirect("/contact/"+contactID+"/edit", http.StatusSeeOther)
 		return
@@ -616,7 +615,7 @@ func UpdateContact(c flamego.Context, s session.Session, t template.Template, da
 		isService := form.Get("is_service") == "true"
 		err := db.ToggleServiceStatus(c.Request().Context(), contactID, isService)
 		if err != nil {
-			log.Printf("Error toggling service status: %v", err)
+			logger.Error("Error toggling service status", "error", err)
 		}
 	}
 
@@ -634,7 +633,7 @@ func UpdateContact(c flamego.Context, s session.Session, t template.Template, da
 	// Update contact in database
 	err := db.UpdateContact(c.Request().Context(), input)
 	if err != nil {
-		log.Printf("Error updating contact: %v", err)
+		logger.Error("Error updating contact", "error", err)
 		data["Error"] = "Failed to update contact: " + err.Error()
 		c.Redirect("/contact/"+contactID+"/edit", http.StatusSeeOther)
 		return
@@ -644,13 +643,13 @@ func UpdateContact(c flamego.Context, s session.Session, t template.Template, da
 	contact, err := db.GetContact(c.Request().Context(), contactID)
 	if err == nil && contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
 		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
-			log.Printf("Error pushing contact update to CardDAV: %v", err)
+			logger.Error("Error pushing contact update to CardDAV", "error", err)
 			// Don't fail the whole operation, just log the error
 		}
 	}
 
 	// Redirect to contact view page on success
-	log.Printf("Successfully updated contact: %s", contactID)
+	logger.Info("Successfully updated contact", "contact_id", contactID)
 	SetSuccessFlash(s, "Contact updated successfully")
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 }
@@ -664,7 +663,7 @@ func AddEmail(c flamego.Context, s session.Session) {
 	}
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
@@ -687,7 +686,7 @@ func AddEmail(c flamego.Context, s session.Session) {
 	// Check if contact is linked to CardDAV first
 	contact, err := db.GetContact(c.Request().Context(), contactID)
 	if err != nil {
-		log.Printf("Error getting contact: %v", err)
+		logger.Error("Error getting contact", "error", err)
 		SetErrorFlash(s, "Contact not found")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
@@ -710,12 +709,12 @@ func AddEmail(c flamego.Context, s session.Session) {
 		contact.Emails = append(contact.Emails, newEmail)
 
 		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
-			log.Printf("Error pushing new email to CardDAV: %v", err)
+			logger.Error("Error pushing new email to CardDAV", "error", err)
 			SetErrorFlash(s, "Failed to sync email to CardDAV")
 		} else {
 			// Sync the contact back to get the email with proper ID
 			if err := db.SyncContactFromCardDAV(c.Request().Context(), contact.ID.String(), *contact.CardDAVUUID); err != nil {
-				log.Printf("Error syncing contact after adding email: %v", err)
+				logger.Error("Error syncing contact after adding email", "error", err)
 			}
 		}
 	} else {
@@ -728,7 +727,7 @@ func AddEmail(c flamego.Context, s session.Session) {
 		}
 
 		if err := db.AddEmail(c.Request().Context(), input); err != nil {
-			log.Printf("Error adding email: %v", err)
+			logger.Error("Error adding email", "error", err)
 			SetErrorFlash(s, "Failed to add email")
 		}
 	}
@@ -745,7 +744,7 @@ func AddPhone(c flamego.Context, s session.Session) {
 	}
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
@@ -775,7 +774,7 @@ func AddPhone(c flamego.Context, s session.Session) {
 	// Check if contact is linked to CardDAV first
 	contact, err := db.GetContact(c.Request().Context(), contactID)
 	if err != nil {
-		log.Printf("Error getting contact: %v", err)
+		logger.Error("Error getting contact", "error", err)
 		SetErrorFlash(s, "Contact not found")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
@@ -798,12 +797,12 @@ func AddPhone(c flamego.Context, s session.Session) {
 		contact.Phones = append(contact.Phones, newPhone)
 
 		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
-			log.Printf("Error pushing new phone to CardDAV: %v", err)
+			logger.Error("Error pushing new phone to CardDAV", "error", err)
 			SetErrorFlash(s, "Failed to sync phone to CardDAV")
 		} else {
 			// Sync the contact back to get the phone with proper ID
 			if err := db.SyncContactFromCardDAV(c.Request().Context(), contact.ID.String(), *contact.CardDAVUUID); err != nil {
-				log.Printf("Error syncing contact after adding phone: %v", err)
+				logger.Error("Error syncing contact after adding phone", "error", err)
 			}
 		}
 	} else {
@@ -816,7 +815,7 @@ func AddPhone(c flamego.Context, s session.Session) {
 		}
 
 		if err := db.AddPhone(c.Request().Context(), input); err != nil {
-			log.Printf("Error adding phone: %v", err)
+			logger.Error("Error adding phone", "error", err)
 			SetErrorFlash(s, "Failed to add phone")
 		}
 	}
@@ -833,7 +832,7 @@ func AddURL(c flamego.Context) {
 	}
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
 	}
@@ -859,7 +858,7 @@ func AddURL(c flamego.Context) {
 
 	err := db.AddURL(c.Request().Context(), input)
 	if err != nil {
-		log.Printf("Error adding URL: %v", err)
+		logger.Error("Error adding URL", "error", err)
 	}
 
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
@@ -877,7 +876,7 @@ func DeleteEmail(c flamego.Context, s session.Session) {
 
 	err := db.DeleteEmail(c.Request().Context(), emailID, contactID)
 	if err != nil {
-		log.Printf("Error deleting email: %v", err)
+		logger.Error("Error deleting email", "error", err)
 		SetErrorFlash(s, "Failed to delete email")
 	}
 
@@ -885,7 +884,7 @@ func DeleteEmail(c flamego.Context, s session.Session) {
 	contact, err := db.GetContact(c.Request().Context(), contactID)
 	if err == nil && contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
 		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
-			log.Printf("Error pushing email deletion to CardDAV: %v", err)
+			logger.Error("Error pushing email deletion to CardDAV", "error", err)
 		}
 	}
 
@@ -904,7 +903,7 @@ func DeletePhone(c flamego.Context, s session.Session) {
 
 	err := db.DeletePhone(c.Request().Context(), phoneID, contactID)
 	if err != nil {
-		log.Printf("Error deleting phone: %v", err)
+		logger.Error("Error deleting phone", "error", err)
 		SetErrorFlash(s, "Failed to delete phone")
 	}
 
@@ -912,7 +911,7 @@ func DeletePhone(c flamego.Context, s session.Session) {
 	contact, err := db.GetContact(c.Request().Context(), contactID)
 	if err == nil && contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
 		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
-			log.Printf("Error pushing phone deletion to CardDAV: %v", err)
+			logger.Error("Error pushing phone deletion to CardDAV", "error", err)
 		}
 	}
 
@@ -930,7 +929,7 @@ func UpdateEmail(c flamego.Context, s session.Session) {
 	}
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
@@ -957,7 +956,7 @@ func UpdateEmail(c flamego.Context, s session.Session) {
 
 	err := db.UpdateEmail(c.Request().Context(), input)
 	if err != nil {
-		log.Printf("Error updating email: %v", err)
+		logger.Error("Error updating email", "error", err)
 		SetErrorFlash(s, "Failed to update email")
 	}
 
@@ -977,7 +976,7 @@ func UpdateEmail(c flamego.Context, s session.Session) {
 			}
 		}
 		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
-			log.Printf("Error pushing email update to CardDAV: %v", err)
+			logger.Error("Error pushing email update to CardDAV", "error", err)
 		}
 	}
 
@@ -995,7 +994,7 @@ func UpdatePhone(c flamego.Context, s session.Session) {
 	}
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
@@ -1028,7 +1027,7 @@ func UpdatePhone(c flamego.Context, s session.Session) {
 
 	err := db.UpdatePhone(c.Request().Context(), input)
 	if err != nil {
-		log.Printf("Error updating phone: %v", err)
+		logger.Error("Error updating phone", "error", err)
 		SetErrorFlash(s, "Failed to update phone")
 	}
 
@@ -1048,7 +1047,7 @@ func UpdatePhone(c flamego.Context, s session.Session) {
 			}
 		}
 		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
-			log.Printf("Error pushing phone update to CardDAV: %v", err)
+			logger.Error("Error pushing phone update to CardDAV", "error", err)
 		}
 	}
 
@@ -1067,7 +1066,7 @@ func DeleteURL(c flamego.Context) {
 
 	err := db.DeleteURL(c.Request().Context(), urlID)
 	if err != nil {
-		log.Printf("Error deleting URL: %v", err)
+		logger.Error("Error deleting URL", "error", err)
 	}
 
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
@@ -1084,7 +1083,7 @@ func DeleteContact(c flamego.Context, s session.Session) {
 
 	err := db.DeleteContact(c.Request().Context(), contactID)
 	if err != nil {
-		log.Printf("Error deleting contact: %v", err)
+		logger.Error("Error deleting contact", "error", err)
 		SetErrorFlash(s, "Failed to delete contact")
 	} else {
 		SetSuccessFlash(s, "Contact deleted successfully")
@@ -1102,7 +1101,7 @@ func AddLog(c flamego.Context) {
 	}
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
 	}
@@ -1124,7 +1123,7 @@ func AddLog(c flamego.Context) {
 
 	err := db.AddLog(c.Request().Context(), input)
 	if err != nil {
-		log.Printf("Error adding log: %v", err)
+		logger.Error("Error adding log", "error", err)
 	}
 
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
@@ -1147,7 +1146,7 @@ func DeleteLog(c flamego.Context) {
 
 	err := db.DeleteLog(c.Request().Context(), logID)
 	if err != nil {
-		log.Printf("Error deleting log: %v", err)
+		logger.Error("Error deleting log", "error", err)
 	}
 
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
@@ -1162,7 +1161,7 @@ func LinkCardDAV(c flamego.Context, t template.Template, data template.Data) {
 	}
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
 	}
@@ -1177,14 +1176,14 @@ func LinkCardDAV(c flamego.Context, t template.Template, data template.Data) {
 	// Check if this CardDAV UUID is already linked to another contact
 	isLinked, err := db.IsCardDAVUUIDLinked(c.Request().Context(), cardDAVUUID)
 	if err != nil {
-		log.Printf("Error checking if CardDAV UUID is linked: %v", err)
+		logger.Error("Error checking if CardDAV UUID is linked", "error", err)
 		data["Error"] = "Failed to check CardDAV link status"
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
 	}
 
 	if isLinked {
-		log.Printf("Cannot link CardDAV UUID %s: already linked to another contact", cardDAVUUID)
+		logger.Warn("CardDAV UUID already linked to another contact", "carddav_uuid", cardDAVUUID)
 		data["Error"] = "This CardDAV contact is already linked to another contact"
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
@@ -1192,10 +1191,10 @@ func LinkCardDAV(c flamego.Context, t template.Template, data template.Data) {
 
 	err = db.LinkCardDAV(c.Request().Context(), contactID, cardDAVUUID)
 	if err != nil {
-		log.Printf("Error linking CardDAV contact: %v", err)
+		logger.Error("Error linking CardDAV contact", "error", err)
 		data["Error"] = "Failed to link CardDAV contact"
 	} else {
-		log.Printf("Successfully linked contact %s with CardDAV UUID %s", contactID, cardDAVUUID)
+		logger.Info("Successfully linked contact with CardDAV UUID", "contact_id", contactID, "carddav_uuid", cardDAVUUID)
 	}
 
 	c.Redirect("/contact/"+contactID+"/edit", http.StatusSeeOther)
@@ -1211,9 +1210,9 @@ func UnlinkCardDAV(c flamego.Context) {
 
 	err := db.UnlinkCardDAV(c.Request().Context(), contactID)
 	if err != nil {
-		log.Printf("Error unlinking CardDAV contact: %v", err)
+		logger.Error("Error unlinking CardDAV contact", "error", err)
 	} else {
-		log.Printf("Successfully unlinked contact %s from CardDAV", contactID)
+		logger.Info("Successfully unlinked contact from CardDAV", "contact_id", contactID)
 	}
 
 	c.Redirect("/contact/"+contactID+"/edit", http.StatusSeeOther)
@@ -1229,10 +1228,10 @@ func MigrateToCardDAV(c flamego.Context, s session.Session) {
 
 	err := db.MigrateContactToCardDAV(c.Request().Context(), contactID)
 	if err != nil {
-		log.Printf("Error migrating contact %s to CardDAV: %v", contactID, err)
+		logger.Error("Error migrating contact to CardDAV", "contact_id", contactID, "error", err)
 		SetErrorFlash(s, "Failed to migrate to CardDAV: "+err.Error())
 	} else {
-		log.Printf("Successfully migrated contact %s to CardDAV", contactID)
+		logger.Info("Successfully migrated contact to CardDAV", "contact_id", contactID)
 		SetSuccessFlash(s, "Contact successfully migrated to CardDAV")
 	}
 
@@ -1265,7 +1264,7 @@ func shouldHideCardDAVContact(contact db.CardDAVContact) bool {
 func ListCardDAVContacts(c flamego.Context) {
 	contacts, err := db.ListCardDAVContacts(c.Request().Context())
 	if err != nil {
-		log.Printf("Error listing CardDAV contacts: %v", err)
+		logger.Error("Error listing CardDAV contacts", "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{
 			"error": "Failed to fetch CardDAV contacts: " + err.Error(),
@@ -1284,7 +1283,7 @@ func ListCardDAVContacts(c flamego.Context) {
 	// Get all linked CardDAV UUIDs with service status
 	linkedMap, err := db.GetLinkedCardDAVUUIDsWithServiceStatus(c.Request().Context())
 	if err != nil {
-		log.Printf("Error getting linked CardDAV UUIDs: %v", err)
+		logger.Error("Error getting linked CardDAV UUIDs", "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{
 			"error": "Failed to fetch linked CardDAV UUIDs: " + err.Error(),
@@ -1324,7 +1323,7 @@ func AddNote(c flamego.Context) {
 	}
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
 	}
@@ -1344,7 +1343,7 @@ func AddNote(c flamego.Context) {
 
 	err := db.AddNote(c.Request().Context(), input)
 	if err != nil {
-		log.Printf("Error adding note: %v", err)
+		logger.Error("Error adding note", "error", err)
 	}
 
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
@@ -1362,7 +1361,7 @@ func DeleteNote(c flamego.Context) {
 
 	err := db.DeleteNote(c.Request().Context(), noteID)
 	if err != nil {
-		log.Printf("Error deleting note: %v", err)
+		logger.Error("Error deleting note", "error", err)
 	}
 
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
@@ -1377,7 +1376,7 @@ func AddTag(c flamego.Context) {
 	}
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 		return
 	}
@@ -1390,7 +1389,7 @@ func AddTag(c flamego.Context) {
 
 	err := db.AddTagToContact(c.Request().Context(), contactID, tagName)
 	if err != nil {
-		log.Printf("Error adding tag: %v", err)
+		logger.Error("Error adding tag", "error", err)
 	}
 
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
@@ -1408,7 +1407,7 @@ func RemoveTag(c flamego.Context) {
 
 	err := db.RemoveTagFromContact(c.Request().Context(), contactID, tagID)
 	if err != nil {
-		log.Printf("Error removing tag: %v", err)
+		logger.Error("Error removing tag", "error", err)
 	}
 
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
@@ -1436,7 +1435,7 @@ func ListServiceContacts(c flamego.Context, t template.Template, data template.D
 	}
 
 	if err != nil {
-		log.Printf("Error fetching service contacts: %v", err)
+		logger.Error("Error fetching service contacts", "error", err)
 		data["Error"] = "Failed to load service contacts"
 	} else {
 		data["ServiceContacts"] = contacts
@@ -1445,7 +1444,7 @@ func ListServiceContacts(c flamego.Context, t template.Template, data template.D
 	// Fetch all tags for the filter UI
 	allTags, err := db.ListAllTags(ctx)
 	if err != nil {
-		log.Printf("Error fetching tags: %v", err)
+		logger.Error("Error fetching tags", "error", err)
 	} else {
 		data["AllTags"] = allTags
 		data["SelectedTags"] = tagIDs
@@ -1467,7 +1466,7 @@ func BulkContactLogForm(c flamego.Context, t template.Template, data template.Da
 	// Fetch all contacts for the multi-select
 	contacts, err := db.ListContacts(ctx)
 	if err != nil {
-		log.Printf("Error fetching contacts: %v", err)
+		logger.Error("Error fetching contacts", "error", err)
 		data["Error"] = "Failed to load contacts"
 	} else {
 		data["Contacts"] = contacts
@@ -1487,7 +1486,7 @@ func BulkAddLog(c flamego.Context, s session.Session) {
 	ctx := c.Request().Context()
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form data")
 		c.Redirect("/bulk-contact-log", http.StatusSeeOther)
 		return
@@ -1528,7 +1527,7 @@ func BulkAddLog(c flamego.Context, s session.Session) {
 
 		err := db.AddLog(ctx, input)
 		if err != nil {
-			log.Printf("Error adding log to contact %s: %v", contactID, err)
+			logger.Error("Error adding log to contact", "contact_id", contactID, "error", err)
 			failedContacts = append(failedContacts, contactID)
 		} else {
 			successCount++

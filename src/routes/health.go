@@ -7,7 +7,6 @@ package routes
 import (
 	"bytes"
 	htmltemplate "html/template"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -54,7 +53,7 @@ func ensureHealthProfileAccess(c flamego.Context, s session.Session, profileID s
 	ctx := c.Request().Context()
 	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil {
-		log.Printf("Error resolving admin state: %v", err)
+		logger.Error("Error resolving admin state", "error", err)
 		isAdmin = false
 	}
 	if isAdmin {
@@ -70,7 +69,7 @@ func ensureHealthProfileAccess(c flamego.Context, s session.Session, profileID s
 
 	hasAccess, err := db.UserHasHealthProfileAccess(ctx, userID, profileID)
 	if err != nil {
-		log.Printf("Error checking profile access: %v", err)
+		logger.Error("Error checking profile access", "error", err)
 		SetErrorFlash(s, "Failed to load health profile")
 		c.Redirect("/health", http.StatusSeeOther)
 		return false
@@ -88,7 +87,7 @@ func ensureHealthFollowupAccess(c flamego.Context, s session.Session, followupID
 	ctx := c.Request().Context()
 	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil {
-		log.Printf("Error resolving admin state: %v", err)
+		logger.Error("Error resolving admin state", "error", err)
 		isAdmin = false
 	}
 	if isAdmin {
@@ -104,7 +103,7 @@ func ensureHealthFollowupAccess(c flamego.Context, s session.Session, followupID
 
 	hasAccess, err := db.UserHasHealthFollowupAccess(ctx, userID, followupID)
 	if err != nil {
-		log.Printf("Error checking follow-up access: %v", err)
+		logger.Error("Error checking follow-up access", "error", err)
 		SetErrorFlash(s, "Failed to load follow-up")
 		c.Redirect("/health", http.StatusSeeOther)
 		return false
@@ -266,7 +265,7 @@ func generateLabTestChart(ctx flamego.Context, profileID, testName string) (stri
 		// Get reference range for this test from database
 		refRange, err := db.GetReferenceRange(ctx.Request().Context(), testName, ageRange, *profile.Gender)
 		if err != nil {
-			log.Printf("Warning: failed to get reference range for %s: %v", testName, err)
+			logger.Warn("Failed to get reference range", "test_name", testName, "error", err)
 		}
 
 		if refRange != nil {
@@ -349,7 +348,7 @@ func ListHealthProfiles(c flamego.Context, s session.Session, t template.Templat
 	ctx := c.Request().Context()
 	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil {
-		log.Printf("Error resolving admin state: %v", err)
+		logger.Error("Error resolving admin state", "error", err)
 		isAdmin = false
 	}
 	data["IsAdmin"] = isAdmin
@@ -366,7 +365,7 @@ func ListHealthProfiles(c flamego.Context, s session.Session, t template.Templat
 		}
 	}
 	if err != nil {
-		log.Printf("Error fetching health profiles: %v", err)
+		logger.Error("Error fetching health profiles", "error", err)
 		data["Error"] = "Failed to load health profiles"
 	} else {
 		data["Profiles"] = profiles
@@ -390,7 +389,7 @@ func CreateHealthProfile(c flamego.Context, s session.Session) {
 	ctx := c.Request().Context()
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/health", http.StatusSeeOther)
 		return
@@ -398,7 +397,7 @@ func CreateHealthProfile(c flamego.Context, s session.Session) {
 
 	name := strings.TrimSpace(c.Request().Form.Get("name"))
 	if name == "" {
-		log.Printf("Profile name is required")
+		logger.Warn("Profile name is required")
 		SetErrorFlash(s, "Profile name is required")
 		c.Redirect("/health/new", http.StatusSeeOther)
 		return
@@ -410,7 +409,7 @@ func CreateHealthProfile(c flamego.Context, s session.Session) {
 	if dobStr != "" {
 		parsed, err := time.Parse("2006-01-02", dobStr)
 		if err != nil {
-			log.Printf("Invalid date of birth format: %v", err)
+			logger.Warn("Invalid date of birth format", "error", err)
 			SetErrorFlash(s, "Invalid date of birth format")
 			c.Redirect("/health/new", http.StatusSeeOther)
 			return
@@ -437,13 +436,13 @@ func CreateHealthProfile(c flamego.Context, s session.Session) {
 
 	profileID, err := db.CreateHealthProfile(ctx, name, dob, gender, description, isPrimary)
 	if err != nil {
-		log.Printf("Error creating health profile: %v", err)
+		logger.Error("Error creating health profile", "error", err)
 		SetErrorFlash(s, "Failed to create health profile")
 		c.Redirect("/health/new", http.StatusSeeOther)
 		return
 	}
 
-	log.Printf("Created health profile: %s", profileID)
+	logger.Info("Created health profile", "profile_id", profileID)
 	SetSuccessFlash(s, "Health profile created successfully")
 	c.Redirect("/health/"+profileID, http.StatusSeeOther)
 }
@@ -460,7 +459,7 @@ func ViewHealthProfile(c flamego.Context, s session.Session, t template.Template
 
 	profile, err := db.GetHealthProfile(ctx, profileID)
 	if err != nil {
-		log.Printf("Error fetching health profile %s: %v", profileID, err)
+		logger.Error("Error fetching health profile", "profile_id", profileID, "error", err)
 		SetErrorFlash(s, "Profile not found")
 		c.Redirect("/health", http.StatusSeeOther)
 		return
@@ -476,7 +475,7 @@ func ViewHealthProfile(c flamego.Context, s session.Session, t template.Template
 
 	followups, err := db.ListFollowups(ctx, profileID)
 	if err != nil {
-		log.Printf("Error fetching follow-ups for profile %s: %v", profileID, err)
+		logger.Error("Error fetching follow-ups for profile", "profile_id", profileID, "error", err)
 		data["Error"] = "Failed to load follow-ups"
 	} else {
 		data["Followups"] = followups
@@ -485,7 +484,7 @@ func ViewHealthProfile(c flamego.Context, s session.Session, t template.Template
 	// Get all test names with counts (including calculated absolute counts)
 	testCounts, err := db.GetTestNamesWithCountsIncludingCalculated(ctx, profileID)
 	if err != nil {
-		log.Printf("Error fetching test names: %v", err)
+		logger.Error("Error fetching test names", "error", err)
 	}
 
 	// Build a map of test names to categories
@@ -501,7 +500,7 @@ func ViewHealthProfile(c flamego.Context, s session.Session, t template.Template
 		if test.Count > 0 {
 			chart, err := generateLabTestChart(c, profileID, test.TestName)
 			if err != nil {
-				log.Printf("Error generating chart for %s: %v", test.TestName, err)
+				logger.Error("Error generating chart", "test_name", test.TestName, "error", err)
 				continue
 			}
 			if chart != "" {
@@ -559,7 +558,7 @@ func EditHealthProfileForm(c flamego.Context, s session.Session, t template.Temp
 
 	profile, err := db.GetHealthProfile(ctx, profileID)
 	if err != nil {
-		log.Printf("Error fetching health profile %s: %v", profileID, err)
+		logger.Error("Error fetching health profile", "profile_id", profileID, "error", err)
 		SetErrorFlash(s, "Profile not found")
 		c.Redirect("/health", http.StatusSeeOther)
 		return
@@ -587,14 +586,14 @@ func UpdateHealthProfile(c flamego.Context, s session.Session) {
 	ctx := c.Request().Context()
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/health/"+profileID, http.StatusSeeOther)
 		return
 	}
 
 	name := strings.TrimSpace(c.Request().Form.Get("name"))
 	if name == "" {
-		log.Printf("Profile name is required")
+		logger.Warn("Profile name is required")
 		c.Redirect("/health/"+profileID+"/edit", http.StatusSeeOther)
 		return
 	}
@@ -605,7 +604,7 @@ func UpdateHealthProfile(c flamego.Context, s session.Session) {
 	if dobStr != "" {
 		parsed, err := time.Parse("2006-01-02", dobStr)
 		if err != nil {
-			log.Printf("Invalid date of birth format: %v", err)
+			logger.Warn("Invalid date of birth format", "error", err)
 			c.Redirect("/health/"+profileID+"/edit", http.StatusSeeOther)
 			return
 		}
@@ -631,12 +630,12 @@ func UpdateHealthProfile(c flamego.Context, s session.Session) {
 
 	err := db.UpdateHealthProfile(ctx, profileID, name, dob, gender, description, isPrimary)
 	if err != nil {
-		log.Printf("Error updating health profile %s: %v", profileID, err)
+		logger.Error("Error updating health profile", "profile_id", profileID, "error", err)
 		c.Redirect("/health/"+profileID+"/edit", http.StatusSeeOther)
 		return
 	}
 
-	log.Printf("Updated health profile: %s", profileID)
+	logger.Info("Updated health profile", "profile_id", profileID)
 	SetSuccessFlash(s, "Health profile updated successfully")
 	c.Redirect("/health/"+profileID, http.StatusSeeOther)
 }
@@ -648,7 +647,7 @@ func DeleteHealthProfile(c flamego.Context, s session.Session) {
 
 	err := db.DeleteHealthProfile(ctx, profileID)
 	if err != nil {
-		log.Printf("Error deleting health profile %s: %v", profileID, err)
+		logger.Error("Error deleting health profile", "profile_id", profileID, "error", err)
 		SetErrorFlash(s, "Failed to delete health profile")
 	} else {
 		SetSuccessFlash(s, "Health profile deleted successfully")
@@ -667,7 +666,7 @@ func NewFollowupForm(c flamego.Context, s session.Session, t template.Template, 
 
 	profile, err := db.GetHealthProfile(ctx, profileID)
 	if err != nil {
-		log.Printf("Error fetching health profile %s: %v", profileID, err)
+		logger.Error("Error fetching health profile", "profile_id", profileID, "error", err)
 		SetErrorFlash(s, "Profile not found")
 		c.Redirect("/health", http.StatusSeeOther)
 		return
@@ -689,7 +688,7 @@ func CreateFollowup(c flamego.Context, s session.Session) {
 	ctx := c.Request().Context()
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/health/"+profileID, http.StatusSeeOther)
 		return
 	}
@@ -699,20 +698,20 @@ func CreateFollowup(c flamego.Context, s session.Session) {
 	// Parse date
 	dateStr := strings.TrimSpace(form.Get("followup_date"))
 	if dateStr == "" {
-		log.Printf("Follow-up date is required")
+		logger.Warn("Follow-up date is required")
 		c.Redirect("/health/"+profileID+"/followup/new", http.StatusSeeOther)
 		return
 	}
 	followupDate, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
-		log.Printf("Invalid date format: %v", err)
+		logger.Warn("Invalid date format", "error", err)
 		c.Redirect("/health/"+profileID+"/followup/new", http.StatusSeeOther)
 		return
 	}
 
 	hospitalName := strings.TrimSpace(form.Get("hospital_name"))
 	if hospitalName == "" {
-		log.Printf("Hospital name is required")
+		logger.Warn("Hospital name is required")
 		c.Redirect("/health/"+profileID+"/followup/new", http.StatusSeeOther)
 		return
 	}
@@ -733,12 +732,12 @@ func CreateFollowup(c flamego.Context, s session.Session) {
 
 	followupID, err := db.CreateFollowup(ctx, input)
 	if err != nil {
-		log.Printf("Error creating follow-up: %v", err)
+		logger.Error("Error creating follow-up", "error", err)
 		c.Redirect("/health/"+profileID+"/followup/new", http.StatusSeeOther)
 		return
 	}
 
-	log.Printf("Created follow-up: %s", followupID)
+	logger.Info("Created follow-up", "followup_id", followupID)
 	SetSuccessFlash(s, "Follow-up created successfully")
 	c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
 }
@@ -757,7 +756,7 @@ func ViewFollowup(c flamego.Context, s session.Session, t template.Template, dat
 
 	profile, err := db.GetHealthProfile(ctx, profileID)
 	if err != nil {
-		log.Printf("Error fetching health profile %s: %v", profileID, err)
+		logger.Error("Error fetching health profile", "profile_id", profileID, "error", err)
 		SetErrorFlash(s, "Profile not found")
 		c.Redirect("/health", http.StatusSeeOther)
 		return
@@ -765,7 +764,7 @@ func ViewFollowup(c flamego.Context, s session.Session, t template.Template, dat
 
 	followup, err := db.GetFollowup(ctx, followupID)
 	if err != nil {
-		log.Printf("Error fetching follow-up %s: %v", followupID, err)
+		logger.Error("Error fetching follow-up", "followup_id", followupID, "error", err)
 		SetErrorFlash(s, "Follow-up not found")
 		c.Redirect("/health/"+profileID, http.StatusSeeOther)
 		return
@@ -778,7 +777,7 @@ func ViewFollowup(c flamego.Context, s session.Session, t template.Template, dat
 
 	results, err := db.GetLabResultsByFollowupWithCalculated(ctx, followupID)
 	if err != nil {
-		log.Printf("Error fetching lab results for follow-up %s: %v", followupID, err)
+		logger.Error("Error fetching lab results for follow-up", "followup_id", followupID, "error", err)
 		data["Error"] = "Failed to load lab results"
 	} else {
 		// Enrich results with range status for color coding
@@ -922,7 +921,7 @@ func EditFollowupForm(c flamego.Context, s session.Session, t template.Template,
 
 	profile, err := db.GetHealthProfile(ctx, profileID)
 	if err != nil {
-		log.Printf("Error fetching health profile %s: %v", profileID, err)
+		logger.Error("Error fetching health profile", "profile_id", profileID, "error", err)
 		SetErrorFlash(s, "Profile not found")
 		c.Redirect("/health", http.StatusSeeOther)
 		return
@@ -930,7 +929,7 @@ func EditFollowupForm(c flamego.Context, s session.Session, t template.Template,
 
 	followup, err := db.GetFollowup(ctx, followupID)
 	if err != nil {
-		log.Printf("Error fetching follow-up %s: %v", followupID, err)
+		logger.Error("Error fetching follow-up", "followup_id", followupID, "error", err)
 		SetErrorFlash(s, "Follow-up not found")
 		c.Redirect("/health/"+profileID, http.StatusSeeOther)
 		return
@@ -956,7 +955,7 @@ func UpdateFollowup(c flamego.Context, s session.Session) {
 	ctx := c.Request().Context()
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
 		return
 	}
@@ -966,20 +965,20 @@ func UpdateFollowup(c flamego.Context, s session.Session) {
 	// Parse date
 	dateStr := strings.TrimSpace(form.Get("followup_date"))
 	if dateStr == "" {
-		log.Printf("Follow-up date is required")
+		logger.Warn("Follow-up date is required")
 		c.Redirect("/health/"+profileID+"/followup/"+followupID+"/edit", http.StatusSeeOther)
 		return
 	}
 	followupDate, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
-		log.Printf("Invalid date format: %v", err)
+		logger.Warn("Invalid date format", "error", err)
 		c.Redirect("/health/"+profileID+"/followup/"+followupID+"/edit", http.StatusSeeOther)
 		return
 	}
 
 	hospitalName := strings.TrimSpace(form.Get("hospital_name"))
 	if hospitalName == "" {
-		log.Printf("Hospital name is required")
+		logger.Warn("Hospital name is required")
 		c.Redirect("/health/"+profileID+"/followup/"+followupID+"/edit", http.StatusSeeOther)
 		return
 	}
@@ -999,12 +998,12 @@ func UpdateFollowup(c flamego.Context, s session.Session) {
 
 	err = db.UpdateFollowup(ctx, followupID, input)
 	if err != nil {
-		log.Printf("Error updating follow-up %s: %v", followupID, err)
+		logger.Error("Error updating follow-up", "followup_id", followupID, "error", err)
 		c.Redirect("/health/"+profileID+"/followup/"+followupID+"/edit", http.StatusSeeOther)
 		return
 	}
 
-	log.Printf("Updated follow-up: %s", followupID)
+	logger.Info("Updated follow-up", "followup_id", followupID)
 	SetSuccessFlash(s, "Follow-up updated successfully")
 	c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
 }
@@ -1017,7 +1016,7 @@ func DeleteFollowup(c flamego.Context, s session.Session) {
 
 	err := db.DeleteFollowup(ctx, followupID)
 	if err != nil {
-		log.Printf("Error deleting follow-up %s: %v", followupID, err)
+		logger.Error("Error deleting follow-up", "followup_id", followupID, "error", err)
 		SetErrorFlash(s, "Failed to delete follow-up")
 	} else {
 		SetSuccessFlash(s, "Follow-up deleted successfully")
@@ -1035,7 +1034,7 @@ func AddLabResult(c flamego.Context, s session.Session) {
 	ctx := c.Request().Context()
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
 		return
 	}
@@ -1044,7 +1043,7 @@ func AddLabResult(c flamego.Context, s session.Session) {
 
 	testName := strings.TrimSpace(form.Get("test_name"))
 	if testName == "" {
-		log.Printf("Test name is required")
+		logger.Warn("Test name is required")
 		c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
 		return
 	}
@@ -1059,13 +1058,13 @@ func AddLabResult(c flamego.Context, s session.Session) {
 	// Parse value
 	valueStr := strings.TrimSpace(form.Get("test_value"))
 	if valueStr == "" {
-		log.Printf("Test value is required")
+		logger.Warn("Test value is required")
 		c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
 		return
 	}
 	testValue, err := strconv.ParseFloat(valueStr, 64)
 	if err != nil {
-		log.Printf("Invalid test value: %v", err)
+		logger.Warn("Invalid test value", "error", err)
 		c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
 		return
 	}
@@ -1079,12 +1078,12 @@ func AddLabResult(c flamego.Context, s session.Session) {
 
 	resultID, err := db.CreateLabResult(ctx, input)
 	if err != nil {
-		log.Printf("Error creating lab result: %v", err)
+		logger.Error("Error creating lab result", "error", err)
 		c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
 		return
 	}
 
-	log.Printf("Created lab result: %s", resultID)
+	logger.Info("Created lab result", "result_id", resultID)
 	SetSuccessFlash(s, "Lab result added successfully")
 	c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
 }
@@ -1099,7 +1098,7 @@ func EditLabResultForm(c flamego.Context, s session.Session, t template.Template
 
 	profile, err := db.GetHealthProfile(ctx, profileID)
 	if err != nil {
-		log.Printf("Error fetching health profile %s: %v", profileID, err)
+		logger.Error("Error fetching health profile", "profile_id", profileID, "error", err)
 		SetErrorFlash(s, "Profile not found")
 		c.Redirect("/health", http.StatusSeeOther)
 		return
@@ -1107,7 +1106,7 @@ func EditLabResultForm(c flamego.Context, s session.Session, t template.Template
 
 	followup, err := db.GetFollowup(ctx, followupID)
 	if err != nil {
-		log.Printf("Error fetching follow-up %s: %v", followupID, err)
+		logger.Error("Error fetching follow-up", "followup_id", followupID, "error", err)
 		SetErrorFlash(s, "Follow-up not found")
 		c.Redirect("/health/"+profileID, http.StatusSeeOther)
 		return
@@ -1115,7 +1114,7 @@ func EditLabResultForm(c flamego.Context, s session.Session, t template.Template
 
 	result, err := db.GetLabResult(ctx, resultID)
 	if err != nil {
-		log.Printf("Error fetching lab result %s: %v", resultID, err)
+		logger.Error("Error fetching lab result", "result_id", resultID, "error", err)
 		SetErrorFlash(s, "Lab result not found")
 		c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
 		return
@@ -1143,7 +1142,7 @@ func UpdateLabResult(c flamego.Context, s session.Session) {
 	ctx := c.Request().Context()
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
 		return
 	}
@@ -1151,13 +1150,13 @@ func UpdateLabResult(c flamego.Context, s session.Session) {
 	// Parse value
 	valueStr := strings.TrimSpace(c.Request().Form.Get("test_value"))
 	if valueStr == "" {
-		log.Printf("Test value is required")
+		logger.Warn("Test value is required")
 		c.Redirect("/health/"+profileID+"/followup/"+followupID+"/result/"+resultID+"/edit", http.StatusSeeOther)
 		return
 	}
 	testValue, err := strconv.ParseFloat(valueStr, 64)
 	if err != nil {
-		log.Printf("Invalid test value: %v", err)
+		logger.Warn("Invalid test value", "error", err)
 		c.Redirect("/health/"+profileID+"/followup/"+followupID+"/result/"+resultID+"/edit", http.StatusSeeOther)
 		return
 	}
@@ -1168,12 +1167,12 @@ func UpdateLabResult(c flamego.Context, s session.Session) {
 
 	err = db.UpdateLabResult(ctx, resultID, input)
 	if err != nil {
-		log.Printf("Error updating lab result %s: %v", resultID, err)
+		logger.Error("Error updating lab result", "result_id", resultID, "error", err)
 		c.Redirect("/health/"+profileID+"/followup/"+followupID+"/result/"+resultID+"/edit", http.StatusSeeOther)
 		return
 	}
 
-	log.Printf("Updated lab result: %s", resultID)
+	logger.Info("Updated lab result", "result_id", resultID)
 	SetSuccessFlash(s, "Lab result updated successfully")
 	c.Redirect("/health/"+profileID+"/followup/"+followupID, http.StatusSeeOther)
 }
@@ -1187,7 +1186,7 @@ func DeleteLabResult(c flamego.Context, s session.Session) {
 
 	err := db.DeleteLabResult(ctx, resultID)
 	if err != nil {
-		log.Printf("Error deleting lab result %s: %v", resultID, err)
+		logger.Error("Error deleting lab result", "result_id", resultID, "error", err)
 		SetErrorFlash(s, "Failed to delete lab result")
 	} else {
 		SetSuccessFlash(s, "Lab result deleted successfully")
@@ -1241,7 +1240,7 @@ func GenerateAISummary(c flamego.Context, s session.Session) {
 	// Get profile
 	profile, err := db.GetHealthProfile(ctx, profileID)
 	if err != nil {
-		log.Printf("Error fetching health profile %s: %v", profileID, err)
+		logger.Error("Error fetching health profile", "profile_id", profileID, "error", err)
 		sendError("Profile not found")
 		return
 	}
@@ -1249,7 +1248,7 @@ func GenerateAISummary(c flamego.Context, s session.Session) {
 	// Get followup
 	followup, err := db.GetFollowup(ctx, followupID)
 	if err != nil {
-		log.Printf("Error fetching follow-up %s: %v", followupID, err)
+		logger.Error("Error fetching follow-up", "followup_id", followupID, "error", err)
 		sendError("Follow-up not found")
 		return
 	}
@@ -1261,7 +1260,7 @@ func GenerateAISummary(c flamego.Context, s session.Session) {
 	// Get lab results
 	results, err := db.GetLabResultsByFollowupWithCalculated(ctx, followupID)
 	if err != nil {
-		log.Printf("Error fetching lab results for follow-up %s: %v", followupID, err)
+		logger.Error("Error fetching lab results for follow-up", "followup_id", followupID, "error", err)
 		sendError("Failed to load lab results")
 		return
 	}
@@ -1321,7 +1320,7 @@ func GenerateAISummary(c flamego.Context, s session.Session) {
 	})
 
 	if err != nil {
-		log.Printf("Error generating AI summary: %v", err)
+		logger.Error("Error generating AI summary", "error", err)
 		sendError("Failed to generate summary: " + err.Error())
 		return
 	}

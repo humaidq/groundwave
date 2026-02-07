@@ -7,7 +7,6 @@ package db
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/google/uuid"
 	"github.com/humaidq/groundwave/utils"
@@ -175,7 +174,7 @@ func GetAllZettelComments(ctx context.Context) ([]ZettelCommentWithNote, error) 
 			note, err := GetNoteByID(ctx, comment.ZettelID)
 			if err != nil {
 				// Zettel not found (orphaned)
-				log.Printf("Warning: zettel %s not found (orphaned comment): %v", comment.ZettelID, err)
+				logger.Warn("Zettel not found for orphaned comment", "zettel_id", comment.ZettelID, "error", err)
 				enriched.OrphanedNote = true
 				enriched.ZettelTitle = "[Note Not Found]"
 				enriched.ZettelFilename = ""

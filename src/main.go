@@ -6,15 +6,18 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 
 	"github.com/urfave/cli/v3"
 
 	"github.com/humaidq/groundwave/cmd"
+	"github.com/humaidq/groundwave/logging"
 )
 
 func main() {
+	logging.Init()
+	logger := logging.Logger(logging.SourceApp)
+
 	app := &cli.Command{
 		Name:  "groundwave",
 		Usage: "Groundwave - Personal Database",
@@ -25,6 +28,6 @@ func main() {
 	}
 
 	if err := app.Run(context.Background(), os.Args); err != nil {
-		log.Fatal(err)
+		logger.Fatal("app run failed", "error", err)
 	}
 }

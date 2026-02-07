@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -130,8 +129,8 @@ func (c *Client) setQRCode(qrCode string) {
 func (c *Client) Connect(ctx context.Context) error {
 	c.setStatus(StatusConnecting)
 
-	// Create new client with stdout logger for debugging
-	c.client = whatsmeow.NewClient(c.deviceStore, waLog.Stdout("WhatsApp", "DEBUG", true))
+	// Create new client with structured logger
+	c.client = whatsmeow.NewClient(c.deviceStore, newWALogger("whatsmeow"))
 	c.client.AddEventHandler(c.handleEvent)
 
 	// Enable auto-reconnect
@@ -163,28 +162,28 @@ func (c *Client) Connect(ctx context.Context) error {
 	// Handle QR code events in goroutine
 	go func() {
 		for evt := range qrChan {
-			log.Printf("WhatsApp QR event: %s", evt.Event)
+			logger.Info("WhatsApp QR event", "event", evt.Event)
 			if evt.Event == "code" {
 				// Generate QR code image
 				png, err := qrcode.Encode(evt.Code, qrcode.Medium, 256)
 				if err != nil {
-					log.Printf("Failed to generate QR code: %v", err)
+					logger.Error("Failed to generate QR code", "error", err)
 					continue
 				}
 				c.setQRCode(base64.StdEncoding.EncodeToString(png))
-				log.Println("WhatsApp QR code generated")
+				logger.Info("WhatsApp QR code generated")
 			} else if evt.Event == "success" {
 				c.setQRCode("")
 				c.setStatus(StatusConnected)
-				log.Println("WhatsApp pairing successful")
+				logger.Info("WhatsApp pairing successful")
 			} else if evt.Event == "timeout" {
 				c.setQRCode("")
 				c.setStatus(StatusDisconnected)
-				log.Println("WhatsApp QR code timeout")
+				logger.Warn("WhatsApp QR code timeout")
 			} else if evt.Event == "error" {
 				c.setQRCode("")
 				c.setStatus(StatusDisconnected)
-				log.Printf("WhatsApp pairing error: %v", evt.Error)
+				logger.Error("WhatsApp pairing error", "error", evt.Error)
 			}
 		}
 	}()
@@ -200,7 +199,7 @@ func (c *Client) Reconnect(ctx context.Context) error {
 
 	c.setStatus(StatusConnecting)
 
-	c.client = whatsmeow.NewClient(c.deviceStore, waLog.Stdout("WhatsApp", "DEBUG", true))
+	c.client = whatsmeow.NewClient(c.deviceStore, newWALogger("whatsmeow"))
 	c.client.AddEventHandler(c.handleEvent)
 	c.client.EnableAutoReconnect = true
 	c.client.AutoTrustIdentity = true
@@ -212,7 +211,7 @@ func (c *Client) Reconnect(ctx context.Context) error {
 	}
 
 	c.setStatus(StatusConnected)
-	log.Println("WhatsApp reconnected successfully")
+	logger.Info("WhatsApp reconnected successfully")
 	return nil
 }
 
@@ -255,15 +254,15 @@ func (c *Client) handleEvent(evt interface{}) {
 	switch v := evt.(type) {
 	case *events.Connected:
 		c.setStatus(StatusConnected)
-		log.Println("WhatsApp connected")
+		logger.Info("WhatsApp connected")
 
 	case *events.Disconnected:
 		c.setStatus(StatusDisconnected)
-		log.Println("WhatsApp disconnected")
+		logger.Info("WhatsApp disconnected")
 
 	case *events.LoggedOut:
 		c.setStatus(StatusDisconnected)
-		log.Println("WhatsApp logged out")
+		logger.Info("WhatsApp logged out")
 
 	case *events.Message:
 		c.handleMessage(v)
@@ -284,7 +283,16 @@ func (c *Client) handleMessage(evt *events.Message) {
 
 	otherParty := resolveOtherPartyJID(evt.Info)
 
-	log.Printf("WhatsApp message info: fromMe=%v chat=%v sender=%v recipientAlt=%v deviceSentMeta=%v id=%s type=%s", evt.Info.IsFromMe, evt.Info.Chat, evt.Info.Sender, evt.Info.RecipientAlt, evt.Info.DeviceSentMeta, evt.Info.ID, evt.Info.Type)
+	logger.Info(
+		"WhatsApp message info",
+		"from_me", evt.Info.IsFromMe,
+		"chat", evt.Info.Chat,
+		"sender", evt.Info.Sender,
+		"recipient_alt", evt.Info.RecipientAlt,
+		"device_sent_meta", evt.Info.DeviceSentMeta,
+		"message_id", evt.Info.ID,
+		"message_type", evt.Info.Type,
+	)
 
 	// Determine if this is an outgoing message
 	isOutgoing := evt.Info.IsFromMe

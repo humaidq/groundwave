@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 )
 
@@ -333,7 +332,7 @@ func GetContactsByTags(ctx context.Context, tagIDs []string) ([]ContactListItem,
 		// Unmarshal tags JSON
 		if len(tagsJSON) > 0 && string(tagsJSON) != "[]" {
 			if err := json.Unmarshal(tagsJSON, &contact.Tags); err != nil {
-				log.Printf("Warning: failed to unmarshal tags for contact %s: %v", contact.ID, err)
+				logger.Warn("Failed to unmarshal tags for contact", "contact_id", contact.ID, "error", err)
 				contact.Tags = []Tag{}
 			}
 		} else {

@@ -7,7 +7,6 @@ package routes
 import (
 	"encoding/base64"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -229,7 +228,7 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 		isAdmin = admin
 		data["IsAdmin"] = admin
 	} else {
-		log.Printf("Failed to resolve admin state: %v", err)
+		logger.Error("Failed to resolve admin state", "error", err)
 	}
 
 	var users []db.User
@@ -238,7 +237,7 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 	if isAdmin {
 		users, err = db.ListUsers(ctx)
 		if err != nil {
-			log.Printf("Failed to load users: %v", err)
+			logger.Error("Failed to load users", "error", err)
 			data["ShareError"] = "Failed to load user list"
 			data["AccountError"] = "Failed to load user list"
 		} else {
@@ -352,7 +351,7 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 	if isAdmin {
 		invites, err := db.ListPendingUserInvites(ctx)
 		if err != nil {
-			log.Printf("Failed to load invites: %v", err)
+			logger.Error("Failed to load invites", "error", err)
 			data["InviteError"] = "Failed to load user invites"
 		} else {
 			inviteInfos := make([]InviteInfo, 0, len(invites))
@@ -367,7 +366,7 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 				if png, err := qrcode.Encode(setupURL, qrcode.Medium, 256); err == nil {
 					qrCode = base64.StdEncoding.EncodeToString(png)
 				} else {
-					log.Printf("Failed to generate invite QR code: %v", err)
+					logger.Error("Failed to generate invite QR code", "error", err)
 				}
 				inviteInfos = append(inviteInfos, InviteInfo{
 					ID:          invite.ID.String(),
@@ -383,12 +382,12 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 		if err == nil {
 			profiles, err := db.ListHealthProfiles(ctx)
 			if err != nil {
-				log.Printf("Failed to load health profiles: %v", err)
+				logger.Error("Failed to load health profiles", "error", err)
 				data["ShareError"] = "Failed to load health profiles"
 			} else {
 				shareRows, err := db.ListHealthProfileShares(ctx)
 				if err != nil {
-					log.Printf("Failed to load health shares: %v", err)
+					logger.Error("Failed to load health shares", "error", err)
 					data["ShareError"] = "Failed to load health shares"
 				} else {
 					shareMap := make(map[string]map[string]bool)

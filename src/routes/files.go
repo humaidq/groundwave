@@ -5,7 +5,6 @@
 package routes
 
 import (
-	"log"
 	"net/http"
 	"net/url"
 	"path"
@@ -34,14 +33,14 @@ func FilesList(c flamego.Context, s session.Session, t template.Template, data t
 	ctx := c.Request().Context()
 	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil {
-		log.Printf("Error resolving admin state: %v", err)
+		logger.Error("Error resolving admin state", "error", err)
 		isAdmin = false
 	}
 	data["IsAdmin"] = isAdmin
 
 	adminOnly, err := db.IsFilesPathAdminOnly(ctx, relPath)
 	if err != nil {
-		log.Printf("Error checking WebDAV admin restriction for %q: %v", relPath, err)
+		logger.Error("Error checking WebDAV admin restriction", "path", relPath, "error", err)
 		data["Error"] = "Failed to load files. Please check your WEBDAV_FILES_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables."
 		data["Entries"] = []db.WebDAVEntry{}
 		t.HTML(http.StatusOK, "files")
@@ -60,7 +59,7 @@ func FilesList(c flamego.Context, s session.Session, t template.Template, data t
 
 	restricted, err := db.IsFilesPathRestricted(ctx, relPath)
 	if err != nil {
-		log.Printf("Error checking WebDAV restriction for %q: %v", relPath, err)
+		logger.Error("Error checking WebDAV restriction", "path", relPath, "error", err)
 		data["Error"] = "Failed to load files. Please check your WEBDAV_FILES_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables."
 		data["Entries"] = []db.WebDAVEntry{}
 		t.HTML(http.StatusOK, "files")
@@ -72,13 +71,13 @@ func FilesList(c flamego.Context, s session.Session, t template.Template, data t
 
 	data["IsRestricted"] = restricted
 	if restricted && !HasSensitiveAccess(s, time.Now()) {
-		redirectToBreakGlass(c)
+		redirectToBreakGlass(c, s)
 		return
 	}
 
 	entries, err := db.ListFilesEntries(ctx, relPath)
 	if err != nil {
-		log.Printf("Error listing WebDAV files for %q: %v", relPath, err)
+		logger.Error("Error listing WebDAV files", "path", relPath, "error", err)
 		data["Error"] = "Failed to load files. Please check your WEBDAV_FILES_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables."
 		entries = []db.WebDAVEntry{}
 	}
@@ -88,7 +87,7 @@ func FilesList(c flamego.Context, s session.Session, t template.Template, data t
 			if entry.IsDir {
 				entryAdminOnly, err := db.IsFilesPathAdminOnly(ctx, entry.Path)
 				if err != nil {
-					log.Printf("Error checking admin-only marker for %q: %v", entry.Path, err)
+					logger.Error("Error checking admin-only marker", "path", entry.Path, "error", err)
 					continue
 				}
 				if entryAdminOnly {
@@ -105,7 +104,7 @@ func FilesList(c flamego.Context, s session.Session, t template.Template, data t
 			}
 			entryAdminOnly, err := db.IsFilesPathAdminOnly(ctx, entries[i].Path)
 			if err != nil {
-				log.Printf("Error checking admin-only marker for %q: %v", entries[i].Path, err)
+				logger.Error("Error checking admin-only marker", "path", entries[i].Path, "error", err)
 				continue
 			}
 			entries[i].IsAdminOnly = entryAdminOnly
@@ -135,13 +134,13 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 
 	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil {
-		log.Printf("Error resolving admin state: %v", err)
+		logger.Error("Error resolving admin state", "error", err)
 		isAdmin = false
 	}
 
 	adminOnly, err := db.IsFilesPathAdminOnly(ctx, dirPath)
 	if err != nil {
-		log.Printf("Error checking WebDAV admin restriction for %q: %v", relPath, err)
+		logger.Error("Error checking WebDAV admin restriction", "path", relPath, "error", err)
 		SetErrorFlash(s, "Failed to load file")
 		c.Redirect(filesRedirectPath(dirPath), http.StatusSeeOther)
 		return
@@ -158,7 +157,7 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 
 	restricted, err := db.IsFilesPathRestricted(ctx, dirPath)
 	if err != nil {
-		log.Printf("Error checking WebDAV restriction for %q: %v", relPath, err)
+		logger.Error("Error checking WebDAV restriction", "path", relPath, "error", err)
 		SetErrorFlash(s, "Failed to load file")
 		c.Redirect(filesRedirectPath(dirPath), http.StatusSeeOther)
 		return
@@ -167,13 +166,13 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 		restricted = true
 	}
 	if restricted && !HasSensitiveAccess(s, time.Now()) {
-		redirectToBreakGlass(c)
+		redirectToBreakGlass(c, s)
 		return
 	}
 
 	fileData, contentType, err := db.FetchFilesFile(ctx, relPath)
 	if err != nil {
-		log.Printf("Error fetching WebDAV file %q: %v", relPath, err)
+		logger.Error("Error fetching WebDAV file", "path", relPath, "error", err)
 		SetErrorFlash(s, "File not found")
 		c.Redirect(filesRedirectPath(dirPath), http.StatusSeeOther)
 		return

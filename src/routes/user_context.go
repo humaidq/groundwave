@@ -7,7 +7,6 @@ package routes
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -30,7 +29,7 @@ func UserContextInjector() flamego.Handler {
 
 		isAdmin, err := resolveSessionIsAdmin(c.Request().Context(), s)
 		if err != nil {
-			log.Printf("Failed to resolve user admin state: %v", err)
+			logger.Error("Failed to resolve user admin state", "error", err)
 			return
 		}
 		data["IsAdmin"] = isAdmin
@@ -50,6 +49,11 @@ func UserContextInjector() flamego.Handler {
 func RequireAdmin(s session.Session, c flamego.Context) {
 	isAdmin, err := resolveSessionIsAdmin(c.Request().Context(), s)
 	if err != nil || !isAdmin {
+		if err != nil {
+			logAccessDenied(c, s, "not_admin", http.StatusSeeOther, "/inventory", "error", err)
+		} else {
+			logAccessDenied(c, s, "not_admin", http.StatusSeeOther, "/inventory")
+		}
 		SetErrorFlash(s, "Access restricted")
 		c.Redirect("/inventory", http.StatusSeeOther)
 		return

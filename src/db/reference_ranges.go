@@ -7,7 +7,6 @@ package db
 import (
 	"context"
 	"fmt"
-	"log"
 )
 
 // ReferenceRangeDefinition represents a reference range to be synced to the database
@@ -1528,7 +1527,7 @@ func SyncReferenceRanges(ctx context.Context) error {
 	}
 
 	definitions := GetReferenceRangeDefinitions()
-	log.Printf("Syncing %d reference range definitions to database...", len(definitions))
+	logger.Infof("Syncing %d reference range definitions to database...", len(definitions))
 
 	// Use UPSERT (INSERT ... ON CONFLICT DO UPDATE) for each range
 	query := `
@@ -1557,7 +1556,7 @@ func SyncReferenceRanges(ctx context.Context) error {
 		syncCount++
 	}
 
-	log.Printf("Successfully synced %d reference ranges", syncCount)
+	logger.Infof("Successfully synced %d reference ranges", syncCount)
 	return nil
 }
 

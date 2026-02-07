@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/url"
 	"strings"
 	"time"
@@ -123,7 +122,7 @@ func ListContacts(ctx context.Context) ([]ContactListItem, error) {
 		// Unmarshal tags JSON
 		if len(tagsJSON) > 0 && string(tagsJSON) != "[]" {
 			if err := json.Unmarshal(tagsJSON, &contact.Tags); err != nil {
-				log.Printf("Warning: failed to unmarshal tags for contact %s: %v", contact.ID, err)
+				logger.Warn("Failed to unmarshal tags for contact", "contact_id", contact.ID, "error", err)
 				contact.Tags = []Tag{}
 			}
 		} else {
@@ -257,7 +256,7 @@ func ListContactsWithFilters(ctx context.Context, opts ContactListOptions) ([]Co
 		// Unmarshal tags JSON
 		if len(tagsJSON) > 0 && string(tagsJSON) != "[]" {
 			if err := json.Unmarshal(tagsJSON, &contact.Tags); err != nil {
-				log.Printf("Warning: failed to unmarshal tags for contact %s: %v", contact.ID, err)
+				logger.Warn("Failed to unmarshal tags for contact", "contact_id", contact.ID, "error", err)
 				contact.Tags = []Tag{}
 			}
 		} else {
@@ -1720,7 +1719,7 @@ func ListServiceContacts(ctx context.Context) ([]ContactListItem, error) {
 		// Unmarshal tags JSON
 		if len(tagsJSON) > 0 && string(tagsJSON) != "[]" {
 			if err := json.Unmarshal(tagsJSON, &contact.Tags); err != nil {
-				log.Printf("Warning: failed to unmarshal tags for contact %s: %v", contact.ID, err)
+				logger.Warn("Failed to unmarshal tags for contact", "contact_id", contact.ID, "error", err)
 				contact.Tags = []Tag{}
 			}
 		} else {

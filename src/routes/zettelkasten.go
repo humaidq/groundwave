@@ -9,7 +9,6 @@ import (
 	"crypto/rand"
 	"encoding/gob"
 	"encoding/json"
-	"log"
 	"math/big"
 	"net/http"
 	"strings"
@@ -131,7 +130,7 @@ func buildBacklinks(ctx context.Context, backlinkIDs []string, basePath string, 
 
 		backlinkNote, err := db.GetNoteByIDWithBasePath(ctx, backlinkID, trimmedBase)
 		if err != nil {
-			log.Printf("Error fetching backlink note %s: %v", backlinkID, err)
+			logger.Error("Error fetching backlink note", "note_id", backlinkID, "error", err)
 			continue
 		}
 		if publicOnly && !backlinkNote.IsPublic {
@@ -153,7 +152,7 @@ func ZettelkastenIndex(c flamego.Context, s session.Session, t template.Template
 	// Fetch the index note
 	note, err := db.GetIndexNote(ctx)
 	if err != nil {
-		log.Printf("Error fetching zettelkasten index: %v", err)
+		logger.Error("Error fetching zettelkasten index", "error", err)
 		SetErrorFlash(s, "Failed to load zettelkasten. Please check your WEBDAV_ZK_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables.")
 		c.Redirect("/", http.StatusSeeOther)
 		return
@@ -164,7 +163,7 @@ func ZettelkastenIndex(c flamego.Context, s session.Session, t template.Template
 	if note.ID != "" {
 		comments, err = db.GetCommentsForZettel(ctx, note.ID)
 		if err != nil {
-			log.Printf("Error fetching comments for zettel %s: %v", note.ID, err)
+			logger.Error("Error fetching comments for zettel", "zettel_id", note.ID, "error", err)
 			// Don't fail the page, just log the error
 			comments = []db.ZettelComment{}
 		}
@@ -220,7 +219,7 @@ func ViewZKNote(c flamego.Context, s session.Session, t template.Template, data 
 	// Fetch the note
 	note, err := db.GetNoteByID(ctx, noteID)
 	if err != nil {
-		log.Printf("Error fetching note %s: %v", noteID, err)
+		logger.Error("Error fetching note", "note_id", noteID, "error", err)
 		SetErrorFlash(s, "Note not found: "+noteID)
 		c.Redirect("/zk", http.StatusSeeOther)
 		return
@@ -229,7 +228,7 @@ func ViewZKNote(c flamego.Context, s session.Session, t template.Template, data 
 	// Fetch comments for this zettel
 	comments, err := db.GetCommentsForZettel(ctx, noteID)
 	if err != nil {
-		log.Printf("Error fetching comments for zettel %s: %v", noteID, err)
+		logger.Error("Error fetching comments for zettel", "zettel_id", noteID, "error", err)
 		// Don't fail the page, just log the error
 		comments = []db.ZettelComment{}
 	}
@@ -285,7 +284,7 @@ func ViewPublicNote(c flamego.Context, s session.Session, t template.Template, d
 	note, err := db.GetNoteByIDWithBasePath(ctx, noteID, "/note")
 	if err != nil || !note.IsPublic {
 		if err != nil {
-			log.Printf("Error fetching public note %s: %v", noteID, err)
+			logger.Error("Error fetching public note", "note_id", noteID, "error", err)
 		}
 		renderPrivateNote(t, data)
 		return
@@ -313,7 +312,7 @@ func ZettelkastenList(c flamego.Context, t template.Template, data template.Data
 
 	notes, err := db.ListZKNotes(ctx)
 	if err != nil {
-		log.Printf("Error listing zettelkasten notes: %v", err)
+		logger.Error("Error listing zettelkasten notes", "error", err)
 		data["Error"] = "Failed to load zettelkasten notes"
 	} else {
 		data["Notes"] = notes
@@ -335,7 +334,7 @@ func ZettelkastenRandom(c flamego.Context, s session.Session) {
 
 	notes, err := db.ListZKNotes(ctx)
 	if err != nil {
-		log.Printf("Error listing zettelkasten notes: %v", err)
+		logger.Error("Error listing zettelkasten notes", "error", err)
 		SetErrorFlash(s, "Failed to load zettelkasten notes")
 		c.Redirect("/zk", http.StatusSeeOther)
 		return
@@ -350,7 +349,7 @@ func ZettelkastenRandom(c flamego.Context, s session.Session) {
 	indexMax := big.NewInt(int64(len(notes)))
 	index, err := rand.Int(rand.Reader, indexMax)
 	if err != nil {
-		log.Printf("Error picking random zettelkasten note: %v", err)
+		logger.Error("Error picking random zettelkasten note", "error", err)
 		SetErrorFlash(s, "Failed to pick a random page")
 		c.Redirect("/zk", http.StatusSeeOther)
 		return
@@ -379,7 +378,7 @@ func ZettelkastenChat(c flamego.Context, s session.Session, t template.Template,
 
 	notes, err := db.ListZKNotes(ctx)
 	if err != nil {
-		log.Printf("Error listing zettelkasten notes: %v", err)
+		logger.Error("Error listing zettelkasten notes", "error", err)
 		SetErrorFlash(s, "Failed to load zettelkasten notes")
 		c.Redirect("/zk", http.StatusSeeOther)
 		return
@@ -420,7 +419,7 @@ func ZettelkastenChatLinks(c flamego.Context) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string][]string{"links": links}); err != nil {
-		log.Printf("Error encoding chat links response: %v", err)
+		logger.Error("Error encoding chat links response", "error", err)
 	}
 }
 
@@ -449,7 +448,7 @@ func ZettelkastenChatBacklinks(c flamego.Context) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string][]string{"backlinks": backlinks}); err != nil {
-		log.Printf("Error encoding chat backlinks response: %v", err)
+		logger.Error("Error encoding chat backlinks response", "error", err)
 	}
 }
 
@@ -504,7 +503,7 @@ func ZettelkastenChatStream(c flamego.Context) {
 
 		note, err := db.GetZKNoteForChat(ctx, noteID)
 		if err != nil {
-			log.Printf("Error fetching zettelkasten note %s: %v", noteID, err)
+			logger.Error("Error fetching zettelkasten note", "note_id", noteID, "error", err)
 			sendError("Note not found: " + noteID)
 			return
 		}
@@ -522,7 +521,7 @@ func ZettelkastenChatStream(c flamego.Context) {
 		return nil
 	})
 	if err != nil {
-		log.Printf("Error generating zettelkasten chat response: %v", err)
+		logger.Error("Error generating zettelkasten chat response", "error", err)
 		sendError("Failed to generate response: " + err.Error())
 		return
 	}
@@ -544,7 +543,7 @@ func AddZettelComment(c flamego.Context, s session.Session, t template.Template,
 
 	// Parse form
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
 		return
 	}
@@ -559,7 +558,7 @@ func AddZettelComment(c flamego.Context, s session.Session, t template.Template,
 
 	// Create comment
 	if err := db.CreateZettelComment(ctx, zettelID, content); err != nil {
-		log.Printf("Error creating zettel comment: %v", err)
+		logger.Error("Error creating zettel comment", "error", err)
 		SetErrorFlash(s, "Failed to add comment")
 		c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
 		return
@@ -584,7 +583,7 @@ func DeleteZettelComment(c flamego.Context, s session.Session, t template.Templa
 	// Parse comment UUID
 	commentID, err := uuid.Parse(commentIDStr)
 	if err != nil {
-		log.Printf("Invalid comment ID: %v", err)
+		logger.Warn("Invalid comment ID", "error", err)
 		SetErrorFlash(s, "Invalid comment ID")
 		c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
 		return
@@ -594,7 +593,7 @@ func DeleteZettelComment(c flamego.Context, s session.Session, t template.Templa
 
 	// Delete comment
 	if err := db.DeleteZettelComment(ctx, commentID); err != nil {
-		log.Printf("Error deleting zettel comment: %v", err)
+		logger.Error("Error deleting zettel comment", "error", err)
 		SetErrorFlash(s, "Failed to delete comment")
 		c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
 		return
@@ -610,9 +609,9 @@ func RebuildCache(c flamego.Context, s session.Session) {
 	// Trigger cache rebuild asynchronously to avoid blocking the HTTP request
 	go func() {
 		if err := db.RebuildZettelkastenCaches(c.Request().Context()); err != nil {
-			log.Printf("[ERROR] Manual cache rebuild failed: %v", err)
+			logger.Error("Manual cache rebuild failed", "error", err)
 		} else {
-			log.Println("[INFO] Manual cache rebuild completed successfully")
+			logger.Info("Manual cache rebuild completed successfully")
 		}
 	}()
 
@@ -629,7 +628,7 @@ func ZettelCommentsInbox(c flamego.Context, s session.Session, t template.Templa
 	// Fetch all comments with zettel metadata
 	comments, err := db.GetAllZettelComments(ctx)
 	if err != nil {
-		log.Printf("Error fetching zettel comments: %v", err)
+		logger.Error("Error fetching zettel comments", "error", err)
 		SetErrorFlash(s, "Failed to load comments inbox")
 		c.Redirect("/zk", http.StatusSeeOther)
 		return

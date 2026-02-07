@@ -5,7 +5,6 @@
 package routes
 
 import (
-	"log"
 	"net/http"
 	"strings"
 
@@ -30,7 +29,7 @@ func ListTags(c flamego.Context, t template.Template, data template.Data) {
 	}
 
 	if err != nil {
-		log.Printf("Error fetching tags: %v", err)
+		logger.Error("Error fetching tags", "error", err)
 		data["Error"] = "Failed to load tags"
 	} else {
 		data["Tags"] = tags
@@ -55,7 +54,7 @@ func EditTagForm(c flamego.Context, s session.Session, t template.Template, data
 
 	tag, err := db.GetTag(c.Request().Context(), tagID)
 	if err != nil {
-		log.Printf("Error fetching tag %s: %v", tagID, err)
+		logger.Error("Error fetching tag", "tag_id", tagID, "error", err)
 		SetErrorFlash(s, "Tag not found")
 		c.Redirect("/tags", http.StatusSeeOther)
 		return
@@ -80,7 +79,7 @@ func UpdateTag(c flamego.Context, s session.Session) {
 	}
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/tags/"+tagID+"/edit", http.StatusSeeOther)
 		return
 	}
@@ -94,7 +93,7 @@ func UpdateTag(c flamego.Context, s session.Session) {
 
 	err := db.RenameTag(c.Request().Context(), tagID, name, getOptionalString(form.Get("description")))
 	if err != nil {
-		log.Printf("Error updating tag: %v", err)
+		logger.Error("Error updating tag", "error", err)
 		SetErrorFlash(s, "Failed to update tag")
 	} else {
 		SetSuccessFlash(s, "Tag updated successfully")
@@ -114,7 +113,7 @@ func DeleteTag(c flamego.Context, s session.Session) {
 
 	err := db.DeleteTag(c.Request().Context(), tagID)
 	if err != nil {
-		log.Printf("Error deleting tag %s: %v", tagID, err)
+		logger.Error("Error deleting tag", "tag_id", tagID, "error", err)
 		SetErrorFlash(s, "Failed to delete tag")
 	} else {
 		SetSuccessFlash(s, "Tag deleted successfully")
@@ -134,7 +133,7 @@ func ViewTagContacts(c flamego.Context, s session.Session, t template.Template, 
 
 	tag, err := db.GetTag(c.Request().Context(), tagID)
 	if err != nil {
-		log.Printf("Error fetching tag %s: %v", tagID, err)
+		logger.Error("Error fetching tag", "tag_id", tagID, "error", err)
 		SetErrorFlash(s, "Tag not found")
 		c.Redirect("/tags", http.StatusSeeOther)
 		return
@@ -142,7 +141,7 @@ func ViewTagContacts(c flamego.Context, s session.Session, t template.Template, 
 
 	contacts, err := db.GetContactsByTags(c.Request().Context(), []string{tagID})
 	if err != nil {
-		log.Printf("Error fetching contacts for tag %s: %v", tagID, err)
+		logger.Error("Error fetching contacts for tag", "tag_id", tagID, "error", err)
 		data["Error"] = "Failed to load contacts"
 	} else {
 		data["Contacts"] = contacts

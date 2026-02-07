@@ -5,7 +5,6 @@
 package routes
 
 import (
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -27,7 +26,7 @@ func Welcome(c flamego.Context, s session.Session, t template.Template, data tem
 
 	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil {
-		log.Printf("Failed to resolve admin state: %v", err)
+		logger.Error("Failed to resolve admin state", "error", err)
 		isAdmin = false
 	}
 	data["IsAdmin"] = isAdmin
@@ -36,7 +35,7 @@ func Welcome(c flamego.Context, s session.Session, t template.Template, data tem
 		// Get total contacts count
 		totalContacts, err := db.GetContactsCount(ctx)
 		if err != nil {
-			log.Printf("Error fetching contacts count: %v", err)
+			logger.Error("Error fetching contacts count", "error", err)
 			totalContacts = 0
 		}
 		data["TotalContacts"] = totalContacts
@@ -44,7 +43,7 @@ func Welcome(c flamego.Context, s session.Session, t template.Template, data tem
 		// Get overdue contacts count
 		overdueContacts, err := db.GetOverdueContacts(ctx)
 		if err != nil {
-			log.Printf("Error fetching overdue contacts: %v", err)
+			logger.Error("Error fetching overdue contacts", "error", err)
 			data["OverdueCount"] = 0
 		} else {
 			data["OverdueCount"] = len(overdueContacts)
@@ -53,7 +52,7 @@ func Welcome(c flamego.Context, s session.Session, t template.Template, data tem
 		// Get QSO count
 		qsoCount, err := db.GetQSOCount(ctx)
 		if err != nil {
-			log.Printf("Error fetching QSO count: %v", err)
+			logger.Error("Error fetching QSO count", "error", err)
 			qsoCount = 0
 		}
 		data["QSOCount"] = qsoCount
@@ -61,7 +60,7 @@ func Welcome(c flamego.Context, s session.Session, t template.Template, data tem
 		// Get recent contacts (last 5 modified)
 		recentContacts, err := db.GetRecentContacts(ctx, 5)
 		if err != nil {
-			log.Printf("Error fetching recent contacts: %v", err)
+			logger.Error("Error fetching recent contacts", "error", err)
 		} else {
 			data["RecentContacts"] = recentContacts
 		}
@@ -69,7 +68,7 @@ func Welcome(c flamego.Context, s session.Session, t template.Template, data tem
 		// Get notes count (from zettelkasten cache)
 		orgFiles, err := db.ListOrgFiles(ctx)
 		if err != nil {
-			log.Printf("Error fetching org files: %v", err)
+			logger.Error("Error fetching org files", "error", err)
 			data["NotesCount"] = 0
 		} else {
 			data["NotesCount"] = len(orgFiles)
@@ -78,7 +77,7 @@ func Welcome(c flamego.Context, s session.Session, t template.Template, data tem
 		// Get recent QSOs (last 5)
 		recentQSOs, err := db.ListRecentQSOs(ctx, 5)
 		if err != nil {
-			log.Printf("Error fetching recent QSOs: %v", err)
+			logger.Error("Error fetching recent QSOs", "error", err)
 		} else {
 			data["RecentQSOs"] = recentQSOs
 		}
@@ -95,7 +94,7 @@ func Welcome(c flamego.Context, s session.Session, t template.Template, data tem
 	// Get inventory count
 	inventoryCount, err := db.GetInventoryCount(ctx)
 	if err != nil {
-		log.Printf("Error fetching inventory count: %v", err)
+		logger.Error("Error fetching inventory count", "error", err)
 		inventoryCount = 0
 	}
 	data["InventoryCount"] = inventoryCount
@@ -106,7 +105,7 @@ func Welcome(c flamego.Context, s session.Session, t template.Template, data tem
 		if ok {
 			profiles, err := db.ListHealthProfilesForUser(ctx, userID)
 			if err != nil {
-				log.Printf("Error fetching shared health profiles: %v", err)
+				logger.Error("Error fetching shared health profiles", "error", err)
 				data["HealthProfileCount"] = 0
 			} else {
 				data["HealthProfileCount"] = len(profiles)
@@ -154,7 +153,7 @@ func Home(c flamego.Context, s session.Session, t template.Template, data templa
 	contacts, err = db.ListContactsWithFilters(ctx, opts)
 
 	if err != nil {
-		log.Printf("Error fetching contacts: %v", err)
+		logger.Error("Error fetching contacts", "error", err)
 		data["Error"] = "Failed to load contacts"
 	} else {
 		data["Contacts"] = contacts
@@ -163,7 +162,7 @@ func Home(c flamego.Context, s session.Session, t template.Template, data templa
 	// Fetch all tags for the filter UI
 	allTags, err := db.ListAllTags(ctx)
 	if err != nil {
-		log.Printf("Error fetching tags: %v", err)
+		logger.Error("Error fetching tags", "error", err)
 	} else {
 		data["AllTags"] = allTags
 		data["SelectedTags"] = tagIDs
@@ -175,7 +174,7 @@ func Home(c flamego.Context, s session.Session, t template.Template, data templa
 	// Get overdue contacts count for the button
 	overdueContacts, err := db.GetOverdueContacts(ctx)
 	if err != nil {
-		log.Printf("Error fetching overdue contacts: %v", err)
+		logger.Error("Error fetching overdue contacts", "error", err)
 		data["OverdueCount"] = 0
 	} else {
 		data["OverdueCount"] = len(overdueContacts)
@@ -196,7 +195,7 @@ func Overdue(c flamego.Context, s session.Session, t template.Template, data tem
 	// Fetch overdue contacts from database
 	contacts, err := db.GetOverdueContacts(c.Request().Context())
 	if err != nil {
-		log.Printf("Error fetching overdue contacts: %v", err)
+		logger.Error("Error fetching overdue contacts", "error", err)
 		data["Error"] = "Failed to load overdue contacts"
 	} else {
 		data["OverdueContacts"] = contacts
@@ -229,14 +228,14 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 
 	logs, err := db.ListContactLogsTimeline(ctx)
 	if err != nil {
-		log.Printf("Error fetching contact logs: %v", err)
+		logger.Error("Error fetching contact logs", "error", err)
 		data["Error"] = "Failed to load timeline"
 		logs = []db.ContactLogTimelineEntry{}
 	}
 
 	qsos, err := db.ListQSOs(ctx)
 	if err != nil {
-		log.Printf("Error fetching QSOs: %v", err)
+		logger.Error("Error fetching QSOs", "error", err)
 		qsos = []db.QSOListItem{}
 	}
 
@@ -245,7 +244,7 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 
 	primaryProfile, err := db.GetPrimaryHealthProfile(ctx)
 	if err != nil {
-		log.Printf("Error fetching primary health profile: %v", err)
+		logger.Error("Error fetching primary health profile", "error", err)
 	}
 
 	var followups []db.HealthFollowupSummary
@@ -253,7 +252,7 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 		data["PrimaryHealthProfileName"] = primaryProfile.Name
 		followups, err = db.ListFollowups(ctx, primaryProfile.ID.String())
 		if err != nil {
-			log.Printf("Error fetching follow-ups for primary health profile: %v", err)
+			logger.Error("Error fetching follow-ups for primary health profile", "error", err)
 			followups = []db.HealthFollowupSummary{}
 		}
 	}
@@ -427,7 +426,7 @@ func ViewJournalEntry(c flamego.Context, t template.Template, data template.Data
 
 	locations, err := db.ListJournalDayLocations(c.Request().Context(), entry.Date)
 	if err != nil {
-		log.Printf("Error fetching journal day locations: %v", err)
+		logger.Error("Error fetching journal day locations", "error", err)
 		locations = []db.JournalDayLocation{}
 	}
 	data["Locations"] = locations
@@ -451,7 +450,7 @@ func AddJournalLocation(c flamego.Context, s session.Session) {
 	}
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/journal/"+date, http.StatusSeeOther)
 		return
@@ -500,7 +499,7 @@ func AddJournalLocation(c flamego.Context, s session.Session) {
 
 	ctx := c.Request().Context()
 	if err := db.CreateJournalDayLocation(ctx, day, lat, lon); err != nil {
-		log.Printf("Error creating journal day location: %v", err)
+		logger.Error("Error creating journal day location", "error", err)
 		SetErrorFlash(s, "Failed to add location")
 		c.Redirect("/journal/"+date, http.StatusSeeOther)
 		return
@@ -529,7 +528,7 @@ func DeleteJournalLocation(c flamego.Context, s session.Session) {
 
 	ctx := c.Request().Context()
 	if err := db.DeleteJournalDayLocation(ctx, parsedID); err != nil {
-		log.Printf("Error deleting journal day location: %v", err)
+		logger.Error("Error deleting journal day location", "error", err)
 		SetErrorFlash(s, "Failed to delete location")
 		c.Redirect("/journal/"+date, http.StatusSeeOther)
 		return

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"html/template"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -227,7 +226,7 @@ func ListOrgFiles(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("failed to list directory: %w", err)
 	}
 
-	log.Printf("Found %d items in WebDAV directory %s", len(fileInfos), config.BaseURL)
+	logger.Info("Found WebDAV directory items", "count", len(fileInfos), "base_url", config.BaseURL)
 
 	var orgFiles []string
 	for _, info := range fileInfos {
@@ -265,7 +264,7 @@ func ListDailyOrgFiles(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("failed to list daily directory: %w", err)
 	}
 
-	log.Printf("Found %d items in WebDAV daily directory %s", len(fileInfos), dailyBaseURL)
+	logger.Info("Found WebDAV daily directory items", "count", len(fileInfos), "base_url", dailyBaseURL)
 
 	var orgFiles []string
 	for _, info := range fileInfos {
@@ -296,7 +295,7 @@ func FindFileByID(ctx context.Context, id string) (string, error) {
 	}
 
 	// Cache miss - scan all .org files
-	log.Printf("Cache miss for ID %s, scanning WebDAV directory...", id)
+	logger.Info("Cache miss for ID, scanning WebDAV directory", "id", id)
 
 	files, err := ListOrgFiles(ctx)
 	if err != nil {
@@ -307,7 +306,7 @@ func FindFileByID(ctx context.Context, id string) (string, error) {
 	for _, file := range files {
 		content, err := FetchOrgFile(ctx, file)
 		if err != nil {
-			log.Printf("Skipping unreadable file %s: %v", file, err)
+			logger.Warn("Skipping unreadable file", "file", file, "error", err)
 			continue
 		}
 
@@ -342,7 +341,7 @@ func ListZKNotes(ctx context.Context) ([]ZKNoteSummary, error) {
 	for _, file := range files {
 		content, err := FetchOrgFile(ctx, file)
 		if err != nil {
-			log.Printf("Skipping unreadable file %s: %v", file, err)
+			logger.Warn("Skipping unreadable file", "file", file, "error", err)
 			continue
 		}
 

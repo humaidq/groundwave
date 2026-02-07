@@ -5,7 +5,6 @@
 package routes
 
 import (
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,7 +34,7 @@ func InventoryList(c flamego.Context, s session.Session, t template.Template, da
 	}
 
 	if err != nil {
-		log.Printf("Error fetching inventory items: %v", err)
+		logger.Error("Error fetching inventory items", "error", err)
 		SetErrorFlash(s, "Failed to load inventory items")
 		c.Redirect("/", http.StatusSeeOther)
 		return
@@ -63,7 +62,7 @@ func ViewInventoryItem(c flamego.Context, s session.Session, t template.Template
 	ctx := c.Request().Context()
 	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil {
-		log.Printf("Error resolving admin state: %v", err)
+		logger.Error("Error resolving admin state", "error", err)
 		isAdmin = false
 	}
 	data["IsAdmin"] = isAdmin
@@ -71,7 +70,7 @@ func ViewInventoryItem(c flamego.Context, s session.Session, t template.Template
 	// Fetch item
 	item, err := db.GetInventoryItem(ctx, inventoryID)
 	if err != nil {
-		log.Printf("Error fetching inventory item %s: %v", inventoryID, err)
+		logger.Error("Error fetching inventory item", "inventory_id", inventoryID, "error", err)
 		SetErrorFlash(s, "Inventory item not found")
 		c.Redirect("/inventory", http.StatusSeeOther)
 		return
@@ -82,7 +81,7 @@ func ViewInventoryItem(c flamego.Context, s session.Session, t template.Template
 	if isAdmin {
 		comments, err = db.GetCommentsForItem(ctx, item.ID)
 		if err != nil {
-			log.Printf("Error fetching comments for item %s: %v", inventoryID, err)
+			logger.Error("Error fetching comments for item", "inventory_id", inventoryID, "error", err)
 			// Don't fail the page, just show empty comments
 			comments = []db.InventoryComment{}
 		}
@@ -92,7 +91,7 @@ func ViewInventoryItem(c flamego.Context, s session.Session, t template.Template
 	var files []db.WebDAVFile
 	webdavFiles, err := db.ListInventoryFiles(ctx, inventoryID)
 	if err != nil {
-		log.Printf("Warning: could not list WebDAV files for %s: %v", inventoryID, err)
+		logger.Warn("Could not list WebDAV files", "inventory_id", inventoryID, "error", err)
 		files = []db.WebDAVFile{} // Empty list if WebDAV not configured/available
 	} else {
 		files = webdavFiles
@@ -135,7 +134,7 @@ func NewInventoryItemForm(c flamego.Context, t template.Template, data template.
 	// Fetch distinct locations for autocomplete
 	locations, err := db.GetDistinctLocations(ctx)
 	if err != nil {
-		log.Printf("Error fetching locations: %v", err)
+		logger.Error("Error fetching locations", "error", err)
 		locations = []string{} // Continue with empty list
 	}
 
@@ -152,7 +151,7 @@ func NewInventoryItemForm(c flamego.Context, t template.Template, data template.
 // CreateInventoryItem handles inventory item creation
 func CreateInventoryItem(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form data")
 		c.Redirect("/inventory/new", http.StatusSeeOther)
 		return
@@ -195,7 +194,7 @@ func CreateInventoryItem(c flamego.Context, s session.Session, t template.Templa
 	// Create item
 	inventoryID, err := db.CreateInventoryItem(ctx, name, location, description, status, inspectionDate)
 	if err != nil {
-		log.Printf("Error creating inventory item: %v", err)
+		logger.Error("Error creating inventory item", "error", err)
 		SetErrorFlash(s, "Failed to create inventory item")
 		c.Redirect("/inventory/new", http.StatusSeeOther)
 		return
@@ -213,7 +212,7 @@ func EditInventoryItemForm(c flamego.Context, s session.Session, t template.Temp
 
 	item, err := db.GetInventoryItem(ctx, inventoryID)
 	if err != nil {
-		log.Printf("Error fetching inventory item: %v", err)
+		logger.Error("Error fetching inventory item", "error", err)
 		SetErrorFlash(s, "Inventory item not found")
 		c.Redirect("/inventory", http.StatusSeeOther)
 		return
@@ -222,7 +221,7 @@ func EditInventoryItemForm(c flamego.Context, s session.Session, t template.Temp
 	// Fetch locations for autocomplete
 	locations, err := db.GetDistinctLocations(ctx)
 	if err != nil {
-		log.Printf("Error fetching locations: %v", err)
+		logger.Error("Error fetching locations", "error", err)
 		locations = []string{}
 	}
 
@@ -243,7 +242,7 @@ func UpdateInventoryItem(c flamego.Context, s session.Session, t template.Templa
 	inventoryID := c.Param("id")
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/inventory/"+inventoryID+"/edit", http.StatusSeeOther)
 		return
@@ -284,7 +283,7 @@ func UpdateInventoryItem(c flamego.Context, s session.Session, t template.Templa
 	ctx := c.Request().Context()
 
 	if err := db.UpdateInventoryItem(ctx, inventoryID, name, location, description, status, inspectionDate); err != nil {
-		log.Printf("Error updating inventory item: %v", err)
+		logger.Error("Error updating inventory item", "error", err)
 		SetErrorFlash(s, "Failed to update inventory item")
 		c.Redirect("/inventory/"+inventoryID+"/edit", http.StatusSeeOther)
 		return
@@ -300,7 +299,7 @@ func DeleteInventoryItem(c flamego.Context, s session.Session, t template.Templa
 	ctx := c.Request().Context()
 
 	if err := db.DeleteInventoryItem(ctx, inventoryID); err != nil {
-		log.Printf("Error deleting inventory item: %v", err)
+		logger.Error("Error deleting inventory item", "error", err)
 		SetErrorFlash(s, "Failed to delete inventory item")
 		c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
 		return
@@ -318,14 +317,14 @@ func AddInventoryComment(c flamego.Context, s session.Session, t template.Templa
 	// Get item to retrieve numeric ID
 	item, err := db.GetInventoryItem(ctx, inventoryID)
 	if err != nil {
-		log.Printf("Error fetching inventory item: %v", err)
+		logger.Error("Error fetching inventory item", "error", err)
 		SetErrorFlash(s, "Inventory item not found")
 		c.Redirect("/inventory", http.StatusSeeOther)
 		return
 	}
 
 	if err := c.Request().ParseForm(); err != nil {
-		log.Printf("Error parsing form: %v", err)
+		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
 		return
 	}
@@ -337,7 +336,7 @@ func AddInventoryComment(c flamego.Context, s session.Session, t template.Templa
 	}
 
 	if err := db.CreateInventoryComment(ctx, item.ID, content); err != nil {
-		log.Printf("Error creating comment: %v", err)
+		logger.Error("Error creating comment", "error", err)
 		SetErrorFlash(s, "Failed to add comment")
 		c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
 		return
@@ -354,7 +353,7 @@ func DeleteInventoryComment(c flamego.Context, s session.Session, t template.Tem
 
 	commentID, err := uuid.Parse(commentIDStr)
 	if err != nil {
-		log.Printf("Invalid comment ID: %v", err)
+		logger.Warn("Invalid comment ID", "error", err)
 		SetErrorFlash(s, "Invalid comment ID")
 		c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
 		return
@@ -363,7 +362,7 @@ func DeleteInventoryComment(c flamego.Context, s session.Session, t template.Tem
 	ctx := c.Request().Context()
 
 	if err := db.DeleteInventoryComment(ctx, commentID); err != nil {
-		log.Printf("Error deleting comment: %v", err)
+		logger.Error("Error deleting comment", "error", err)
 		SetErrorFlash(s, "Failed to delete comment")
 		c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
 		return
@@ -390,7 +389,7 @@ func DownloadInventoryFile(c flamego.Context, s session.Session, t template.Temp
 	// Fetch file from WebDAV
 	fileData, contentType, err := db.FetchInventoryFile(ctx, inventoryID, filename)
 	if err != nil {
-		log.Printf("Error fetching file: %v", err)
+		logger.Error("Error fetching file", "error", err)
 		SetErrorFlash(s, "File not found")
 		c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
 		return

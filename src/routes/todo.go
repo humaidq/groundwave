@@ -5,7 +5,6 @@
 package routes
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/flamego/flamego"
@@ -20,7 +19,7 @@ func Todo(c flamego.Context, t template.Template, data template.Data) {
 
 	note, err := db.GetTodoNote(ctx)
 	if err != nil {
-		log.Printf("Error fetching todo note: %v", err)
+		logger.Error("Error fetching todo note", "error", err)
 		data["Error"] = "Failed to load todo list. Please check your WEBDAV_TODO_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables."
 	} else {
 		data["Note"] = note

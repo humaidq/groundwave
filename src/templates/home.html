@@ -30,12 +30,7 @@
 {{end}}
 
 <div class="tag-filter-section">
-  {{ if .SensitiveAccess }}
-  <form method="POST" action="/sensitive-access/lock" class="inline-form">
-    <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
-    <button type="submit" class="btn">Lock Sensitive View</button>
-  </form>
-  {{ else }}
+  {{ if not .SensitiveAccess }}
   <a href="/break-glass?next=/contacts" class="btn">Unlock Sensitive View</a>
   {{ end }}
   <form method="GET" action="/contacts" class="tag-filter-form">

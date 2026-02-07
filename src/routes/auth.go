@@ -13,7 +13,12 @@ import (
 )
 
 // LoginForm renders the login page
-func LoginForm(c flamego.Context, t template.Template, data template.Data) {
+func LoginForm(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+	authenticated, ok := s.Get("authenticated").(bool)
+	if ok && authenticated {
+		c.Redirect("/", http.StatusSeeOther)
+		return
+	}
 	data["HeaderOnly"] = true
 	t.HTML(http.StatusOK, "login")
 }
@@ -34,6 +39,7 @@ func Logout(s session.Session, c flamego.Context) {
 func RequireAuth(s session.Session, c flamego.Context) {
 	authenticated, ok := s.Get("authenticated").(bool)
 	if !ok || !authenticated {
+		logAccessDenied(c, s, "not_authenticated", http.StatusFound, "/login")
 		c.Redirect("/login")
 		return
 	}

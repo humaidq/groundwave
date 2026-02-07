@@ -9,7 +9,6 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -355,7 +354,7 @@ func PasskeyLoginFinish(c flamego.Context, s session.Session, web *webauthn.WebA
 		return loadWebAuthnUserByHandle(c.Request().Context(), rawID, userHandle)
 	}, *loginSession, c.Request().Request)
 	if err != nil {
-		log.Printf("passkey login verification failed: %v", err)
+		logger.Error("Passkey login verification failed", "error", err)
 		writeJSONError(c, http.StatusUnauthorized, "failed to verify passkey")
 		return
 	}
@@ -503,7 +502,7 @@ func BreakGlassFinish(c flamego.Context, s session.Session, web *webauthn.WebAut
 
 	credential, err := web.FinishLogin(waUser, *breakSession, c.Request().Request)
 	if err != nil {
-		log.Printf("break-glass passkey verification failed: %v", err)
+		logger.Error("Break-glass passkey verification failed", "error", err)
 		writeJSONError(c, http.StatusUnauthorized, "failed to verify passkey")
 		return
 	}

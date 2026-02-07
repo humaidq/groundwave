@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -72,36 +71,36 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	os.Setenv("DATABASE_URL", databaseURL)
 
 	// Initialize database connection
-	log.Println("Connecting to database...")
+	appLogger.Info("Connecting to database")
 	if err := db.Init(ctx); err != nil {
 		return fmt.Errorf("failed to initialize database: %w", err)
 	}
 	defer db.Close()
 
 	// Sync schema
-	log.Println("Syncing database schema...")
+	appLogger.Info("Syncing database schema")
 	if err := db.SyncSchema(ctx); err != nil {
 		return fmt.Errorf("failed to sync schema: %w", err)
 	}
-	log.Println("Database schema synced successfully")
+	appLogger.Info("Database schema synced successfully")
 
 	// Start cache rebuild worker
 	db.StartRebuildCacheWorker(context.Background())
 
 	// Sync CardDAV contacts
-	log.Println("Syncing contacts from CardDAV...")
+	appLogger.Info("Syncing contacts from CardDAV")
 	if err := db.SyncAllCardDAVContacts(ctx); err != nil {
-		log.Printf("Warning: CardDAV sync failed: %v", err)
+		appLogger.Warn("CardDAV sync failed", "error", err)
 		// Don't fail startup, just log the error
 	}
 
 	// Initialize WhatsApp client (optional feature)
-	log.Println("Initializing WhatsApp client...")
+	whatsappLogger.Info("Initializing WhatsApp client")
 	if err := whatsapp.Initialize(ctx, databaseURL, handleWhatsAppMessage); err != nil {
-		log.Printf("Warning: WhatsApp initialization failed: %v", err)
+		whatsappLogger.Warn("WhatsApp initialization failed", "error", err)
 		// Don't fail startup, WhatsApp is optional
 	} else {
-		log.Println("WhatsApp client initialized successfully")
+		whatsappLogger.Info("WhatsApp client initialized successfully")
 	}
 
 	// Create maps directory if it doesn't exist
@@ -109,7 +108,10 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		return fmt.Errorf("failed to create maps directory: %w", err)
 	}
 
-	f := flamego.Classic()
+	f := flamego.New()
+	f.Use(flamego.Recovery())
+	f.Map(requestLogger)
+	f.Map(requestStdLogger)
 	f.Map(webAuthn)
 
 	// Setup flamego
@@ -300,6 +302,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 			SameSite: http.SameSiteLaxMode,
 		},
 	}))
+	f.Use(routes.RequestLogger)
 	f.Use(csrf.Csrfer(csrf.Options{
 		Secret: csrfSecret,
 	}))
@@ -318,6 +321,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 			data["Flash"] = msg
 		}
 	})
+	f.Use(flamego.Static())
 	f.Use(flamego.Static(flamego.StaticOptions{
 		FileSystem: http.FS(static.Static),
 	}))
@@ -325,27 +329,6 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	f.Use(flamego.Static(flamego.StaticOptions{
 		Directory: "maps",
 	}))
-
-	// Add request logging middleware
-	f.Use(func(c flamego.Context) {
-		start := time.Now()
-		c.Next()
-
-		// Log the request
-		logEntry := fmt.Sprintf("[%s] %s %s %s - %v\n",
-			start.Format("2006-01-02 15:04:05"),
-			c.Request().Method,
-			c.Request().URL.Path,
-			c.Request().RemoteAddr,
-			time.Since(start))
-
-		// Append to log file
-		logFile, err := os.OpenFile("groundwave-access.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		if err == nil {
-			logFile.WriteString(logEntry)
-			logFile.Close()
-		}
-	})
 
 	// Public routes (no authentication required)
 	f.Get("/security.txt", func(c flamego.Context) {
@@ -519,7 +502,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 
 	port := cmd.String("port")
 
-	log.Printf("Starting web server on port %s\n", port)
+	appLogger.Info("Starting web server", "port", port)
 	srv := &http.Server{
 		Addr:         fmt.Sprintf("0.0.0.0:%s", port),
 		Handler:      f,
@@ -527,7 +510,9 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		WriteTimeout: 5 * time.Minute, // Extended for SSE streaming (AI summary)
 	}
 
-	log.Fatal(srv.ListenAndServe())
+	if err := srv.ListenAndServe(); err != nil {
+		appLogger.Fatal("web server failed", "error", err)
+	}
 
 	return nil
 }
@@ -543,7 +528,7 @@ func handleWhatsAppMessage(jid string, timestamp time.Time, isOutgoing bool, mes
 	// Find contact by phone number
 	contactID, err := db.FindContactByPhone(ctx, phone)
 	if err != nil {
-		log.Printf("Error finding contact by phone %s: %v", phone, err)
+		whatsappLogger.Error("Failed to find contact by phone", "phone", phone, "error", err)
 		return
 	}
 
@@ -555,7 +540,7 @@ func handleWhatsAppMessage(jid string, timestamp time.Time, isOutgoing bool, mes
 	// Update the contact's auto-contact timestamp
 	err = db.UpdateContactAutoTimestamp(ctx, *contactID, timestamp)
 	if err != nil {
-		log.Printf("Error updating auto contact timestamp for %s: %v", *contactID, err)
+		whatsappLogger.Error("Failed to update auto contact timestamp", "contact_id", *contactID, "error", err)
 		return
 	}
 
@@ -575,7 +560,7 @@ func handleWhatsAppMessage(jid string, timestamp time.Time, isOutgoing bool, mes
 			SentAt:    &sentAt,
 		})
 		if err != nil {
-			log.Printf("Error adding WhatsApp chat entry for %s: %v", *contactID, err)
+			whatsappLogger.Error("Failed to add WhatsApp chat entry", "contact_id", *contactID, "error", err)
 		}
 	}
 
@@ -583,5 +568,5 @@ func handleWhatsAppMessage(jid string, timestamp time.Time, isOutgoing bool, mes
 	if isOutgoing {
 		direction = "sent"
 	}
-	log.Printf("Updated last_auto_contact for contact %s (WhatsApp message %s)", *contactID, direction)
+	whatsappLogger.Info("Updated last_auto_contact", "contact_id", *contactID, "direction", direction)
 }

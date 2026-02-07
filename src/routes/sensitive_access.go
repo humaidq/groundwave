@@ -5,7 +5,7 @@
 package routes
 
 import (
-	"log"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -21,9 +21,12 @@ const sensitiveAccessWindow = 30 * time.Minute
 
 // BreakGlassForm renders the reauthentication page for sensitive data access.
 func BreakGlassForm(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+	next := sanitizeNextPath(c.Query("next"))
+	logBreakGlassView(c, s, next)
+
 	data["HeaderOnly"] = true
 	data["DisplayName"] = getSessionDisplayName(s)
-	data["Next"] = sanitizeNextPath(c.Query("next"))
+	data["Next"] = next
 	data["BreakGlassBase"] = c.Request().URL.Path
 
 	t.HTML(http.StatusOK, "break_glass")
@@ -46,7 +49,7 @@ func RequireSensitiveAccessForHealth(s session.Session, c flamego.Context) {
 		return
 	}
 
-	redirectToBreakGlass(c)
+	redirectToBreakGlass(c, s)
 }
 
 // RequireSensitiveAccess redirects to break glass when locked.
@@ -55,7 +58,7 @@ func RequireSensitiveAccess(s session.Session, c flamego.Context) {
 		c.Next()
 		return
 	}
-	redirectToBreakGlass(c)
+	redirectToBreakGlass(c, s)
 }
 
 // LockSensitiveAccess clears sensitive access for this session.
@@ -99,22 +102,24 @@ func getSensitiveAccessTime(s session.Session) (time.Time, bool) {
 		}
 		return *v, true
 	default:
-		log.Printf("Unexpected break glass timestamp type: %T", val)
+		logger.Warn("Unexpected break glass timestamp type", "type", fmt.Sprintf("%T", val))
 		return time.Time{}, false
 	}
 }
 
-func redirectToBreakGlass(c flamego.Context) {
+func redirectToBreakGlass(c flamego.Context, s session.Session) {
 	request := c.Request()
 	if request.Method == http.MethodGet || request.Method == http.MethodHead {
 		next := sanitizeNextPath(request.URL.RequestURI())
 		redirectURL := "/break-glass?next=" + url.QueryEscape(next)
+		logAccessDenied(c, s, "sensitive_access_locked", http.StatusSeeOther, "/break-glass", "next", next)
 		c.Redirect(redirectURL, http.StatusSeeOther)
 		return
 	}
 
 	next := sanitizeNextPath(request.Header.Get("Referer"))
 	redirectURL := "/break-glass?next=" + url.QueryEscape(next)
+	logAccessDenied(c, s, "sensitive_access_locked", http.StatusSeeOther, "/break-glass", "next", next)
 	c.Redirect(redirectURL, http.StatusSeeOther)
 }
 
