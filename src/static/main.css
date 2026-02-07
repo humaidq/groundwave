@@ -65,6 +65,18 @@ main {
 }
 
 @media only screen and (max-width: 780px) {
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background-color: #fefefe;
+  }
+
+  main {
+    flex: 1 0 auto;
+  }
+
   .main-no-header {
     margin-top: 0;
   }
@@ -1549,6 +1561,43 @@ code:not(pre code) {
 /* Hidden file input for upload buttons */
 .hidden-file-input {
   display: none;
+}
+
+/* Restricted Bar */
+.restricted-bar {
+  background-color: #5a0f0f;
+  color: #ffffff;
+  text-align: center;
+  margin: 0;
+  border: 0;
+}
+
+.restricted-bar-btn {
+  display: block;
+  width: 100%;
+  padding: 0.25rem 0.75rem;
+  border: none;
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  cursor: pointer;
+  text-align: center;
+  white-space: normal;
+}
+
+.restricted-bar-btn:hover {
+  background-color: #6b1515;
+}
+
+.restricted-bar-btn:focus {
+  outline: 2px solid #ffbf47;
+  outline-offset: -2px;
+}
+
+.restricted-bar-countdown {
+  font-weight: 600;
 }
 
 /* Offline Bar */
@@ -4130,6 +4179,7 @@ code:not(pre code) {
   .tag-pill-delete-btn,
   .header-container,
   .groundwave-header,
+  .restricted-bar,
   .offline-bar,
   .alert {
     display: none !important;

@@ -28,12 +28,48 @@
           var bar = document.getElementById('offline-bar');
           if (bar) bar.classList.toggle('show', offline);
         }
+        function startRestrictedCountdown() {
+          var bar = document.getElementById('restricted-bar');
+          if (!bar) return;
+          var expiresAt = parseInt(bar.getAttribute('data-expires-at'), 10);
+          if (!expiresAt) return;
+          var countdown = bar.querySelector('.restricted-bar-countdown');
+          if (!countdown) return;
+
+          function pad(value) {
+            return value < 10 ? '0' + value : String(value);
+          }
+          function formatRemaining(totalSeconds) {
+            var hours = Math.floor(totalSeconds / 3600);
+            var minutes = Math.floor((totalSeconds % 3600) / 60);
+            var seconds = totalSeconds % 60;
+            if (hours > 0) {
+              return hours + ':' + pad(minutes) + ':' + pad(seconds);
+            }
+            return pad(minutes) + ':' + pad(seconds);
+          }
+          function updateCountdown() {
+            var now = Math.floor(Date.now() / 1000);
+            var remaining = expiresAt - now;
+            if (remaining <= 0) {
+              countdown.textContent = ' - Lock expired';
+              return;
+            }
+            countdown.textContent = ' - Locks in ' + formatRemaining(remaining);
+          }
+
+          updateCountdown();
+          setInterval(updateCountdown, 1000);
+        }
         function checkOnline() {
           fetch('/connectivity', { cache: 'no-store' })
             .then(function(r) { setOffline(!r.ok); })
             .catch(function() { setOffline(true); });
         }
-        document.addEventListener('DOMContentLoaded', checkOnline);
+        document.addEventListener('DOMContentLoaded', function() {
+          checkOnline();
+          startRestrictedCountdown();
+        });
         setInterval(checkOnline, 5000);
         window.addEventListener('online', checkOnline);
         window.addEventListener('offline', function() { setOffline(true); });
@@ -41,6 +77,15 @@
     </script>
     {{ if or (not .HideNav) .HeaderOnly }}
     <header class="groundwave-header">
+      {{ if .SensitiveAccess }}
+      <form id="restricted-bar" class="restricted-bar" method="POST" action="/sensitive-access/lock" data-expires-at="{{ .SensitiveAccessExpiresAt }}">
+        <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+        <button type="submit" class="restricted-bar-btn">
+          Restricted view is unlocked, you can view sensitive information. Click here to re-lock.
+          <span class="restricted-bar-countdown" aria-live="off"></span>
+        </button>
+      </form>
+      {{ end }}
       <div id="offline-bar" class="offline-bar">You are offline</div>
       <div class="header-container">
         <a href="/" class="header-logo">Groundwave</a>

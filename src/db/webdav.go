@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"sort"
@@ -196,6 +197,8 @@ func ListFilesEntries(ctx context.Context, dirPath string) ([]WebDAVEntry, error
 		return nil, fmt.Errorf("failed to create WebDAV client: %w", err)
 	}
 
+	basePath := filesBasePath(config)
+
 	target := "."
 	if dirPath != "" {
 		target = dirPath
@@ -208,7 +211,7 @@ func ListFilesEntries(ctx context.Context, dirPath string) ([]WebDAVEntry, error
 
 	entries := make([]WebDAVEntry, 0, len(fileInfos))
 	for _, info := range fileInfos {
-		if isListingSelf(info.Path, dirPath) {
+		if isListingSelf(info.Path, dirPath, basePath) {
 			continue
 		}
 		name := extractFilename(info.Path)
@@ -392,18 +395,58 @@ func extractFilename(path string) string {
 	return parts[len(parts)-1]
 }
 
-func isListingSelf(entryPath string, dirPath string) bool {
-	entry := strings.TrimSuffix(strings.TrimPrefix(entryPath, "/"), "/")
-	if entry == "." {
-		entry = ""
-	}
-
-	dir := strings.TrimSuffix(strings.TrimPrefix(dirPath, "/"), "/")
-	if dir == "." {
-		dir = ""
-	}
-
+func isListingSelf(entryPath string, dirPath string, basePath string) bool {
+	entry := normalizeFilesPathForCompare(entryPath, basePath)
+	dir := normalizeFilesPathForCompare(dirPath, "")
 	return entry == dir
+}
+
+func normalizeFilesPathForCompare(value string, basePath string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+	if decoded, err := url.PathUnescape(trimmed); err == nil {
+		trimmed = decoded
+	}
+	if basePath != "" {
+		base := basePath
+		if decoded, err := url.PathUnescape(base); err == nil {
+			base = decoded
+		}
+		original := trimmed
+		trimmed = strings.TrimPrefix(trimmed, base)
+		if trimmed == original {
+			altBase := strings.TrimSuffix(base, "/")
+			if altBase != "" && altBase != "/" {
+				trimmed = strings.TrimPrefix(trimmed, altBase)
+			}
+		}
+	}
+	trimmed = strings.TrimPrefix(trimmed, "/")
+	trimmed = strings.TrimSuffix(trimmed, "/")
+	if trimmed == "." {
+		trimmed = ""
+	}
+	return trimmed
+}
+
+func filesBasePath(config *WebDAVConfig) string {
+	parsed, err := url.Parse(config.FilesPath)
+	if err != nil {
+		return ""
+	}
+	basePath := parsed.Path
+	if basePath == "" {
+		basePath = "/"
+	}
+	if !strings.HasPrefix(basePath, "/") {
+		basePath = "/" + basePath
+	}
+	if !strings.HasSuffix(basePath, "/") {
+		basePath += "/"
+	}
+	return basePath
 }
 
 func inferContentType(filename string) string {

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/flamego/flamego"
 	"github.com/flamego/session"
@@ -33,6 +34,15 @@ func UserContextInjector() flamego.Handler {
 			return
 		}
 		data["IsAdmin"] = isAdmin
+
+		now := time.Now()
+		sensitiveAccess := HasSensitiveAccess(s, now)
+		data["SensitiveAccess"] = sensitiveAccess
+		if sensitiveAccess {
+			if unlockedAt, ok := getSensitiveAccessTime(s); ok {
+				data["SensitiveAccessExpiresAt"] = unlockedAt.Add(sensitiveAccessWindow).Unix()
+			}
+		}
 	}
 }
 

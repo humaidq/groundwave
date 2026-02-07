@@ -413,10 +413,10 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	// Admin-only routes
 	f.Group("", func() {
 		f.Get("/todo", routes.Todo)
-		f.Get("/timeline", routes.Timeline)
-		f.Get("/journal/{date}", routes.ViewJournalEntry)
-		f.Post("/journal/{date}/location", csrf.Validate, routes.AddJournalLocation)
-		f.Post("/journal/{date}/location/{location_id}/delete", csrf.Validate, routes.DeleteJournalLocation)
+		f.Get("/timeline", routes.RequireSensitiveAccess, routes.Timeline)
+		f.Get("/journal/{date}", routes.RequireSensitiveAccess, routes.ViewJournalEntry)
+		f.Post("/journal/{date}/location", routes.RequireSensitiveAccess, csrf.Validate, routes.AddJournalLocation)
+		f.Post("/journal/{date}/location/{location_id}/delete", routes.RequireSensitiveAccess, csrf.Validate, routes.DeleteJournalLocation)
 		f.Get("/contacts", routes.Home)
 		f.Get("/overdue", routes.Overdue)
 		f.Get("/qsl", routes.QSL)
@@ -513,6 +513,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		// Security admin actions
 		f.Post("/security/invites", csrf.Validate, routes.CreateUserInvite)
 		f.Post("/security/invites/{id}/delete", csrf.Validate, routes.DeleteUserInvite)
+		f.Post("/security/users/{id}/delete", csrf.Validate, routes.DeleteUserAccount)
 		f.Post("/security/users/{id}/health-shares", csrf.Validate, routes.UpdateHealthProfileShares)
 	}, routes.RequireAuth, routes.RequireAdmin, routes.RequireSensitiveAccessForHealth)
 

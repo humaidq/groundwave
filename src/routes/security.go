@@ -189,6 +189,16 @@ type InviteInfo struct {
 	QRCode      string
 }
 
+// AccountInfo represents a user account for the security page.
+type AccountInfo struct {
+	ID          string
+	DisplayName string
+	IsAdmin     bool
+	CreatedAt   time.Time
+	IsCurrent   bool
+	CanDelete   bool
+}
+
 // HealthProfileOption represents a health profile for sharing.
 type HealthProfileOption struct {
 	ID        string
@@ -224,12 +234,15 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 
 	var users []db.User
 	userNameByID := make(map[string]string)
+	usersLoaded := false
 	if isAdmin {
 		users, err = db.ListUsers(ctx)
 		if err != nil {
 			log.Printf("Failed to load users: %v", err)
 			data["ShareError"] = "Failed to load user list"
+			data["AccountError"] = "Failed to load user list"
 		} else {
+			usersLoaded = true
 			for _, user := range users {
 				userNameByID[user.ID.String()] = user.DisplayName
 			}
@@ -306,6 +319,30 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 			CreatedAt: passkey.CreatedAt,
 			LastUsed:  passkey.LastUsedAt,
 		})
+	}
+
+	if isAdmin && usersLoaded {
+		adminCount := 0
+		for _, user := range users {
+			if user.IsAdmin {
+				adminCount++
+			}
+		}
+
+		accountInfos := make([]AccountInfo, 0, len(users))
+		for _, user := range users {
+			isCurrent := user.ID.String() == userID
+			canDelete := !isCurrent && (!user.IsAdmin || adminCount > 1)
+			accountInfos = append(accountInfos, AccountInfo{
+				ID:          user.ID.String(),
+				DisplayName: user.DisplayName,
+				IsAdmin:     user.IsAdmin,
+				CreatedAt:   user.CreatedAt,
+				IsCurrent:   isCurrent,
+				CanDelete:   canDelete,
+			})
+		}
+		data["Accounts"] = accountInfos
 	}
 
 	data["Sessions"] = sessionInfos
@@ -606,6 +643,97 @@ func DeleteUserInvite(c flamego.Context, s session.Session) {
 	}
 
 	SetSuccessFlash(s, "Invite revoked")
+	c.Redirect("/security", http.StatusSeeOther)
+}
+
+// DeleteUserAccount removes a user account (admin only).
+func DeleteUserAccount(c flamego.Context, s session.Session, store session.Store) {
+	ctx := c.Request().Context()
+	isAdmin, err := resolveSessionIsAdmin(ctx, s)
+	if err != nil || !isAdmin {
+		SetErrorFlash(s, "Access restricted")
+		c.Redirect("/security", http.StatusSeeOther)
+		return
+	}
+
+	userID := strings.TrimSpace(c.Param("id"))
+	if userID == "" {
+		SetErrorFlash(s, "Missing user ID")
+		c.Redirect("/security", http.StatusSeeOther)
+		return
+	}
+
+	currentUserID, ok := getSessionUserID(s)
+	if !ok {
+		SetErrorFlash(s, "Unable to resolve current user")
+		c.Redirect("/security", http.StatusSeeOther)
+		return
+	}
+	if userID == currentUserID {
+		SetErrorFlash(s, "You cannot delete your own account")
+		c.Redirect("/security", http.StatusSeeOther)
+		return
+	}
+
+	targetUser, err := db.GetUserByID(ctx, userID)
+	if err != nil {
+		SetErrorFlash(s, "User not found")
+		c.Redirect("/security", http.StatusSeeOther)
+		return
+	}
+
+	if targetUser.IsAdmin {
+		users, err := db.ListUsers(ctx)
+		if err != nil {
+			SetErrorFlash(s, "Failed to load user list")
+			c.Redirect("/security", http.StatusSeeOther)
+			return
+		}
+		adminCount := 0
+		for _, user := range users {
+			if user.IsAdmin {
+				adminCount++
+			}
+		}
+		if adminCount <= 1 {
+			SetErrorFlash(s, "Cannot delete the last admin account")
+			c.Redirect("/security", http.StatusSeeOther)
+			return
+		}
+	}
+
+	postgresStore, ok := store.(*db.PostgresSessionStore)
+	if !ok {
+		SetErrorFlash(s, "Unable to access session information")
+		c.Redirect("/security", http.StatusSeeOther)
+		return
+	}
+
+	sessions, err := postgresStore.ListValidSessions(ctx)
+	if err != nil {
+		SetErrorFlash(s, "Failed to load session information")
+		c.Redirect("/security", http.StatusSeeOther)
+		return
+	}
+
+	for _, sess := range sessions {
+		if sess.UserID != userID {
+			continue
+		}
+		if err := postgresStore.Destroy(ctx, sess.ID); err != nil {
+			SetErrorFlash(s, "Failed to invalidate user sessions")
+			c.Redirect("/security", http.StatusSeeOther)
+			return
+		}
+	}
+
+	if err := db.DeleteUser(ctx, userID); err != nil {
+		SetErrorFlash(s, "Failed to delete account")
+		c.Redirect("/security", http.StatusSeeOther)
+		return
+	}
+
+	SetSuccessFlash(s, "Account deleted")
 	c.Redirect("/security", http.StatusSeeOther)
 }
 
