@@ -64,10 +64,10 @@ func Initialize(ctx context.Context, databaseURL string, onMessage MessageHandle
 		store.SetOSInfo("Groundwave", [3]uint32{1, 0, 0})
 
 		// Create a silent logger for whatsmeow
-		logger := waLog.Noop
+		waLogger := waLog.Noop
 
 		// Initialize the SQL store with PostgreSQL
-		container, err := sqlstore.New(ctx, "pgx", databaseURL, logger)
+		container, err := sqlstore.New(ctx, "pgx", databaseURL, waLogger)
 		if err != nil {
 			initErr = fmt.Errorf("failed to create sqlstore: %w", err)
 			return
@@ -90,7 +90,11 @@ func Initialize(ctx context.Context, databaseURL string, onMessage MessageHandle
 
 		// If we have an existing device, try to reconnect
 		if deviceStore.ID != nil {
-			go instance.Reconnect(context.Background())
+			go func() {
+				if err := instance.Reconnect(context.Background()); err != nil {
+					logger.Error("WhatsApp reconnect failed", "error", err)
+				}
+			}()
 		}
 	})
 

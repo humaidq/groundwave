@@ -52,7 +52,9 @@ func ExtensionAuth(c flamego.Context) {
 	token, err := generateExtensionToken()
 	if err != nil {
 		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
-		c.ResponseWriter().Write([]byte("failed to generate token"))
+		if _, writeErr := c.ResponseWriter().Write([]byte("failed to generate token")); writeErr != nil {
+			logger.Error("Error writing extension auth response", "error", writeErr)
+		}
 		return
 	}
 
@@ -65,7 +67,7 @@ func ExtensionAuth(c flamego.Context) {
 func ExtensionComplete(c flamego.Context) {
 	c.ResponseWriter().Header().Set("Content-Type", "text/html; charset=utf-8")
 	c.ResponseWriter().WriteHeader(http.StatusOK)
-	c.ResponseWriter().Write([]byte(`<!doctype html>
+	if _, err := c.ResponseWriter().Write([]byte(`<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -91,7 +93,9 @@ func ExtensionComplete(c flamego.Context) {
     }
   </script>
 </body>
-</html>`))
+</html>`)); err != nil {
+		logger.Error("Error writing extension completion HTML", "error", err)
+	}
 }
 
 // ExtensionValidate checks whether the provided token is valid.
@@ -108,7 +112,9 @@ func ExtensionValidate(c flamego.Context) {
 	}
 
 	c.ResponseWriter().Header().Set("Content-Type", "application/json")
-	json.NewEncoder(c.ResponseWriter()).Encode(map[string]bool{"valid": true})
+	if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]bool{"valid": true}); err != nil {
+		logger.Error("Error encoding extension validation", "error", err)
+	}
 }
 
 // ExtensionLinkedInLookup checks if LinkedIn URLs exist in contacts.
@@ -130,7 +136,9 @@ func ExtensionLinkedInLookup(c flamego.Context) {
 
 	if err := json.NewDecoder(c.Request().Body().ReadCloser()).Decode(&request); err != nil {
 		c.ResponseWriter().WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "invalid request body"})
+		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "invalid request body"}); err != nil {
+			logger.Error("Error encoding extension lookup error", "error", err)
+		}
 		return
 	}
 
@@ -146,7 +154,9 @@ func ExtensionLinkedInLookup(c flamego.Context) {
 	storedURLs, err := db.ListLinkedInURLs(c.Request().Context())
 	if err != nil {
 		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "failed to fetch LinkedIn URLs"})
+		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "failed to fetch LinkedIn URLs"}); err != nil {
+			logger.Error("Error encoding extension lookup error", "error", err)
+		}
 		return
 	}
 
@@ -173,13 +183,15 @@ func ExtensionLinkedInLookup(c flamego.Context) {
 	}
 
 	c.ResponseWriter().Header().Set("Content-Type", "application/json")
-	json.NewEncoder(c.ResponseWriter()).Encode(struct {
+	if err := json.NewEncoder(c.ResponseWriter()).Encode(struct {
 		Matches  map[string]bool   `json:"matches"`
 		Contacts map[string]string `json:"contacts"`
 	}{
 		Matches:  matches,
 		Contacts: contacts,
-	})
+	}); err != nil {
+		logger.Error("Error encoding extension lookup response", "error", err)
+	}
 }
 
 type extensionContactSummary struct {
@@ -203,7 +215,9 @@ func ExtensionContactsWithoutLinkedIn(c flamego.Context) {
 	contacts, err := db.ListContactsWithoutLinkedIn(c.Request().Context())
 	if err != nil {
 		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "failed to fetch contacts"})
+		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "failed to fetch contacts"}); err != nil {
+			logger.Error("Error encoding extension contacts error", "error", err)
+		}
 		return
 	}
 
@@ -216,11 +230,13 @@ func ExtensionContactsWithoutLinkedIn(c flamego.Context) {
 	}
 
 	c.ResponseWriter().Header().Set("Content-Type", "application/json")
-	json.NewEncoder(c.ResponseWriter()).Encode(struct {
+	if err := json.NewEncoder(c.ResponseWriter()).Encode(struct {
 		Contacts []extensionContactSummary `json:"contacts"`
 	}{
 		Contacts: response,
-	})
+	}); err != nil {
+		logger.Error("Error encoding extension contacts response", "error", err)
+	}
 }
 
 // ExtensionLinkedInAssign links a LinkedIn URL to a contact.
@@ -243,20 +259,26 @@ func ExtensionLinkedInAssign(c flamego.Context) {
 
 	if err := json.NewDecoder(c.Request().Body().ReadCloser()).Decode(&request); err != nil {
 		c.ResponseWriter().WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "invalid request body"})
+		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "invalid request body"}); err != nil {
+			logger.Error("Error encoding extension assign error", "error", err)
+		}
 		return
 	}
 
 	if strings.TrimSpace(request.ContactID) == "" {
 		c.ResponseWriter().WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "missing contact ID"})
+		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "missing contact ID"}); err != nil {
+			logger.Error("Error encoding extension assign error", "error", err)
+		}
 		return
 	}
 
 	normalized, ok := db.NormalizeLinkedInURL(request.URL)
 	if !ok {
 		c.ResponseWriter().WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "invalid LinkedIn URL"})
+		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "invalid LinkedIn URL"}); err != nil {
+			logger.Error("Error encoding extension assign error", "error", err)
+		}
 		return
 	}
 
@@ -266,15 +288,19 @@ func ExtensionLinkedInAssign(c flamego.Context) {
 		URLType:   db.URLLinkedIn,
 	}); err != nil {
 		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "failed to add LinkedIn URL"})
+		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "failed to add LinkedIn URL"}); err != nil {
+			logger.Error("Error encoding extension assign error", "error", err)
+		}
 		return
 	}
 
 	c.ResponseWriter().Header().Set("Content-Type", "application/json")
-	json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{
+	if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{
 		"status":        "ok",
 		"normalizedUrl": normalized,
-	})
+	}); err != nil {
+		logger.Error("Error encoding extension assign response", "error", err)
+	}
 }
 
 func hasValidExtensionToken(c flamego.Context) bool {
@@ -288,7 +314,9 @@ func hasValidExtensionToken(c flamego.Context) bool {
 func writeExtensionAuthError(c flamego.Context, status int) {
 	c.ResponseWriter().Header().Set("Content-Type", "application/json")
 	c.ResponseWriter().WriteHeader(status)
-	json.NewEncoder(c.ResponseWriter()).Encode(map[string]bool{"valid": false})
+	if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]bool{"valid": false}); err != nil {
+		logger.Error("Error encoding extension auth error", "error", err)
+	}
 }
 
 func generateExtensionToken() (string, error) {

@@ -6,10 +6,12 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // HealthProfileShare represents a shared profile entry.
@@ -159,7 +161,11 @@ func SetHealthProfileShares(ctx context.Context, userID string, profileIDs []str
 	if err != nil {
 		return fmt.Errorf("failed to start transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+			logger.Warn("Failed to rollback health profile shares", "error", err)
+		}
+	}()
 
 	if _, err := tx.Exec(ctx, `DELETE FROM health_profile_shares WHERE user_id = $1`, userUUID); err != nil {
 		return fmt.Errorf("failed to clear existing shares: %w", err)

@@ -1222,11 +1222,17 @@ func GenerateAISummary(c flamego.Context, s session.Session) {
 	// Helper to send SSE event
 	sendEvent := func(event, data string) {
 		if event != "" {
-			w.Write([]byte("event: " + event + "\n"))
+			if _, err := w.Write([]byte("event: " + event + "\n")); err != nil {
+				logger.Error("Error writing SSE event", "error", err)
+				return
+			}
 		}
 		// Escape newlines in data for SSE format
 		escapedData := strings.ReplaceAll(data, "\n", "\ndata: ")
-		w.Write([]byte("data: " + escapedData + "\n\n"))
+		if _, err := w.Write([]byte("data: " + escapedData + "\n\n")); err != nil {
+			logger.Error("Error writing SSE data", "error", err)
+			return
+		}
 		if flusher, ok := w.(http.Flusher); ok {
 			flusher.Flush()
 		}

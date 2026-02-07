@@ -83,7 +83,11 @@ func ensureDatabaseExists(ctx context.Context, databaseURL string) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to postgres database: %w", err)
 	}
-	defer conn.Close(ctx)
+	defer func() {
+		if err := conn.Close(ctx); err != nil {
+			logger.Warn("Failed to close bootstrap database connection", "error", err)
+		}
+	}()
 
 	// Check if database exists
 	var exists bool

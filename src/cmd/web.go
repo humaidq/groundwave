@@ -68,7 +68,9 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	}
 
 	// Set DATABASE_URL for db package
-	os.Setenv("DATABASE_URL", databaseURL)
+	if err := os.Setenv("DATABASE_URL", databaseURL); err != nil {
+		return fmt.Errorf("failed to set DATABASE_URL: %w", err)
+	}
 
 	// Initialize database connection
 	appLogger.Info("Connecting to database")
@@ -343,7 +345,11 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	f.Post("/webauthn/login/finish", csrf.Validate, routes.PasskeyLoginFinish)
 	f.Post("/webauthn/setup/start", csrf.Validate, routes.SetupStart)
 	f.Post("/webauthn/setup/finish", csrf.Validate, routes.SetupFinish)
-	f.Get("/connectivity", func(c flamego.Context) { c.ResponseWriter().Write([]byte("1")) })
+	f.Get("/connectivity", func(c flamego.Context) {
+		if _, err := c.ResponseWriter().Write([]byte("1")); err != nil {
+			appLogger.Error("Error writing connectivity response", "error", err)
+		}
+	})
 	f.Get("/note/{id}", routes.ViewPublicNote)
 	f.Get("/ext/auth", routes.RequireAuth, routes.RequireAdmin, routes.ExtensionAuth)
 	f.Get("/ext/complete", routes.ExtensionComplete)

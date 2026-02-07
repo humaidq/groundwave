@@ -70,7 +70,9 @@ func getDB(cmd *cli.Command) (*sql.DB, error) {
 	}
 
 	// Set DATABASE_URL for db package
-	os.Setenv("DATABASE_URL", databaseURL)
+	if err := os.Setenv("DATABASE_URL", databaseURL); err != nil {
+		return nil, fmt.Errorf("failed to set DATABASE_URL: %w", err)
+	}
 
 	// Open a database/sql connection for goose
 	sqlDB, err := sql.Open("pgx", databaseURL)
@@ -80,7 +82,9 @@ func getDB(cmd *cli.Command) (*sql.DB, error) {
 
 	// Test the connection
 	if err := sqlDB.Ping(); err != nil {
-		sqlDB.Close()
+		if closeErr := sqlDB.Close(); closeErr != nil {
+			return nil, fmt.Errorf("failed to ping database: %w (close error: %v)", err, closeErr)
+		}
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
@@ -89,7 +93,9 @@ func getDB(cmd *cli.Command) (*sql.DB, error) {
 
 	// Set dialect
 	if err := goose.SetDialect("postgres"); err != nil {
-		sqlDB.Close()
+		if closeErr := sqlDB.Close(); closeErr != nil {
+			return nil, fmt.Errorf("failed to set dialect: %w (close error: %v)", err, closeErr)
+		}
 		return nil, fmt.Errorf("failed to set dialect: %w", err)
 	}
 
@@ -101,7 +107,11 @@ func migrateUp(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			appLogger.Warn("Failed to close migration database", "error", err)
+		}
+	}()
 
 	if err := goose.Up(db, "migrations"); err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)
@@ -116,7 +126,11 @@ func migrateDown(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			appLogger.Warn("Failed to close migration database", "error", err)
+		}
+	}()
 
 	if err := goose.Down(db, "migrations"); err != nil {
 		return fmt.Errorf("failed to roll back migration: %w", err)
@@ -131,7 +145,11 @@ func migrateStatus(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			appLogger.Warn("Failed to close migration database", "error", err)
+		}
+	}()
 
 	if err := goose.Status(db, "migrations"); err != nil {
 		return fmt.Errorf("failed to get migration status: %w", err)
@@ -145,7 +163,11 @@ func migrateVersion(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			appLogger.Warn("Failed to close migration database", "error", err)
+		}
+	}()
 
 	version, err := goose.GetDBVersion(db)
 	if err != nil {

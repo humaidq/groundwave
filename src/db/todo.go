@@ -69,7 +69,11 @@ func GetTodoNote(ctx context.Context) (*TodoNote, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch todo file: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Warn("Failed to close todo response body", "error", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch todo file: HTTP %d", resp.StatusCode)

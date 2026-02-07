@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"io"
 	"math"
 	"os"
 
@@ -23,6 +24,28 @@ type MapConfig struct {
 	OutputPath string
 }
 
+type mapContext interface {
+	SetSize(width, height int)
+	SetZoom(zoom int)
+	SetCenter(center s2.LatLng)
+	AddObject(object sm.MapObject)
+	Attribution() string
+	OverrideAttribution(attribution string)
+	Render() (image.Image, error)
+}
+
+var newMapContext = func() mapContext {
+	return sm.NewContext()
+}
+
+var parseLocator = maidenhead.ParseLocator
+
+var createFile = func(name string) (io.WriteCloser, error) {
+	return os.Create(name)
+}
+
+var encodePNG = png.Encode
+
 func DefaultMapConfig() MapConfig {
 	return MapConfig{
 		Width:      800,
@@ -33,15 +56,15 @@ func DefaultMapConfig() MapConfig {
 }
 
 func CreateGridMap(myGrid, theirGrid string, config MapConfig) error {
-	ctx := sm.NewContext()
+	ctx := newMapContext()
 	ctx.SetSize(config.Width, config.Height)
 
-	myPoint, err := maidenhead.ParseLocator(myGrid)
+	myPoint, err := parseLocator(myGrid)
 	if err != nil {
 		return fmt.Errorf("failed to parse my grid locator %s: %w", myGrid, err)
 	}
 
-	theirPoint, err := maidenhead.ParseLocator(theirGrid)
+	theirPoint, err := parseLocator(theirGrid)
 	if err != nil {
 		return fmt.Errorf("failed to parse their grid locator %s: %w", theirGrid, err)
 	}
@@ -138,12 +161,12 @@ func calculateZoomLevel(minLat, maxLat, minLon, maxLon float64, width, height in
 }
 
 func CreateGridMapWithDistance(myGrid, theirGrid string, config MapConfig) (float64, error) {
-	myPoint, err := maidenhead.ParseLocator(myGrid)
+	myPoint, err := parseLocator(myGrid)
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse my grid locator %s: %w", myGrid, err)
 	}
 
-	theirPoint, err := maidenhead.ParseLocator(theirGrid)
+	theirPoint, err := parseLocator(theirGrid)
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse their grid locator %s: %w", theirGrid, err)
 	}
@@ -163,7 +186,7 @@ func CreateGridMapWithDistance(myGrid, theirGrid string, config MapConfig) (floa
 }
 
 func saveImage(img image.Image, filename string) error {
-	file, err := os.Create(filename)
+	file, err := createFile(filename)
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", filename, err)
 	}
@@ -173,7 +196,7 @@ func saveImage(img image.Image, filename string) error {
 		}
 	}()
 
-	err = png.Encode(file, img)
+	err = encodePNG(file, img)
 	if err != nil {
 		return fmt.Errorf("failed to encode PNG: %w", err)
 	}

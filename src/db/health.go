@@ -120,7 +120,11 @@ func CreateHealthProfile(ctx context.Context, name string, dob *time.Time, gende
 	if err != nil {
 		return "", fmt.Errorf("failed to start transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+			logger.Warn("Failed to rollback health profile creation", "error", err)
+		}
+	}()
 
 	if isPrimary {
 		_, err = tx.Exec(ctx, `UPDATE health_profiles SET is_primary = false WHERE is_primary = true`)
@@ -158,7 +162,11 @@ func UpdateHealthProfile(ctx context.Context, id, name string, dob *time.Time, g
 	if err != nil {
 		return fmt.Errorf("failed to start transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+			logger.Warn("Failed to rollback health profile update", "error", err)
+		}
+	}()
 
 	if isPrimary {
 		_, err = tx.Exec(ctx, `UPDATE health_profiles SET is_primary = false WHERE is_primary = true AND id <> $1`, id)

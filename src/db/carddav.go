@@ -147,7 +147,11 @@ func ListCardDAVContacts(ctx context.Context) ([]CardDAVContact, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch VCF file: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Warn("Failed to close CardDAV response body", "error", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch VCF file: HTTP %d", resp.StatusCode)
@@ -303,9 +307,7 @@ func parseVCard(card vcard.Card) CardDAVContact {
 	}
 
 	// Get URLs
-	for _, url := range card.Values(vcard.FieldURL) {
-		contact.URLs = append(contact.URLs, url)
-	}
+	contact.URLs = append(contact.URLs, card.Values(vcard.FieldURL)...)
 
 	// Get notes
 	contact.Notes = card.Value(vcard.FieldNote)

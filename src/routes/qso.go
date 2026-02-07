@@ -135,7 +135,11 @@ func ImportADIF(c flamego.Context, s session.Session, t template.Template, data 
 		t.HTML(http.StatusBadRequest, "qsl")
 		return
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			logger.Error("Error closing ADIF upload file", "error", err)
+		}
+	}()
 
 	logger.Info("Uploading file", "filename", header.Filename, "bytes", header.Size)
 

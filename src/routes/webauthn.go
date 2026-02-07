@@ -686,11 +686,15 @@ func splitEnvList(raw string) []string {
 
 func writeJSON(c flamego.Context, payload any) {
 	c.ResponseWriter().Header().Set("Content-Type", "application/json")
-	json.NewEncoder(c.ResponseWriter()).Encode(payload)
+	if err := json.NewEncoder(c.ResponseWriter()).Encode(payload); err != nil {
+		logger.Error("Error encoding WebAuthn response", "error", err)
+	}
 }
 
 func writeJSONError(c flamego.Context, status int, message string) {
 	c.ResponseWriter().Header().Set("Content-Type", "application/json")
 	c.ResponseWriter().WriteHeader(status)
-	json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": message})
+	if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": message}); err != nil {
+		logger.Error("Error encoding WebAuthn error", "error", err)
+	}
 }

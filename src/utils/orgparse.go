@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"html"
+	"io"
 	"regexp"
 	"strings"
 	"time"
@@ -17,6 +18,22 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
+var newOrgConfig = org.New
+
+var parseOrg = func(config *org.Configuration, reader io.Reader) *org.Document {
+	return config.Parse(reader, "")
+}
+
+var newHTMLWriter = org.NewHTMLWriter
+
+var writeOrg = func(doc *org.Document, writer *org.HTMLWriter) (string, error) {
+	return doc.Write(writer)
+}
+
+var parseHTMLFragment = nethtml.ParseFragment
+
+var renderHTML = nethtml.Render
+
 // ParseOrgToHTML converts org-mode content to HTML
 func ParseOrgToHTML(content string) (string, error) {
 	return ParseOrgToHTMLWithBasePath(content, "/zk")
@@ -24,7 +41,7 @@ func ParseOrgToHTML(content string) (string, error) {
 
 // ParseOrgToHTMLWithBasePath converts org-mode content to HTML using a base path for id links.
 func ParseOrgToHTMLWithBasePath(content string, basePath string) (string, error) {
-	config := org.New()
+	config := newOrgConfig()
 
 	config.DefaultSettings["TODO"] = "TODO PROJ STRT WAIT HOLD | DONE KILL"
 
@@ -51,13 +68,13 @@ func ParseOrgToHTMLWithBasePath(content string, basePath string) (string, error)
 	}
 
 	// Parse the org-mode content
-	doc := config.Parse(strings.NewReader(content), "")
+	doc := parseOrg(config, strings.NewReader(content))
 	if doc.Error != nil {
 		return "", fmt.Errorf("failed to parse org-mode content: %w", doc.Error)
 	}
 
 	// Render to HTML
-	writer := org.NewHTMLWriter()
+	writer := newHTMLWriter()
 	writer.HighlightCodeBlock = func(source, lang string, inline bool, params map[string]string) string {
 		if inline {
 			return `<code class="inline-code">` + html.EscapeString(source) + `</code>`
@@ -65,7 +82,7 @@ func ParseOrgToHTMLWithBasePath(content string, basePath string) (string, error)
 		return `<pre><code class="code-block">` + html.EscapeString(source) + `</code></pre>`
 	}
 
-	renderedHTML, err := doc.Write(writer)
+	renderedHTML, err := writeOrg(doc, writer)
 	if err != nil {
 		return "", fmt.Errorf("failed to render HTML: %w", err)
 	}
@@ -86,7 +103,7 @@ func addExternalLinkPrefix(htmlBody string) (string, error) {
 	}
 
 	container := &nethtml.Node{Type: nethtml.ElementNode, Data: "div", DataAtom: atom.Div}
-	nodes, err := nethtml.ParseFragment(strings.NewReader(htmlBody), container)
+	nodes, err := parseHTMLFragment(strings.NewReader(htmlBody), container)
 	if err != nil {
 		return "", err
 	}
@@ -99,7 +116,7 @@ func addExternalLinkPrefix(htmlBody string) (string, error) {
 
 	var buffer bytes.Buffer
 	for child := container.FirstChild; child != nil; child = child.NextSibling {
-		if err := nethtml.Render(&buffer, child); err != nil {
+		if err := renderHTML(&buffer, child); err != nil {
 			return "", err
 		}
 	}

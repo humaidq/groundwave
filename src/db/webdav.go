@@ -166,7 +166,11 @@ func FetchInventoryFile(ctx context.Context, inventoryID string, filename string
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to fetch file: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Warn("Failed to close WebDAV inventory response body", "error", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, "", fmt.Errorf("failed to fetch file: HTTP %d", resp.StatusCode)
@@ -262,7 +266,11 @@ func FetchFilesFile(ctx context.Context, filePath string) ([]byte, string, error
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to fetch WebDAV file: %w", err)
 	}
-	defer reader.Close()
+	defer func() {
+		if err := reader.Close(); err != nil {
+			logger.Warn("Failed to close WebDAV file reader", "error", err)
+		}
+	}()
 
 	body, err := io.ReadAll(reader)
 	if err != nil {

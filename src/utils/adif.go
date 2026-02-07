@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -109,10 +110,6 @@ func (p *ADIFParser) parseRecord(record string) (QSO, error) {
 	matches := fieldRegex.FindAllStringSubmatch(record, -1)
 
 	for _, match := range matches {
-		if len(match) < 4 {
-			continue
-		}
-
 		fieldName := strings.ToLower(strings.TrimSpace(match[1]))
 		lengthStr := match[2]
 		data := match[3]
@@ -385,13 +382,9 @@ func (p *ADIFParser) GetPaperQSLHallOfFame() []QSO {
 	}
 
 	// Simple bubble sort by callsign
-	for i := 0; i < len(result)-1; i++ {
-		for j := 0; j < len(result)-i-1; j++ {
-			if result[j].Call > result[j+1].Call {
-				result[j], result[j+1] = result[j+1], result[j]
-			}
-		}
-	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Call < result[j].Call
+	})
 
 	return result
 }

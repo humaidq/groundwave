@@ -48,7 +48,11 @@ func WhatsAppConnect(c flamego.Context, s session.Session) {
 	}
 
 	// Use background context since the connection needs to persist beyond the HTTP request
-	go client.Connect(context.Background())
+	go func() {
+		if err := client.Connect(context.Background()); err != nil {
+			logger.Error("WhatsApp connect failed", "error", err)
+		}
+	}()
 
 	c.Redirect("/whatsapp", http.StatusSeeOther)
 }
@@ -90,5 +94,7 @@ func WhatsAppStatusAPI(c flamego.Context) {
 	}
 
 	c.ResponseWriter().Header().Set("Content-Type", "application/json")
-	json.NewEncoder(c.ResponseWriter()).Encode(response)
+	if err := json.NewEncoder(c.ResponseWriter()).Encode(response); err != nil {
+		logger.Error("Error encoding WhatsApp status", "error", err)
+	}
 }

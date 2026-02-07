@@ -308,7 +308,9 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 	c.ResponseWriter().Header().Set("Content-Length", strconv.Itoa(len(fileData)))
 
 	c.ResponseWriter().WriteHeader(http.StatusOK)
-	c.ResponseWriter().Write(fileData)
+	if _, err := c.ResponseWriter().Write(fileData); err != nil {
+		logger.Error("Error writing file response", "path", relPath, "error", err)
+	}
 }
 
 func setFilesBaseData(data template.Data, relPath string) {
@@ -384,9 +386,7 @@ func sanitizeFilesPath(raw string) (string, bool) {
 	if strings.Contains(raw, "\\") {
 		return "", false
 	}
-	if strings.HasPrefix(raw, "/") {
-		raw = strings.TrimPrefix(raw, "/")
-	}
+	raw = strings.TrimPrefix(raw, "/")
 
 	segments := strings.Split(raw, "/")
 	cleaned := make([]string, 0, len(segments))

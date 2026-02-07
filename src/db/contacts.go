@@ -7,10 +7,13 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // ContactListItem represents a contact in the list view
@@ -183,7 +186,6 @@ func ListContactsWithFilters(ctx context.Context, opts ContactListOptions) ([]Co
 				HAVING COUNT(DISTINCT tag_id) = $%d
 			)`, argNum, argNum+1))
 		args = append(args, opts.TagIDs, len(opts.TagIDs))
-		argNum += 2
 	}
 
 	// Build ORDER BY based on service status and alphabetic sort option
@@ -300,7 +302,11 @@ func CreateContact(ctx context.Context, input CreateContactInput) (string, error
 	if err != nil {
 		return "", fmt.Errorf("failed to start transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+			logger.Warn("Failed to rollback contact creation", "error", err)
+		}
+	}()
 
 	// Build display name from first and last name
 	nameDisplay := input.NameGiven
@@ -1373,7 +1379,11 @@ func MigrateContactToCardDAV(ctx context.Context, contactID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to start transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+			logger.Warn("Failed to rollback CardDAV migration", "error", err)
+		}
+	}()
 
 	// Update the source of local emails to 'carddav'
 	_, err = tx.Exec(ctx, `

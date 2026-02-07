@@ -445,7 +445,9 @@ func GenerateContactChatSummary(c flamego.Context, s session.Session) {
 	contactID := c.Param("id")
 	if contactID == "" {
 		c.ResponseWriter().WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "contact ID is required"})
+		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "contact ID is required"}); err != nil {
+			logger.Error("Error encoding chat summary error", "error", err)
+		}
 		return
 	}
 
@@ -455,19 +457,25 @@ func GenerateContactChatSummary(c flamego.Context, s session.Session) {
 	if err != nil {
 		logger.Error("Error fetching contact", "contact_id", contactID, "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusNotFound)
-		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "contact not found"})
+		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "contact not found"}); err != nil {
+			logger.Error("Error encoding chat summary error", "error", err)
+		}
 		return
 	}
 
 	if contact.IsService {
 		c.ResponseWriter().WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "service contacts have no chat summary"})
+		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "service contacts have no chat summary"}); err != nil {
+			logger.Error("Error encoding chat summary error", "error", err)
+		}
 		return
 	}
 
 	if !HasSensitiveAccess(s, time.Now()) {
 		c.ResponseWriter().WriteHeader(http.StatusForbidden)
-		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "sensitive access is locked"})
+		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "sensitive access is locked"}); err != nil {
+			logger.Error("Error encoding chat summary error", "error", err)
+		}
 		return
 	}
 
@@ -476,12 +484,16 @@ func GenerateContactChatSummary(c flamego.Context, s session.Session) {
 	if err != nil {
 		logger.Error("Error fetching chats for contact", "contact_id", contactID, "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "failed to load chat history"})
+		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "failed to load chat history"}); err != nil {
+			logger.Error("Error encoding chat summary error", "error", err)
+		}
 		return
 	}
 
 	if len(chats) == 0 {
-		json.NewEncoder(c.ResponseWriter()).Encode(map[string]interface{}{"summary": "No recent chats", "empty": true})
+		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]interface{}{"summary": "No recent chats", "empty": true}); err != nil {
+			logger.Error("Error encoding chat summary response", "error", err)
+		}
 		return
 	}
 
@@ -492,7 +504,9 @@ func GenerateContactChatSummary(c flamego.Context, s session.Session) {
 	}); err != nil {
 		logger.Error("Error generating chat summary", "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "failed to generate summary"})
+		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "failed to generate summary"}); err != nil {
+			logger.Error("Error encoding chat summary error", "error", err)
+		}
 		return
 	}
 
@@ -503,7 +517,9 @@ func GenerateContactChatSummary(c flamego.Context, s session.Session) {
 		isEmpty = true
 	}
 
-	json.NewEncoder(c.ResponseWriter()).Encode(map[string]interface{}{"summary": summary, "empty": isEmpty})
+	if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]interface{}{"summary": summary, "empty": isEmpty}); err != nil {
+		logger.Error("Error encoding chat summary response", "error", err)
+	}
 }
 
 func parseChatPlatform(value string) db.ChatPlatform {
@@ -1266,9 +1282,11 @@ func ListCardDAVContacts(c flamego.Context) {
 	if err != nil {
 		logger.Error("Error listing CardDAV contacts", "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{
+		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{
 			"error": "Failed to fetch CardDAV contacts: " + err.Error(),
-		})
+		}); err != nil {
+			logger.Error("Error encoding CardDAV contacts error", "error", err)
+		}
 		return
 	}
 
@@ -1285,9 +1303,11 @@ func ListCardDAVContacts(c flamego.Context) {
 	if err != nil {
 		logger.Error("Error getting linked CardDAV UUIDs", "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{
+		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{
 			"error": "Failed to fetch linked CardDAV UUIDs: " + err.Error(),
-		})
+		}); err != nil {
+			logger.Error("Error encoding CardDAV links error", "error", err)
+		}
 		return
 	}
 
@@ -1306,7 +1326,9 @@ func ListCardDAVContacts(c flamego.Context) {
 	}
 
 	c.ResponseWriter().Header().Set("Content-Type", "application/json")
-	json.NewEncoder(c.ResponseWriter()).Encode(contactsWithStatus)
+	if err := json.NewEncoder(c.ResponseWriter()).Encode(contactsWithStatus); err != nil {
+		logger.Error("Error encoding CardDAV contacts response", "error", err)
+	}
 }
 
 // CardDAVPicker renders the CardDAV contact picker popup

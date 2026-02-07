@@ -401,7 +401,9 @@ func DownloadInventoryFile(c flamego.Context, s session.Session, t template.Temp
 	c.ResponseWriter().Header().Set("Content-Length", strconv.Itoa(len(fileData)))
 
 	c.ResponseWriter().WriteHeader(http.StatusOK)
-	c.ResponseWriter().Write(fileData)
+	if _, err := c.ResponseWriter().Write(fileData); err != nil {
+		logger.Error("Error writing inventory file", "error", err)
+	}
 }
 
 // Helper function

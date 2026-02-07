@@ -41,7 +41,11 @@ func SyncSchema(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to open database for migrations: %w", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logger.Warn("Failed to close migration connection", "error", err)
+		}
+	}()
 
 	// Set goose to use embedded migrations
 	goose.SetBaseFS(embedMigrations)

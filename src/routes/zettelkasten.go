@@ -44,11 +44,6 @@ func init() {
 	gob.Register([]ZKHistoryItem{})
 }
 
-// getZKHistory retrieves the navigation history from session
-func getZKHistory(s session.Session) []ZKHistoryItem {
-	return getZKHistoryWithKey(s, zkHistoryKey)
-}
-
 func getZKHistoryWithKey(s session.Session, key string) []ZKHistoryItem {
 	val := s.Get(key)
 	if val == nil {
@@ -464,10 +459,16 @@ func ZettelkastenChatStream(c flamego.Context) {
 
 	sendEvent := func(event, data string) {
 		if event != "" {
-			w.Write([]byte("event: " + event + "\n"))
+			if _, err := w.Write([]byte("event: " + event + "\n")); err != nil {
+				logger.Error("Error writing SSE event", "error", err)
+				return
+			}
 		}
 		escapedData := strings.ReplaceAll(data, "\n", "\ndata: ")
-		w.Write([]byte("data: " + escapedData + "\n\n"))
+		if _, err := w.Write([]byte("data: " + escapedData + "\n\n")); err != nil {
+			logger.Error("Error writing SSE data", "error", err)
+			return
+		}
 		if flusher, ok := w.(http.Flusher); ok {
 			flusher.Flush()
 		}

@@ -53,7 +53,7 @@ func GetOllamaConfig() (*OllamaConfig, error) {
 	model := os.Getenv("OLLAMA_MODEL")
 
 	if url == "" || model == "" {
-		return nil, fmt.Errorf("Ollama configuration incomplete: OLLAMA_URL and OLLAMA_MODEL must be set")
+		return nil, fmt.Errorf("ollama configuration incomplete: OLLAMA_URL and OLLAMA_MODEL must be set")
 	}
 
 	return &OllamaConfig{
@@ -171,11 +171,15 @@ func streamChatCompletion(ctx context.Context, systemPrompt string, userPrompt s
 	if err != nil {
 		return fmt.Errorf("failed to call Ollama: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Warn("Failed to close Ollama response body", "error", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("Ollama returned status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("ollama returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	reader := bufio.NewReader(resp.Body)
@@ -208,7 +212,7 @@ func streamChatCompletion(ctx context.Context, systemPrompt string, userPrompt s
 		}
 
 		if chatResp.Error != nil {
-			return fmt.Errorf("Ollama error: %s", chatResp.Error.Message)
+			return fmt.Errorf("ollama error: %s", chatResp.Error.Message)
 		}
 
 		if len(chatResp.Choices) > 0 {

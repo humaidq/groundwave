@@ -156,7 +156,11 @@ func FetchOrgFile(ctx context.Context, filename string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch file %s: %w", filename, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Warn("Failed to close zettelkasten response body", "error", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("failed to fetch file %s: HTTP %d", filename, resp.StatusCode)
@@ -191,7 +195,11 @@ func FetchDailyOrgFile(ctx context.Context, filename string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch file %s: %w", filename, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Warn("Failed to close zettelkasten daily response body", "error", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("failed to fetch file %s: HTTP %d", filename, resp.StatusCode)
