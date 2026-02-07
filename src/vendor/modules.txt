@@ -82,6 +82,9 @@ github.com/flopp/go-staticmaps
 # github.com/fogleman/gg v1.3.0
 ## explicit
 github.com/fogleman/gg
+# github.com/fxamacker/cbor/v2 v2.9.0
+## explicit; go 1.20
+github.com/fxamacker/cbor/v2
 # github.com/go-echarts/go-echarts/v2 v2.6.7
 ## explicit; go 1.18
 github.com/go-echarts/go-echarts/v2/charts
@@ -95,6 +98,23 @@ github.com/go-echarts/go-echarts/v2/util
 # github.com/go-logfmt/logfmt v0.6.0
 ## explicit; go 1.17
 github.com/go-logfmt/logfmt
+# github.com/go-viper/mapstructure/v2 v2.4.0
+## explicit; go 1.18
+github.com/go-viper/mapstructure/v2
+github.com/go-viper/mapstructure/v2/internal/errors
+# github.com/go-webauthn/webauthn v0.15.0
+## explicit; go 1.24.0
+github.com/go-webauthn/webauthn/metadata
+github.com/go-webauthn/webauthn/protocol
+github.com/go-webauthn/webauthn/protocol/webauthncbor
+github.com/go-webauthn/webauthn/protocol/webauthncose
+github.com/go-webauthn/webauthn/webauthn
+# github.com/go-webauthn/x v0.1.26
+## explicit; go 1.24.0
+github.com/go-webauthn/x/revoke
+# github.com/golang-jwt/jwt/v5 v5.3.0
+## explicit; go 1.21
+github.com/golang-jwt/jwt/v5
 # github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 ## explicit
 github.com/golang/freetype/raster
@@ -106,6 +126,11 @@ github.com/golang/geo/r2
 github.com/golang/geo/r3
 github.com/golang/geo/s1
 github.com/golang/geo/s2
+# github.com/google/go-tpm v0.9.6
+## explicit; go 1.22
+github.com/google/go-tpm/legacy/tpm2
+github.com/google/go-tpm/tpmutil
+github.com/google/go-tpm/tpmutil/tbs
 # github.com/google/uuid v1.6.0
 ## explicit
 github.com/google/uuid
@@ -205,6 +230,9 @@ github.com/urfave/cli/v3
 # github.com/vektah/gqlparser/v2 v2.5.27
 ## explicit; go 1.22
 github.com/vektah/gqlparser/v2/ast
+# github.com/x448/float16 v0.8.4
+## explicit; go 1.11
+github.com/x448/float16
 # github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e
 ## explicit; go 1.19
 github.com/xo/terminfo
@@ -314,10 +342,9 @@ go.mau.fi/whatsmeow/util/log
 go.uber.org/multierr
 # golang.org/x/crypto v0.46.0
 ## explicit; go 1.24.0
-golang.org/x/crypto/bcrypt
-golang.org/x/crypto/blowfish
 golang.org/x/crypto/curve25519
 golang.org/x/crypto/hkdf
+golang.org/x/crypto/ocsp
 golang.org/x/crypto/pbkdf2
 # golang.org/x/exp v0.0.0-20251209150349-8475f28825e9
 ## explicit; go 1.24.0

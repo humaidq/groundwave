@@ -166,6 +166,7 @@ type SessionData struct {
 	DeviceLabel   string
 	DeviceIP      string
 	Authenticated bool
+	UserID        string
 }
 
 // GC performs a garbage collection operation on the session store
@@ -226,6 +227,13 @@ func (s *PostgresSessionStore) ListValidSessions(ctx context.Context) ([]Session
 			}
 		}
 
+		userID := ""
+		if val, ok := sessionData["user_id"]; ok && val != nil {
+			if str, ok := val.(string); ok {
+				userID = str
+			}
+		}
+
 		// Only include authenticated sessions
 		if !authenticated {
 			continue
@@ -237,6 +245,7 @@ func (s *PostgresSessionStore) ListValidSessions(ctx context.Context) ([]Session
 			DeviceLabel:   deviceLabel,
 			DeviceIP:      deviceIP,
 			Authenticated: authenticated,
+			UserID:        userID,
 		})
 	}
 
@@ -248,7 +257,7 @@ func (s *PostgresSessionStore) ListValidSessions(ctx context.Context) ([]Session
 }
 
 // InvalidateOtherSessions deletes all authenticated sessions except the current one.
-func (s *PostgresSessionStore) InvalidateOtherSessions(ctx context.Context, currentID string) (int, error) {
+func (s *PostgresSessionStore) InvalidateOtherSessions(ctx context.Context, currentID string, userID string) (int, error) {
 	sessions, err := s.ListValidSessions(ctx)
 	if err != nil {
 		return 0, err
@@ -257,6 +266,9 @@ func (s *PostgresSessionStore) InvalidateOtherSessions(ctx context.Context, curr
 	deleted := 0
 	for _, sess := range sessions {
 		if sess.ID == currentID {
+			continue
+		}
+		if userID != "" && sess.UserID != "" && sess.UserID != userID {
 			continue
 		}
 		if err := s.Destroy(ctx, sess.ID); err != nil {

@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -23,36 +22,11 @@ const sensitiveAccessWindow = 30 * time.Minute
 // BreakGlassForm renders the reauthentication page for sensitive data access.
 func BreakGlassForm(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	data["HeaderOnly"] = true
-	data["Username"] = getSessionUsername(s)
+	data["DisplayName"] = getSessionDisplayName(s)
 	data["Next"] = sanitizeNextPath(c.Query("next"))
+	data["BreakGlassBase"] = c.Request().URL.Path
 
 	t.HTML(http.StatusOK, "break_glass")
-}
-
-// BreakGlass handles reauthentication POST for sensitive data access.
-func BreakGlass(c flamego.Context, s session.Session, t template.Template, data template.Data) {
-	data["HeaderOnly"] = true
-
-	username := c.Request().FormValue("username")
-	password := c.Request().FormValue("password")
-	data["Username"] = username
-
-	next := sanitizeNextPath(c.Request().FormValue("next"))
-	data["Next"] = next
-
-	if msg, ok := validateCredentials(username, password); !ok {
-		data["Error"] = msg
-		t.HTML(http.StatusUnauthorized, "break_glass")
-		return
-	}
-
-	s.Set(sensitiveAccessSessionKey, time.Now().Unix())
-
-	if next == "" {
-		next = "/contacts"
-	}
-
-	c.Redirect(next, http.StatusSeeOther)
 }
 
 // RequireSensitiveAccessForHealth enforces sensitive access for health routes.
@@ -144,13 +118,13 @@ func redirectToBreakGlass(c flamego.Context) {
 	c.Redirect(redirectURL, http.StatusSeeOther)
 }
 
-func getSessionUsername(s session.Session) string {
-	if val := s.Get("username"); val != nil {
-		if username, ok := val.(string); ok && username != "" {
-			return username
+func getSessionDisplayName(s session.Session) string {
+	if val := s.Get("user_display_name"); val != nil {
+		if displayName, ok := val.(string); ok && displayName != "" {
+			return displayName
 		}
 	}
-	return os.Getenv("AUTH_USERNAME")
+	return "Admin"
 }
 
 func sanitizeNextPath(raw string) string {

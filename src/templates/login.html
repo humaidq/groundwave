@@ -11,22 +11,24 @@
 </div>
 {{ end }}
 
-<form method="POST" action="/login">
-  <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+<div class="alert alert-red hidden" data-webauthn-error>
+  <h5 class="alert-title">Error</h5>
+  <p data-webauthn-error-message></p>
+</div>
 
-  <div class="form-group">
-    <label for="username" class="item-title">Username</label>
-    <input type="text" id="username" name="username" class="form-item" required autofocus autocomplete="username" />
-  </div>
+<p>Private page, access restricted.</p>
+<div class="form-group">
+  <button
+    type="button"
+    class="btn"
+    data-webauthn-login
+    data-start-url="/webauthn/login/start"
+    data-finish-url="/webauthn/login/finish"
+    data-redirect-url="/"
+  >Authenticate</button>
+</div>
+<p class="muted-text" data-webauthn-support></p>
 
-  <div class="form-group">
-    <label for="password" class="item-title">Password</label>
-    <input type="password" id="password" name="password" class="form-item" required autocomplete="current-password" />
-  </div>
-
-  <div class="form-group">
-    <button type="submit" class="btn">Login</button>
-  </div>
-</form>
+<script src="/webauthn.js" defer></script>
 
 {{ template "foot" . }}

@@ -63,6 +63,11 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		return fmt.Errorf("CSRF_SECRET is required")
 	}
 
+	webAuthn, err := routes.NewWebAuthnFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to configure WebAuthn: %w", err)
+	}
+
 	// Set DATABASE_URL for db package
 	os.Setenv("DATABASE_URL", databaseURL)
 
@@ -105,6 +110,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	}
 
 	f := flamego.Classic()
+	f.Map(webAuthn)
 
 	// Setup flamego
 	fs, err := flamegoTemplate.EmbedFS(templates.Templates, ".", []string{".html"})
@@ -348,7 +354,11 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		c.Redirect("https://huma.id/.well-known/security.txt", http.StatusMovedPermanently)
 	})
 	f.Get("/login", routes.LoginForm)
-	f.Post("/login", csrf.Validate, routes.Login)
+	f.Get("/setup", routes.SetupForm)
+	f.Post("/webauthn/login/start", csrf.Validate, routes.PasskeyLoginStart)
+	f.Post("/webauthn/login/finish", csrf.Validate, routes.PasskeyLoginFinish)
+	f.Post("/webauthn/setup/start", csrf.Validate, routes.SetupStart)
+	f.Post("/webauthn/setup/finish", csrf.Validate, routes.SetupFinish)
 	f.Get("/connectivity", func(c flamego.Context) { c.ResponseWriter().Write([]byte("1")) })
 	f.Get("/note/{id}", routes.ViewPublicNote)
 	f.Get("/ext/auth", routes.RequireAuth, routes.ExtensionAuth)
@@ -373,7 +383,8 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Post("/logout", csrf.Validate, routes.Logout)
 		f.Post("/sensitive-access/lock", csrf.Validate, routes.LockSensitiveAccess)
 		f.Get("/break-glass", routes.BreakGlassForm)
-		f.Post("/break-glass", csrf.Validate, routes.BreakGlass)
+		f.Post("/break-glass/start", csrf.Validate, routes.BreakGlassStart)
+		f.Post("/break-glass/finish", csrf.Validate, routes.BreakGlassFinish)
 		f.Get("/contacts", routes.Home)
 		f.Get("/overdue", routes.Overdue)
 		f.Get("/qsl", routes.QSL)
@@ -450,7 +461,8 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 
 		// Health tracking routes
 		f.Get("/health/break-glass", routes.BreakGlassForm)
-		f.Post("/health/break-glass", csrf.Validate, routes.BreakGlass)
+		f.Post("/health/break-glass/start", csrf.Validate, routes.BreakGlassStart)
+		f.Post("/health/break-glass/finish", csrf.Validate, routes.BreakGlassFinish)
 		f.Get("/health", routes.ListHealthProfiles)
 		f.Get("/health/new", routes.NewHealthProfileForm)
 		f.Post("/health/new", csrf.Validate, routes.CreateHealthProfile)
@@ -477,6 +489,9 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Get("/whatsapp/status", routes.WhatsAppStatusAPI)
 		f.Get("/security", routes.Security)
 		f.Post("/security/invalidate-other", csrf.Validate, routes.InvalidateOtherSessions)
+		f.Post("/webauthn/passkey/start", csrf.Validate, routes.PasskeyRegistrationStart)
+		f.Post("/webauthn/passkey/finish", csrf.Validate, routes.PasskeyRegistrationFinish)
+		f.Post("/security/passkeys/{id}/delete", csrf.Validate, routes.DeletePasskey)
 	}, routes.RequireAuth, routes.RequireSensitiveAccessForHealth)
 
 	port := cmd.String("port")

@@ -41,6 +41,26 @@ const (
 	AgeSenior    AgeRange = "Senior"    // 65+
 )
 
+// User represents an authenticated account.
+type User struct {
+	ID          uuid.UUID `db:"id"`
+	DisplayName string    `db:"display_name"`
+	IsAdmin     bool      `db:"is_admin"`
+	CreatedAt   time.Time `db:"created_at"`
+	UpdatedAt   time.Time `db:"updated_at"`
+}
+
+// UserPasskey represents a stored WebAuthn credential.
+type UserPasskey struct {
+	ID             uuid.UUID  `db:"id"`
+	UserID         uuid.UUID  `db:"user_id"`
+	CredentialID   []byte     `db:"credential_id"`
+	CredentialData []byte     `db:"credential_data"`
+	Label          *string    `db:"label"`
+	CreatedAt      time.Time  `db:"created_at"`
+	LastUsedAt     *time.Time `db:"last_used_at"`
+}
+
 // Contact represents a person in the CRM
 type Contact struct {
 	ID              uuid.UUID  `db:"id"`

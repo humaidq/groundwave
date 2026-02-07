@@ -12,8 +12,10 @@
 
 <div class="alert alert-red">
   <h5 class="alert-title">Sensitive access</h5>
-  <p>This action unlocks sensitive data. Please re-enter your password to confirm you are the current user.</p>
+  <p>This action unlocks sensitive data. Re-authenticate to continue.</p>
 </div>
+
+<p class="muted-text">Signed in as {{ .DisplayName }}</p>
 
 {{ if .Error }}
 <div class="alert alert-red">
@@ -22,23 +24,22 @@
 </div>
 {{ end }}
 
-<form method="POST" action="/break-glass">
-  <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
-  <input type="hidden" name="next" value="{{ .Next }}" />
+<div class="alert alert-red hidden" data-webauthn-error>
+  <h5 class="alert-title">Error</h5>
+  <p data-webauthn-error-message></p>
+</div>
 
-  <div class="form-group">
-    <label for="username" class="item-title">Username</label>
-    <input type="text" id="username" name="username" class="form-item" required autocomplete="username" value="{{ .Username }}" readonly />
-  </div>
+<div class="form-group">
+  <button
+    type="button"
+    class="btn"
+    data-webauthn-reauth
+    data-start-url="{{ .BreakGlassBase }}/start"
+    data-finish-url="{{ .BreakGlassBase }}/finish"
+    data-next-path="{{ .Next }}"
+  >Verify</button>
+</div>
 
-  <div class="form-group">
-    <label for="password" class="item-title">Password</label>
-    <input type="password" id="password" name="password" class="form-item" required autofocus autocomplete="current-password" />
-  </div>
-
-  <div class="form-group">
-    <button type="submit" class="btn">Continue</button>
-  </div>
-</form>
+<script src="/webauthn.js" defer></script>
 
 {{ template "foot" . }}

@@ -144,8 +144,23 @@ type SessionInfo struct {
 	IsCurrent bool
 }
 
+// PasskeyInfo represents a passkey entry on the security page.
+type PasskeyInfo struct {
+	ID        string
+	Label     string
+	CreatedAt time.Time
+	LastUsed  *time.Time
+}
+
 // Security renders the security page listing valid authenticated sessions
 func Security(c flamego.Context, s session.Session, store session.Store, t template.Template, data template.Data) {
+	userID, ok := getSessionUserID(s)
+	if !ok {
+		data["Error"] = "Unable to resolve current user"
+		t.HTML(http.StatusInternalServerError, "security")
+		return
+	}
+
 	// Type assert to our Postgres store to access ListValidSessions
 	postgresStore, ok := store.(*db.PostgresSessionStore)
 	if !ok {
@@ -168,6 +183,9 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 	// Convert to view models and mark current session
 	var sessionInfos []SessionInfo
 	for _, sess := range sessions {
+		if sess.UserID != "" && sess.UserID != userID {
+			continue
+		}
 		isCurrent := sess.ID == currentSessionID
 		expiresIn := formatDuration(time.Until(sess.ExpiresAt))
 
@@ -180,7 +198,30 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 		})
 	}
 
+	passkeys, err := db.ListUserPasskeys(c.Request().Context(), userID)
+	if err != nil {
+		data["Error"] = "Failed to load passkey information"
+		t.HTML(http.StatusInternalServerError, "security")
+		return
+	}
+
+	passkeyInfos := make([]PasskeyInfo, 0, len(passkeys))
+	for i, passkey := range passkeys {
+		label := fmt.Sprintf("Passkey %d", i+1)
+		if passkey.Label != nil && strings.TrimSpace(*passkey.Label) != "" {
+			label = strings.TrimSpace(*passkey.Label)
+		}
+		passkeyInfos = append(passkeyInfos, PasskeyInfo{
+			ID:        passkey.ID.String(),
+			Label:     label,
+			CreatedAt: passkey.CreatedAt,
+			LastUsed:  passkey.LastUsedAt,
+		})
+	}
+
 	data["Sessions"] = sessionInfos
+	data["Passkeys"] = passkeyInfos
+	data["PasskeyCount"] = len(passkeyInfos)
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "Security", URL: "", IsCurrent: true},
 	}
@@ -198,7 +239,14 @@ func InvalidateOtherSessions(c flamego.Context, s session.Session, store session
 		return
 	}
 
-	deleted, err := postgresStore.InvalidateOtherSessions(c.Request().Context(), s.ID())
+	userID, ok := getSessionUserID(s)
+	if !ok {
+		SetErrorFlash(s, "Unable to resolve current user")
+		c.Redirect("/security", http.StatusSeeOther)
+		return
+	}
+
+	deleted, err := postgresStore.InvalidateOtherSessions(c.Request().Context(), s.ID(), userID)
 	if err != nil {
 		SetErrorFlash(s, "Failed to invalidate other sessions")
 		c.Redirect("/security", http.StatusSeeOther)
@@ -212,5 +260,43 @@ func InvalidateOtherSessions(c flamego.Context, s session.Session, store session
 	}
 
 	SetSuccessFlash(s, fmt.Sprintf("Invalidated %d other session(s)", deleted))
+	c.Redirect("/security", http.StatusSeeOther)
+}
+
+// DeletePasskey removes a passkey for the current user.
+func DeletePasskey(c flamego.Context, s session.Session) {
+	userID, ok := getSessionUserID(s)
+	if !ok {
+		SetErrorFlash(s, "Unable to resolve current user")
+		c.Redirect("/security", http.StatusSeeOther)
+		return
+	}
+
+	count, err := db.CountUserPasskeys(c.Request().Context(), userID)
+	if err != nil {
+		SetErrorFlash(s, "Failed to load passkeys")
+		c.Redirect("/security", http.StatusSeeOther)
+		return
+	}
+	if count <= 1 {
+		SetWarningFlash(s, "You must keep at least one passkey")
+		c.Redirect("/security", http.StatusSeeOther)
+		return
+	}
+
+	passkeyID := c.Param("id")
+	if passkeyID == "" {
+		SetErrorFlash(s, "Missing passkey ID")
+		c.Redirect("/security", http.StatusSeeOther)
+		return
+	}
+
+	if err := db.DeleteUserPasskey(c.Request().Context(), userID, passkeyID); err != nil {
+		SetErrorFlash(s, "Failed to delete passkey")
+		c.Redirect("/security", http.StatusSeeOther)
+		return
+	}
+
+	SetSuccessFlash(s, "Passkey deleted")
 	c.Redirect("/security", http.StatusSeeOther)
 }
