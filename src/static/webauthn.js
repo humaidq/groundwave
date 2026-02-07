@@ -32,6 +32,74 @@
     return value;
   }
 
+  function isPublicKeyCredential(value) {
+    if (!value || typeof value !== "object") {
+      return false;
+    }
+    if (window.PublicKeyCredential && value instanceof PublicKeyCredential) {
+      return true;
+    }
+    return "rawId" in value && "response" in value && "type" in value;
+  }
+
+  function serializePublicKeyCredential(credential) {
+    if (!credential) {
+      return credential;
+    }
+
+    var rawId = credential.rawId ? bufferEncode(toArrayBuffer(credential.rawId)) : "";
+    var id = credential.id || rawId;
+
+    var result = {
+      id: id,
+      rawId: rawId,
+      type: credential.type,
+    };
+
+    if (credential.authenticatorAttachment) {
+      result.authenticatorAttachment = credential.authenticatorAttachment;
+    }
+
+    var clientExtensionResults = null;
+    if (typeof credential.getClientExtensionResults === "function") {
+      clientExtensionResults = credential.getClientExtensionResults();
+    } else if (credential.clientExtensionResults) {
+      clientExtensionResults = credential.clientExtensionResults;
+    }
+    if (clientExtensionResults) {
+      result.clientExtensionResults = serializeCredential(clientExtensionResults);
+    }
+
+    var response = credential.response || {};
+    var responseData = {};
+    if (response.clientDataJSON) {
+      responseData.clientDataJSON = bufferEncode(toArrayBuffer(response.clientDataJSON));
+    }
+    if (response.attestationObject) {
+      responseData.attestationObject = bufferEncode(toArrayBuffer(response.attestationObject));
+    }
+    if (response.authenticatorData) {
+      responseData.authenticatorData = bufferEncode(toArrayBuffer(response.authenticatorData));
+    }
+    if (response.signature) {
+      responseData.signature = bufferEncode(toArrayBuffer(response.signature));
+    }
+    if (response.userHandle) {
+      responseData.userHandle = bufferEncode(toArrayBuffer(response.userHandle));
+    }
+    if (typeof response.getTransports === "function") {
+      var transports = response.getTransports();
+      if (transports && transports.length) {
+        responseData.transports = transports;
+      }
+    } else if (response.transports) {
+      responseData.transports = response.transports;
+    }
+    result.response = responseData;
+
+    return result;
+  }
+
   function decodeCreationOptions(options) {
     if (!options || !options.publicKey) {
       return options;
@@ -74,6 +142,9 @@
   }
 
   function serializeCredential(value) {
+    if (isPublicKeyCredential(value)) {
+      return serializePublicKeyCredential(value);
+    }
     if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
       return bufferEncode(toArrayBuffer(value));
     }
