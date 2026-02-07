@@ -373,6 +373,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 
 		// Files read-only routes
 		f.Get("/files", routes.FilesList)
+		f.Get("/files/view", routes.FilesView)
 		f.Get("/files/file", routes.DownloadFilesFile)
 
 		// Health read-only routes

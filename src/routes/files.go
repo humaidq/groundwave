@@ -30,6 +30,14 @@ func FilesList(c flamego.Context, s session.Session, t template.Template, data t
 
 	setFilesBaseData(data, relPath)
 
+	fileName := path.Base(relPath)
+	fileURL := "/files/file?path=" + url.QueryEscape(relPath)
+	data["FileName"] = fileName
+	data["FileURL"] = fileURL
+	data["DownloadURL"] = fileURL + "&download=1"
+	data["FileSize"] = int64(0)
+	data["FileModTime"] = time.Time{}
+
 	ctx := c.Request().Context()
 	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil {
@@ -117,6 +125,118 @@ func FilesList(c flamego.Context, s session.Session, t template.Template, data t
 	t.HTML(http.StatusOK, "files")
 }
 
+// FilesView renders a file viewer page for a WebDAV file.
+func FilesView(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+	relPath, ok := sanitizeFilesPath(c.Query("path"))
+	if !ok || relPath == "" {
+		SetErrorFlash(s, "Invalid file path")
+		c.Redirect("/files", http.StatusSeeOther)
+		return
+	}
+
+	setFilesBaseData(data, relPath)
+
+	fileName := path.Base(relPath)
+	fileURL := "/files/file?path=" + url.QueryEscape(relPath)
+	data["FileName"] = fileName
+	data["FileURL"] = fileURL
+	data["DownloadURL"] = fileURL + "&download=1"
+	data["FileSize"] = int64(0)
+	data["FileModTime"] = time.Time{}
+
+	ctx := c.Request().Context()
+	isAdmin, err := resolveSessionIsAdmin(ctx, s)
+	if err != nil {
+		logger.Error("Error resolving admin state", "error", err)
+		isAdmin = false
+	}
+	data["IsAdmin"] = isAdmin
+
+	dirPath := path.Dir(relPath)
+	if dirPath == "." {
+		dirPath = ""
+	}
+
+	adminOnly, err := db.IsFilesPathAdminOnly(ctx, dirPath)
+	if err != nil {
+		logger.Error("Error checking WebDAV admin restriction", "path", relPath, "error", err)
+		SetErrorFlash(s, "Failed to load file")
+		c.Redirect(filesRedirectPath(dirPath), http.StatusSeeOther)
+		return
+	}
+	if adminOnly && !isAdmin {
+		SetErrorFlash(s, "Access restricted")
+		if dirPath == "" {
+			c.Redirect("/inventory", http.StatusSeeOther)
+			return
+		}
+		c.Redirect("/files", http.StatusSeeOther)
+		return
+	}
+	data["IsAdminOnly"] = adminOnly
+
+	restricted, err := db.IsFilesPathRestricted(ctx, dirPath)
+	if err != nil {
+		logger.Error("Error checking WebDAV restriction", "path", relPath, "error", err)
+		SetErrorFlash(s, "Failed to load file")
+		c.Redirect(filesRedirectPath(dirPath), http.StatusSeeOther)
+		return
+	}
+	if adminOnly {
+		restricted = true
+	}
+	data["IsRestricted"] = restricted
+	if restricted && !HasSensitiveAccess(s, time.Now()) {
+		redirectToBreakGlass(c, s)
+		return
+	}
+
+	entries, err := db.ListFilesEntries(ctx, dirPath)
+	if err != nil {
+		logger.Error("Error listing WebDAV files", "path", dirPath, "error", err)
+		data["Error"] = "Failed to load file. Please check your WEBDAV_FILES_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables."
+		data["Entries"] = []db.WebDAVEntry{}
+		t.HTML(http.StatusOK, "files_view")
+		return
+	}
+
+	var fileEntry *db.WebDAVEntry
+	for i := range entries {
+		if entries[i].Name == fileName {
+			fileEntry = &entries[i]
+			break
+		}
+	}
+	if fileEntry == nil {
+		SetErrorFlash(s, "File not found")
+		c.Redirect(filesRedirectPath(dirPath), http.StatusSeeOther)
+		return
+	}
+	if fileEntry.IsDir {
+		c.Redirect(filesRedirectPath(relPath), http.StatusSeeOther)
+		return
+	}
+
+	data["FileName"] = fileEntry.Name
+	data["FileSize"] = fileEntry.Size
+	data["FileModTime"] = fileEntry.ModTime
+
+	viewerType := filesViewerType(fileEntry.Name)
+	data["ViewerType"] = viewerType
+	if viewerType == "text" || viewerType == "markdown" {
+		fileData, _, err := db.FetchFilesFile(ctx, relPath)
+		if err != nil {
+			logger.Error("Error fetching WebDAV file for preview", "path", relPath, "error", err)
+			data["PreviewError"] = "Preview unavailable"
+			data["ViewerType"] = "unknown"
+		} else {
+			data["FileText"] = string(fileData)
+		}
+	}
+
+	t.HTML(http.StatusOK, "files_view")
+}
+
 // DownloadFilesFile proxies a file download from WebDAV files directory.
 func DownloadFilesFile(c flamego.Context, s session.Session) {
 	relPath, ok := sanitizeFilesPath(c.Query("path"))
@@ -179,8 +299,12 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 	}
 
 	filename := sanitizeFilenameForHeader(path.Base(relPath))
+	contentDisposition := "inline"
+	if isDownloadRequested(c.Query("download")) {
+		contentDisposition = "attachment"
+	}
 	c.ResponseWriter().Header().Set("Content-Type", contentType)
-	c.ResponseWriter().Header().Set("Content-Disposition", "inline; filename=\""+filename+"\"")
+	c.ResponseWriter().Header().Set("Content-Disposition", contentDisposition+"; filename=\""+filename+"\"")
 	c.ResponseWriter().Header().Set("Content-Length", strconv.Itoa(len(fileData)))
 
 	c.ResponseWriter().WriteHeader(http.StatusOK)
@@ -280,4 +404,33 @@ func sanitizeFilesPath(raw string) (string, bool) {
 	}
 
 	return strings.Join(cleaned, "/"), true
+}
+
+func filesViewerType(filename string) string {
+	ext := strings.ToLower(strings.TrimPrefix(path.Ext(filename), "."))
+	if ext == "" {
+		return "unknown"
+	}
+
+	switch ext {
+	case "pdf":
+		return "pdf"
+	case "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "tif", "tiff":
+		return "image"
+	case "mp4", "mov", "mkv", "avi", "webm":
+		return "video"
+	case "mp3", "wav", "ogg", "m4a", "flac", "aac", "opus":
+		return "audio"
+	case "md", "markdown", "mdown", "mkd", "mkdn":
+		return "markdown"
+	case "txt", "log", "csv", "json", "xml", "yaml", "yml", "toml", "ini", "conf", "cfg":
+		return "text"
+	default:
+		return "unknown"
+	}
+}
+
+func isDownloadRequested(value string) bool {
+	value = strings.TrimSpace(strings.ToLower(value))
+	return value == "1" || value == "true" || value == "yes"
 }
