@@ -99,12 +99,8 @@ func Welcome(c flamego.Context, t template.Template, data template.Data) {
 func Home(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	ctx := c.Request().Context()
 
-	// Check private mode from session
-	privateMode := false
-	if pm := s.Get("private_mode"); pm != nil {
-		privateMode = pm.(bool)
-	}
-	data["PrivateMode"] = privateMode
+	sensitiveAccess := HasSensitiveAccess(s, time.Now())
+	data["SensitiveAccess"] = sensitiveAccess
 	data["IsContacts"] = true
 
 	// Get tag filter from URL query
@@ -125,12 +121,12 @@ func Home(c flamego.Context, s session.Session, t template.Template, data templa
 	var contacts []db.ContactListItem
 	var err error
 
-	// Use ListContactsWithFilters to handle private mode sorting
+	// Use ListContactsWithFilters to handle locked-mode sorting
 	opts := db.ContactListOptions{
 		Filters:        filters,
 		TagIDs:         tagIDs,
 		IsService:      false,
-		AlphabeticSort: privateMode, // Sort alphabetically in private mode
+		AlphabeticSort: !sensitiveAccess, // Sort alphabetically when locked
 	}
 	contacts, err = db.ListContactsWithFilters(ctx, opts)
 
@@ -171,12 +167,8 @@ func Home(c flamego.Context, s session.Session, t template.Template, data templa
 
 // Overdue renders the overdue contacts list
 func Overdue(c flamego.Context, s session.Session, t template.Template, data template.Data) {
-	// Check private mode from session
-	privateMode := false
-	if pm := s.Get("private_mode"); pm != nil {
-		privateMode = pm.(bool)
-	}
-	data["PrivateMode"] = privateMode
+	sensitiveAccess := HasSensitiveAccess(s, time.Now())
+	data["SensitiveAccess"] = sensitiveAccess
 
 	// Fetch overdue contacts from database
 	contacts, err := db.GetOverdueContacts(c.Request().Context())

@@ -799,6 +799,12 @@ code:not(pre code) {
   gap: 1rem;
 }
 
+.break-glass-illustration {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
 .contact-title-block {
   display: flex;
   flex-direction: column;

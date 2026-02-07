@@ -276,12 +276,8 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 		}
 	}
 
-	// Check private mode from session
-	privateMode := false
-	if pm := s.Get("private_mode"); pm != nil {
-		privateMode = pm.(bool)
-	}
-	data["PrivateMode"] = privateMode
+	sensitiveAccess := HasSensitiveAccess(s, time.Now())
+	data["SensitiveAccess"] = sensitiveAccess
 
 	data["Contact"] = contact
 	data["ContactName"] = contact.NameDisplay
@@ -289,7 +285,7 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 	data["TierLower"] = strings.ToLower(string(contact.Tier))
 	data["CardDAVContact"] = contact.CardDAVContact
 
-	if !contact.IsService && !privateMode {
+	if !contact.IsService && sensitiveAccess {
 		currentYear := time.Now().UTC().Year()
 		start := isoWeekStart(currentYear - 4)
 		end := isoWeekStart(currentYear + 1)
@@ -358,13 +354,8 @@ func ViewContactChats(c flamego.Context, s session.Session, t template.Template,
 		return
 	}
 
-	privateMode := false
-	if pm := s.Get("private_mode"); pm != nil {
-		privateMode = pm.(bool)
-	}
-	if privateMode {
-		SetErrorFlash(s, "Private mode is enabled")
-		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+	if !HasSensitiveAccess(s, time.Now()) {
+		redirectToBreakGlass(c)
 		return
 	}
 
@@ -406,12 +397,9 @@ func AddContactChat(c flamego.Context, s session.Session) {
 		return
 	}
 
-	if pm := s.Get("private_mode"); pm != nil {
-		if pm.(bool) {
-			SetErrorFlash(s, "Private mode is enabled")
-			c.Redirect("/contact/"+contactID, http.StatusSeeOther)
-			return
-		}
+	if !HasSensitiveAccess(s, time.Now()) {
+		redirectToBreakGlass(c)
+		return
 	}
 
 	if err := c.Request().ParseForm(); err != nil {
@@ -478,12 +466,10 @@ func GenerateContactChatSummary(c flamego.Context, s session.Session) {
 		return
 	}
 
-	if pm := s.Get("private_mode"); pm != nil {
-		if pm.(bool) {
-			c.ResponseWriter().WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "private mode is enabled"})
-			return
-		}
+	if !HasSensitiveAccess(s, time.Now()) {
+		c.ResponseWriter().WriteHeader(http.StatusForbidden)
+		json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "sensitive access is locked"})
+		return
 	}
 
 	since := time.Now().Add(-48 * time.Hour)
@@ -1472,25 +1458,6 @@ func ListServiceContacts(c flamego.Context, t template.Template, data template.D
 		{Name: "Service Contacts", URL: "", IsCurrent: true},
 	}
 	t.HTML(http.StatusOK, "service_contacts")
-}
-
-// TogglePrivateMode toggles the private mode session flag
-func TogglePrivateMode(c flamego.Context, s session.Session) {
-	// Get current state, default to false
-	privateMode := false
-	if pm := s.Get("private_mode"); pm != nil {
-		privateMode = pm.(bool)
-	}
-
-	// Toggle the state
-	s.Set("private_mode", !privateMode)
-
-	// Redirect back to the referring page, default to /contacts
-	referer := c.Request().Header.Get("Referer")
-	if referer == "" {
-		referer = "/contacts"
-	}
-	c.Redirect(referer, http.StatusSeeOther)
 }
 
 // BulkContactLogForm renders the bulk contact log form

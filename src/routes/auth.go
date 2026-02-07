@@ -45,7 +45,8 @@ func Login(c flamego.Context, s session.Session, t template.Template, data templ
 func Logout(s session.Session, c flamego.Context) {
 	s.Delete("authenticated")
 	s.Delete("username")
-	s.Delete(healthBreakGlassSessionKey)
+	s.Delete(sensitiveAccessSessionKey)
+	s.Delete("private_mode")
 	c.Redirect("/login")
 }
 

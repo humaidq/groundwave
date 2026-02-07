@@ -30,12 +30,14 @@
 {{end}}
 
 <div class="tag-filter-section">
-  <form method="POST" action="/private-mode/toggle" class="inline-form">
+  {{ if .SensitiveAccess }}
+  <form method="POST" action="/sensitive-access/lock" class="inline-form">
     <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
-    <button type="submit" class="btn{{ if .PrivateMode }} btn-active{{ end }}">
-      {{ if .PrivateMode }}Exit Private{{ else }}Private Mode{{ end }}
-    </button>
+    <button type="submit" class="btn">Lock Sensitive View</button>
   </form>
+  {{ else }}
+  <a href="/break-glass?next=/contacts" class="btn">Unlock Sensitive View</a>
+  {{ end }}
   <form method="GET" action="/contacts" class="tag-filter-form">
     {{ if .AllTags }}
     <div class="tag-dropdown-container">
@@ -162,15 +164,15 @@
 
 {{ if .Contacts }}
 <div id="contactList">
-  {{ if .PrivateMode }}
-  {{/* Private mode: flat alphabetical list, no tiers or tags */}}
+  {{ if not .SensitiveAccess }}
+  {{/* Locked view: flat alphabetical list, no tiers or tags */}}
   <div class="list-card-list">
   {{ range .Contacts }}
     <div class="list-card">
       <a href="/contact/{{ .ID }}" class="list-card-link">
         <div class="list-card-content">
           {{ $photo := safeImageURL .PhotoURL }}
-          {{ if and $photo (not $.PrivateMode) }}
+          {{ if and $photo $.SensitiveAccess }}
           <img src="{{ $photo }}" alt="Photo of {{ .NameDisplay }}" class="contact-avatar contact-avatar-small" loading="lazy">
           {{ end }}
           <div class="list-card-body">
@@ -187,7 +189,7 @@
   {{ end }}
   </div>
   {{ else }}
-  {{/* Normal mode: grouped by tier with tags */}}
+  {{/* Sensitive view: grouped by tier with tags */}}
   {{ $prevTier := "" }}
   {{ range .Contacts }}
     {{ if ne .Tier $prevTier }}
@@ -200,7 +202,7 @@
       <a href="/contact/{{ .ID }}" class="list-card-link">
         <div class="list-card-content">
           {{ $photo := safeImageURL .PhotoURL }}
-          {{ if and $photo (not $.PrivateMode) }}
+          {{ if and $photo $.SensitiveAccess }}
           <img src="{{ $photo }}" alt="Photo of {{ .NameDisplay }}" class="contact-avatar contact-avatar-small" loading="lazy">
           {{ end }}
           <div class="list-card-body">

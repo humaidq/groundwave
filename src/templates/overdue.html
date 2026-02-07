@@ -26,7 +26,11 @@
 {{end}}
 
 {{ if .OverdueContacts }}
+{{ if .SensitiveAccess }}
 <p class="muted-text overdue-help">Contacts sorted by most overdue first. Tier F contacts (no regular contact needed) are not included.</p>
+{{ else }}
+<p class="muted-text overdue-help">Contacts sorted by most overdue first.</p>
+{{ end }}
 
 <div class="list-card-list">
   {{ range .OverdueContacts }}
@@ -34,7 +38,7 @@
     <a href="/contact/{{ .ID }}" class="list-card-link">
       <div class="list-card-content">
         {{ $photo := safeImageURL .PhotoURL }}
-        {{ if and $photo (not $.PrivateMode) }}
+        {{ if and $photo $.SensitiveAccess }}
         <img src="{{ $photo }}" alt="Photo of {{ .NameDisplay }}" class="contact-avatar contact-avatar-small" loading="lazy">
         {{ end }}
         <div class="list-card-body">
@@ -47,7 +51,11 @@
             {{ end }}
           </div>
           <div class="list-card-meta muted-text">
-            {{ if .Organization }}{{ .Organization }} • {{ end }}Tier {{ .Tier }} (every {{ .ContactInterval }} days){{ if .LastContactDate }} • Last contact: {{ .LastContactDate }}{{ end }}
+            {{ if .SensitiveAccess }}
+              {{ if .Organization }}{{ .Organization }} • {{ end }}Tier {{ .Tier }} (every {{ .ContactInterval }} days){{ if .LastContactDate }} • Last contact: {{ .LastContactDate }}{{ end }}
+            {{ else }}
+              {{ if .Organization }}{{ .Organization }}{{ end }}{{ if .LastContactDate }}{{ if .Organization }} • {{ end }}Last contact: {{ .LastContactDate }}{{ end }}
+            {{ end }}
           </div>
         </div>
       </div>

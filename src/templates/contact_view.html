@@ -22,7 +22,7 @@
 <div class="page-header">
   <div class="page-header-title">
     {{ $photo := safeImageURL .Contact.PhotoURL }}
-    {{ if and $photo (not .PrivateMode) }}
+    {{ if and $photo .SensitiveAccess }}
     <img src="{{ $photo }}" alt="Photo of {{ .Contact.NameDisplay }}" class="contact-avatar contact-avatar-large" loading="lazy">
     {{ end }}
     <div class="contact-title-block">
@@ -39,11 +39,15 @@
     </div>
   </div>
   <div class="page-header-actions">
+    {{ if .SensitiveAccess }}
     <a href="/contact/{{ .Contact.ID }}/edit" class="btn">Edit Contact</a>
     <form method="POST" action="/contact/{{ .Contact.ID }}/delete" class="inline-form" onsubmit="return confirm('Are you sure you want to delete this contact? This action cannot be undone.');">
       <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
       <button type="submit" class="btn btn-danger">Delete Contact</button>
     </form>
+    {{ else }}
+    <a href="/break-glass?next=/contact/{{ .Contact.ID }}" class="btn">Unlock Sensitive View</a>
+    {{ end }}
   </div>
 </div>
 
@@ -51,7 +55,7 @@
   <div class="detail-section">
     <div class="detail-meta">
       {{ if not .Contact.IsService }}
-      {{ if not .PrivateMode }}
+      {{ if .SensitiveAccess }}
       <span class="contact-tier tier-{{ .TierLower }}">{{ .Contact.Tier }}</span>
       <a href="/contact/{{ .Contact.ID }}/chats" class="btn ml-half">Chats</a>
       {{ end }}
@@ -85,7 +89,7 @@
     {{ end }}
   </div>
 
-  {{ if not .PrivateMode }}
+  {{ if .SensitiveAccess }}
   <div class="detail-section">
     <h3>Tags</h3>
     {{ if .Contact.Tags }}
@@ -121,7 +125,7 @@
   </div>
   {{ end }}
 
-  {{ if and (not .Contact.IsService) (not .PrivateMode) }}
+  {{ if and (not .Contact.IsService) .SensitiveAccess }}
   <div class="detail-section">
     <h3>Activity Feed</h3>
 

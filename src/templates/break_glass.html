@@ -1,12 +1,18 @@
 {{ template "head" . }}
 
 <div class="page-header">
-  <h2>Break the Glass</h2>
+  <div class="page-header-title">
+    <img src="/btg.png" alt="Break the glass illustration" class="break-glass-illustration" />
+    <h2>Break the Glass</h2>
+  </div>
+  <div class="page-header-actions">
+    <button type="button" class="btn" onclick="window.history.back()">Back</button>
+  </div>
 </div>
 
-<div class="alert alert-yellow">
+<div class="alert alert-red">
   <h5 class="alert-title">Sensitive access</h5>
-  <p>Health records are sensitive. Please re-enter your password to confirm you are the current user. This unlock lasts 30 minutes.</p>
+  <p>This action unlocks sensitive data. Please re-enter your password to confirm you are the current user.</p>
 </div>
 
 {{ if .Error }}
@@ -16,13 +22,13 @@
 </div>
 {{ end }}
 
-<form method="POST" action="/health/break-glass">
+<form method="POST" action="/break-glass">
   <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
   <input type="hidden" name="next" value="{{ .Next }}" />
 
   <div class="form-group">
     <label for="username" class="item-title">Username</label>
-    <input type="text" id="username" name="username" class="form-item" required autocomplete="username" value="{{ .Username }}" />
+    <input type="text" id="username" name="username" class="form-item" required autocomplete="username" value="{{ .Username }}" readonly />
   </div>
 
   <div class="form-group">
