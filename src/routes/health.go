@@ -50,6 +50,74 @@ func followupBreadcrumb(profileID, followupID, label string, isCurrent bool) Bre
 	}
 }
 
+func ensureHealthProfileAccess(c flamego.Context, s session.Session, profileID string) bool {
+	ctx := c.Request().Context()
+	isAdmin, err := resolveSessionIsAdmin(ctx, s)
+	if err != nil {
+		log.Printf("Error resolving admin state: %v", err)
+		isAdmin = false
+	}
+	if isAdmin {
+		return true
+	}
+
+	userID, ok := getSessionUserID(s)
+	if !ok {
+		SetErrorFlash(s, "Unable to resolve current user")
+		c.Redirect("/login", http.StatusSeeOther)
+		return false
+	}
+
+	hasAccess, err := db.UserHasHealthProfileAccess(ctx, userID, profileID)
+	if err != nil {
+		log.Printf("Error checking profile access: %v", err)
+		SetErrorFlash(s, "Failed to load health profile")
+		c.Redirect("/health", http.StatusSeeOther)
+		return false
+	}
+	if !hasAccess {
+		SetErrorFlash(s, "Profile not found")
+		c.Redirect("/health", http.StatusSeeOther)
+		return false
+	}
+
+	return true
+}
+
+func ensureHealthFollowupAccess(c flamego.Context, s session.Session, followupID string) bool {
+	ctx := c.Request().Context()
+	isAdmin, err := resolveSessionIsAdmin(ctx, s)
+	if err != nil {
+		log.Printf("Error resolving admin state: %v", err)
+		isAdmin = false
+	}
+	if isAdmin {
+		return true
+	}
+
+	userID, ok := getSessionUserID(s)
+	if !ok {
+		SetErrorFlash(s, "Unable to resolve current user")
+		c.Redirect("/login", http.StatusSeeOther)
+		return false
+	}
+
+	hasAccess, err := db.UserHasHealthFollowupAccess(ctx, userID, followupID)
+	if err != nil {
+		log.Printf("Error checking follow-up access: %v", err)
+		SetErrorFlash(s, "Failed to load follow-up")
+		c.Redirect("/health", http.StatusSeeOther)
+		return false
+	}
+	if !hasAccess {
+		SetErrorFlash(s, "Follow-up not found")
+		c.Redirect("/health", http.StatusSeeOther)
+		return false
+	}
+
+	return true
+}
+
 // ========== Health Chart Helpers ==========
 
 // generateLabTestChart creates a line chart for a specific lab test with reference ranges
@@ -272,14 +340,31 @@ func generateLabTestChart(ctx flamego.Context, profileID, testName string) (stri
 // ========== Health Profile Handlers ==========
 
 // ListHealthProfiles displays all health profiles
-func ListHealthProfiles(c flamego.Context, t template.Template, data template.Data) {
+func ListHealthProfiles(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	data["IsHealth"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		healthBreadcrumb(true),
 	}
 
 	ctx := c.Request().Context()
-	profiles, err := db.ListHealthProfiles(ctx)
+	isAdmin, err := resolveSessionIsAdmin(ctx, s)
+	if err != nil {
+		log.Printf("Error resolving admin state: %v", err)
+		isAdmin = false
+	}
+	data["IsAdmin"] = isAdmin
+
+	var profiles []db.HealthProfileSummary
+	if isAdmin {
+		profiles, err = db.ListHealthProfiles(ctx)
+	} else {
+		userID, ok := getSessionUserID(s)
+		if ok {
+			profiles, err = db.ListHealthProfilesForUser(ctx, userID)
+		} else {
+			profiles = []db.HealthProfileSummary{}
+		}
+	}
 	if err != nil {
 		log.Printf("Error fetching health profiles: %v", err)
 		data["Error"] = "Failed to load health profiles"
@@ -368,6 +453,10 @@ func ViewHealthProfile(c flamego.Context, s session.Session, t template.Template
 	data["IsHealth"] = true
 	profileID := c.Param("id")
 	ctx := c.Request().Context()
+
+	if !ensureHealthProfileAccess(c, s, profileID) {
+		return
+	}
 
 	profile, err := db.GetHealthProfile(ctx, profileID)
 	if err != nil {
@@ -662,6 +751,10 @@ func ViewFollowup(c flamego.Context, s session.Session, t template.Template, dat
 	followupID := c.Param("id")
 	ctx := c.Request().Context()
 
+	if !ensureHealthFollowupAccess(c, s, followupID) {
+		return
+	}
+
 	profile, err := db.GetHealthProfile(ctx, profileID)
 	if err != nil {
 		log.Printf("Error fetching health profile %s: %v", profileID, err)
@@ -675,6 +768,11 @@ func ViewFollowup(c flamego.Context, s session.Session, t template.Template, dat
 		log.Printf("Error fetching follow-up %s: %v", followupID, err)
 		SetErrorFlash(s, "Follow-up not found")
 		c.Redirect("/health/"+profileID, http.StatusSeeOther)
+		return
+	}
+	if followup.ProfileID.String() != profileID {
+		SetErrorFlash(s, "Follow-up not found")
+		c.Redirect("/health", http.StatusSeeOther)
 		return
 	}
 
@@ -1102,10 +1200,17 @@ func DeleteLabResult(c flamego.Context, s session.Session) {
 
 // GenerateAISummary handles AI-powered lab result summarization using Server-Sent Events (SSE).
 // SSE keeps data flowing, preventing reverse proxy timeouts during long AI generation.
-func GenerateAISummary(c flamego.Context) {
+func GenerateAISummary(c flamego.Context, s session.Session) {
 	profileID := c.Param("profile_id")
 	followupID := c.Param("id")
 	ctx := c.Request().Context()
+
+	if !ensureHealthFollowupAccess(c, s, followupID) {
+		return
+	}
+	if !ensureHealthProfileAccess(c, s, profileID) {
+		return
+	}
 
 	w := c.ResponseWriter()
 
@@ -1145,6 +1250,10 @@ func GenerateAISummary(c flamego.Context) {
 	followup, err := db.GetFollowup(ctx, followupID)
 	if err != nil {
 		log.Printf("Error fetching follow-up %s: %v", followupID, err)
+		sendError("Follow-up not found")
+		return
+	}
+	if followup.ProfileID.String() != profileID {
 		sendError("Follow-up not found")
 		return
 	}

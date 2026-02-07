@@ -167,6 +167,7 @@ type SessionData struct {
 	DeviceIP      string
 	Authenticated bool
 	UserID        string
+	UserDisplay   string
 }
 
 // GC performs a garbage collection operation on the session store
@@ -234,6 +235,13 @@ func (s *PostgresSessionStore) ListValidSessions(ctx context.Context) ([]Session
 			}
 		}
 
+		userDisplay := ""
+		if val, ok := sessionData["user_display_name"]; ok && val != nil {
+			if str, ok := val.(string); ok {
+				userDisplay = str
+			}
+		}
+
 		// Only include authenticated sessions
 		if !authenticated {
 			continue
@@ -246,6 +254,7 @@ func (s *PostgresSessionStore) ListValidSessions(ctx context.Context) ([]Session
 			DeviceIP:      deviceIP,
 			Authenticated: authenticated,
 			UserID:        userID,
+			UserDisplay:   userDisplay,
 		})
 	}
 

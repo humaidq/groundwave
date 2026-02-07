@@ -22,40 +22,74 @@ import (
 )
 
 // Welcome renders the welcome/dashboard page
-func Welcome(c flamego.Context, t template.Template, data template.Data) {
+func Welcome(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	ctx := c.Request().Context()
 
-	// Get total contacts count
-	totalContacts, err := db.GetContactsCount(ctx)
+	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil {
-		log.Printf("Error fetching contacts count: %v", err)
-		totalContacts = 0
+		log.Printf("Failed to resolve admin state: %v", err)
+		isAdmin = false
 	}
-	data["TotalContacts"] = totalContacts
+	data["IsAdmin"] = isAdmin
 
-	// Get overdue contacts count
-	overdueContacts, err := db.GetOverdueContacts(ctx)
-	if err != nil {
-		log.Printf("Error fetching overdue contacts: %v", err)
-		data["OverdueCount"] = 0
-	} else {
-		data["OverdueCount"] = len(overdueContacts)
-	}
+	if isAdmin {
+		// Get total contacts count
+		totalContacts, err := db.GetContactsCount(ctx)
+		if err != nil {
+			log.Printf("Error fetching contacts count: %v", err)
+			totalContacts = 0
+		}
+		data["TotalContacts"] = totalContacts
 
-	// Get QSO count
-	qsoCount, err := db.GetQSOCount(ctx)
-	if err != nil {
-		log.Printf("Error fetching QSO count: %v", err)
-		qsoCount = 0
-	}
-	data["QSOCount"] = qsoCount
+		// Get overdue contacts count
+		overdueContacts, err := db.GetOverdueContacts(ctx)
+		if err != nil {
+			log.Printf("Error fetching overdue contacts: %v", err)
+			data["OverdueCount"] = 0
+		} else {
+			data["OverdueCount"] = len(overdueContacts)
+		}
 
-	// Get recent contacts (last 5 modified)
-	recentContacts, err := db.GetRecentContacts(ctx, 5)
-	if err != nil {
-		log.Printf("Error fetching recent contacts: %v", err)
-	} else {
-		data["RecentContacts"] = recentContacts
+		// Get QSO count
+		qsoCount, err := db.GetQSOCount(ctx)
+		if err != nil {
+			log.Printf("Error fetching QSO count: %v", err)
+			qsoCount = 0
+		}
+		data["QSOCount"] = qsoCount
+
+		// Get recent contacts (last 5 modified)
+		recentContacts, err := db.GetRecentContacts(ctx, 5)
+		if err != nil {
+			log.Printf("Error fetching recent contacts: %v", err)
+		} else {
+			data["RecentContacts"] = recentContacts
+		}
+
+		// Get notes count (from zettelkasten cache)
+		orgFiles, err := db.ListOrgFiles(ctx)
+		if err != nil {
+			log.Printf("Error fetching org files: %v", err)
+			data["NotesCount"] = 0
+		} else {
+			data["NotesCount"] = len(orgFiles)
+		}
+
+		// Get recent QSOs (last 5)
+		recentQSOs, err := db.ListRecentQSOs(ctx, 5)
+		if err != nil {
+			log.Printf("Error fetching recent QSOs: %v", err)
+		} else {
+			data["RecentQSOs"] = recentQSOs
+		}
+
+		// Get WhatsApp status
+		waClient := whatsapp.GetClient()
+		if waClient != nil {
+			data["WhatsAppStatus"] = string(waClient.GetStatus())
+		} else {
+			data["WhatsAppStatus"] = "unavailable"
+		}
 	}
 
 	// Get inventory count
@@ -66,29 +100,18 @@ func Welcome(c flamego.Context, t template.Template, data template.Data) {
 	}
 	data["InventoryCount"] = inventoryCount
 
-	// Get notes count (from zettelkasten cache)
-	orgFiles, err := db.ListOrgFiles(ctx)
-	if err != nil {
-		log.Printf("Error fetching org files: %v", err)
-		data["NotesCount"] = 0
-	} else {
-		data["NotesCount"] = len(orgFiles)
-	}
-
-	// Get recent QSOs (last 5)
-	recentQSOs, err := db.ListRecentQSOs(ctx, 5)
-	if err != nil {
-		log.Printf("Error fetching recent QSOs: %v", err)
-	} else {
-		data["RecentQSOs"] = recentQSOs
-	}
-
-	// Get WhatsApp status
-	waClient := whatsapp.GetClient()
-	if waClient != nil {
-		data["WhatsAppStatus"] = string(waClient.GetStatus())
-	} else {
-		data["WhatsAppStatus"] = "unavailable"
+	if !isAdmin {
+		data["HealthProfileCount"] = 0
+		userID, ok := getSessionUserID(s)
+		if ok {
+			profiles, err := db.ListHealthProfilesForUser(ctx, userID)
+			if err != nil {
+				log.Printf("Error fetching shared health profiles: %v", err)
+				data["HealthProfileCount"] = 0
+			} else {
+				data["HealthProfileCount"] = len(profiles)
+			}
+		}
 	}
 
 	data["IsWelcome"] = true

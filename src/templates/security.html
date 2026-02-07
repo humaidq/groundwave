@@ -25,7 +25,11 @@
   <div class="page-header-actions">
     <form method="POST" action="/security/invalidate-other" class="inline-form">
       <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+      {{ if .IsAdmin }}
+      <button type="submit" class="btn">Invalidate All Sessions</button>
+      {{ else }}
       <button type="submit" class="btn">Invalidate Other Sessions</button>
+      {{ end }}
     </form>
   </div>
 </div>
@@ -83,6 +87,92 @@
 
 <script src="/webauthn.js" defer></script>
 
+{{ if .IsAdmin }}
+<div class="section-heading">User Provisioning</div>
+
+{{ if .InviteError }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Error</h5>
+  <p>{{ .InviteError }}</p>
+</div>
+{{ end }}
+
+<form method="POST" action="/security/invites" class="form-group">
+  <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+  <label for="invite-display-name" class="item-title">Display name (optional)</label>
+  <input type="text" id="invite-display-name" name="display_name" class="form-item" placeholder="Guest" />
+  <div class="form-group">
+    <button type="submit" class="btn">Create invite</button>
+  </div>
+</form>
+
+{{ if .UserInvites }}
+<div class="list-card-list">
+  {{ range .UserInvites }}
+  <div class="list-card">
+    <div class="list-card-title">{{ .DisplayName }}</div>
+    <div class="list-card-meta">
+      <span class="muted-text">Created {{ .CreatedAt.Format "Jan 2, 2006" }}</span>
+    </div>
+    {{ if .QRCode }}
+    <div class="qr-container">
+      <img src="data:image/png;base64,{{ .QRCode }}" alt="Setup QR code" class="qr-code" />
+    </div>
+    {{ end }}
+    <div class="list-card-meta">
+      <a href="{{ .SetupURL }}" class="btn" target="_blank" rel="noreferrer">Open setup link</a>
+      <form method="POST" action="/security/invites/{{ .ID }}/delete" class="inline-form" onsubmit="return confirm('Revoke this invite?');">
+        <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
+        <button type="submit" class="btn btn-danger">Revoke</button>
+      </form>
+    </div>
+  </div>
+  {{ end }}
+</div>
+{{ else }}
+<p class="muted-text">No pending invites.</p>
+{{ end }}
+
+<div class="section-heading">Health Sharing</div>
+
+{{ if .ShareError }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Error</h5>
+  <p>{{ .ShareError }}</p>
+</div>
+{{ end }}
+
+{{ if .UserShares }}
+  {{ if .ShareProfiles }}
+    {{ range .UserShares }}
+    {{ $user := . }}
+    <div class="detail-section">
+      <h3>{{ $user.DisplayName }}</h3>
+      <form method="POST" action="/security/users/{{ $user.ID }}/health-shares" class="form-group">
+        <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
+        <div class="tag-dropdown-list">
+          {{ range $.ShareProfiles }}
+          <label class="tag-checkbox-item">
+            <input type="checkbox" name="profile_id" value="{{ .ID }}"{{ if index $user.SharedProfileIDs .ID }} checked{{ end }}>
+            <span class="tag-checkbox-label">{{ .Name }}</span>
+            {{ if .IsPrimary }}<span class="badge ml-half">Primary</span>{{ end }}
+          </label>
+          {{ end }}
+        </div>
+        <div class="form-group">
+          <button type="submit" class="btn">Save sharing</button>
+        </div>
+      </form>
+    </div>
+    {{ end }}
+  {{ else }}
+  <p class="muted-text">No health profiles available to share.</p>
+  {{ end }}
+{{ else }}
+<p class="muted-text">No non-admin users found.</p>
+{{ end }}
+{{ end }}
+
 <div class="section-heading">Sessions</div>
 
 {{ if .Sessions }}
@@ -94,8 +184,17 @@
       {{ if .IsCurrent }}<span class="badge">Current</span>{{ end }}
     </div>
     <div class="list-card-meta">
+      {{ if $.IsAdmin }}
+      <span class="muted-text">User: {{ .UserName }}</span>
+      {{ end }}
       <span class="muted-text">IP: {{ .IP }}</span>
       <span class="muted-text" title="{{ .ExpiresAt.Format "Jan 2, 2006 15:04" }}">Expires {{ .ExpiresIn }}</span>
+    </div>
+    <div class="list-card-meta">
+      <form method="POST" action="/security/sessions/{{ .ID }}/invalidate" class="inline-form" onsubmit="return confirm('Invalidate this session?');">
+        <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
+        <button type="submit" class="btn btn-danger">Invalidate</button>
+      </form>
     </div>
   </div>
   {{ end }}

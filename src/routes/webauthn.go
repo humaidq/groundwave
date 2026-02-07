@@ -9,6 +9,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -38,6 +39,9 @@ const (
 	webauthnRegisterLabelKey  = "webauthn_register_label"
 
 	webauthnBootstrapAllowedKey = "webauthn_bootstrap_allowed"
+	webauthnInviteAllowedKey    = "webauthn_invite_allowed"
+	webauthnInviteIDKey         = "webauthn_invite_id"
+	webauthnSetupIsAdminKey     = "webauthn_setup_is_admin"
 )
 
 func init() {
@@ -76,64 +80,121 @@ func NewWebAuthnFromEnv() (*webauthn.WebAuthn, error) {
 // SetupForm renders the admin bootstrap screen.
 func SetupForm(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	data["HeaderOnly"] = true
+	s.Delete(webauthnInviteAllowedKey)
+	s.Delete(webauthnInviteIDKey)
 
-	count, err := db.CountUsers(c.Request().Context())
+	ctx := c.Request().Context()
+	count, err := db.CountUsers(ctx)
 	if err != nil {
 		data["Error"] = "Failed to load authentication state"
 		t.HTML(http.StatusInternalServerError, "setup")
 		return
 	}
 
-	if count > 0 {
-		s.Delete(webauthnBootstrapAllowedKey)
-		SetInfoFlash(s, "Setup already completed")
-		c.Redirect("/login", http.StatusSeeOther)
+	token := strings.TrimSpace(c.Query("token"))
+	if count == 0 {
+		bootstrapToken := strings.TrimSpace(os.Getenv("BOOTSTRAP_TOKEN"))
+		if bootstrapToken == "" {
+			s.Delete(webauthnBootstrapAllowedKey)
+			data["Error"] = "BOOTSTRAP_TOKEN is not configured"
+			t.HTML(http.StatusForbidden, "setup")
+			return
+		}
+
+		if token == "" || token != bootstrapToken {
+			s.Delete(webauthnBootstrapAllowedKey)
+			data["Error"] = "Invalid setup link"
+			t.HTML(http.StatusForbidden, "setup")
+			return
+		}
+
+		s.Set(webauthnBootstrapAllowedKey, true)
+		data["BootstrapReady"] = true
+		data["DisplayName"] = "Admin"
+		data["IsInviteSetup"] = false
+		t.HTML(http.StatusOK, "setup")
 		return
 	}
 
-	bootstrapToken := strings.TrimSpace(os.Getenv("BOOTSTRAP_TOKEN"))
-	if bootstrapToken == "" {
-		s.Delete(webauthnBootstrapAllowedKey)
-		data["Error"] = "BOOTSTRAP_TOKEN is not configured"
-		t.HTML(http.StatusForbidden, "setup")
-		return
-	}
-
-	if token := strings.TrimSpace(c.Query("token")); token == "" || token != bootstrapToken {
-		s.Delete(webauthnBootstrapAllowedKey)
+	// Existing users -> invite flow only.
+	s.Delete(webauthnBootstrapAllowedKey)
+	if token == "" {
 		data["Error"] = "Invalid setup link"
 		t.HTML(http.StatusForbidden, "setup")
 		return
 	}
 
-	s.Set(webauthnBootstrapAllowedKey, true)
+	invite, err := db.GetUserInviteByToken(ctx, token)
+	if err != nil {
+		data["Error"] = "Failed to load setup link"
+		t.HTML(http.StatusInternalServerError, "setup")
+		return
+	}
+	if invite == nil || invite.UsedAt != nil {
+		s.Delete(webauthnInviteAllowedKey)
+		s.Delete(webauthnInviteIDKey)
+		data["Error"] = "Invalid setup link"
+		t.HTML(http.StatusForbidden, "setup")
+		return
+	}
+
+	s.Set(webauthnInviteAllowedKey, true)
+	s.Set(webauthnInviteIDKey, invite.ID.String())
 	data["BootstrapReady"] = true
-	data["DisplayName"] = "Admin"
+	data["IsInviteSetup"] = true
+	if invite.DisplayName != nil {
+		data["DisplayName"] = *invite.DisplayName
+	}
 
 	t.HTML(http.StatusOK, "setup")
 }
 
-// SetupStart begins WebAuthn registration for the first admin.
+// SetupStart begins WebAuthn registration for setup or invite provisioning.
 func SetupStart(c flamego.Context, s session.Session, web *webauthn.WebAuthn) {
-	if !isBootstrapAllowed(s) {
+	ctx := c.Request().Context()
+
+	isBootstrap := isBootstrapAllowed(s)
+	isInvite := isInviteAllowed(s)
+	if !isBootstrap && !isInvite {
 		writeJSONError(c, http.StatusForbidden, "setup not permitted")
 		return
 	}
 
-	count, err := db.CountUsers(c.Request().Context())
-	if err != nil {
-		writeJSONError(c, http.StatusInternalServerError, "failed to load authentication state")
-		return
-	}
-	if count > 0 {
-		writeJSONError(c, http.StatusBadRequest, "setup already completed")
-		return
+	if isBootstrap {
+		count, err := db.CountUsers(ctx)
+		if err != nil {
+			writeJSONError(c, http.StatusInternalServerError, "failed to load authentication state")
+			return
+		}
+		if count > 0 {
+			writeJSONError(c, http.StatusBadRequest, "setup already completed")
+			return
+		}
+
+		bootstrapToken := strings.TrimSpace(os.Getenv("BOOTSTRAP_TOKEN"))
+		if bootstrapToken == "" {
+			writeJSONError(c, http.StatusForbidden, "bootstrap token not configured")
+			return
+		}
 	}
 
-	bootstrapToken := strings.TrimSpace(os.Getenv("BOOTSTRAP_TOKEN"))
-	if bootstrapToken == "" {
-		writeJSONError(c, http.StatusForbidden, "bootstrap token not configured")
-		return
+	var inviteID string
+	if isInvite {
+		storedInviteID, ok := getInviteID(s)
+		if !ok {
+			writeJSONError(c, http.StatusBadRequest, "invite token missing")
+			return
+		}
+		invite, err := db.GetUserInviteByID(ctx, storedInviteID)
+		if err != nil {
+			writeJSONError(c, http.StatusInternalServerError, "failed to load invite")
+			return
+		}
+		if invite == nil || invite.UsedAt != nil {
+			writeJSONError(c, http.StatusBadRequest, "invite is no longer valid")
+			return
+		}
+		inviteID = invite.ID.String()
 	}
 
 	var request struct {
@@ -157,7 +218,7 @@ func SetupStart(c flamego.Context, s session.Session, web *webauthn.WebAuthn) {
 	user := newWebAuthnUser(&db.User{
 		ID:          userID,
 		DisplayName: displayName,
-		IsAdmin:     true,
+		IsAdmin:     isBootstrap,
 	}, nil)
 
 	options, sessionData, err := web.BeginRegistration(user,
@@ -172,25 +233,38 @@ func SetupStart(c flamego.Context, s session.Session, web *webauthn.WebAuthn) {
 	s.Set(webauthnSetupUserIDKey, userID.String())
 	s.Set(webauthnSetupDisplayNameKey, displayName)
 	s.Set(webauthnSetupLabelKey, label)
+	s.Set(webauthnSetupIsAdminKey, isBootstrap)
+	if inviteID != "" {
+		s.Set(webauthnInviteIDKey, inviteID)
+	}
 
 	writeJSON(c, options)
 }
 
-// SetupFinish completes WebAuthn registration for the first admin.
+// SetupFinish completes WebAuthn registration for setup or invite provisioning.
 func SetupFinish(c flamego.Context, s session.Session, web *webauthn.WebAuthn) {
-	if !isBootstrapAllowed(s) {
+	ctx := c.Request().Context()
+	if !isBootstrapAllowed(s) && !isInviteAllowed(s) {
 		writeJSONError(c, http.StatusForbidden, "setup not permitted")
 		return
 	}
 
-	count, err := db.CountUsers(c.Request().Context())
-	if err != nil {
-		writeJSONError(c, http.StatusInternalServerError, "failed to load authentication state")
+	isAdmin, ok := getSetupIsAdmin(s)
+	if !ok {
+		writeJSONError(c, http.StatusBadRequest, "setup state missing")
 		return
 	}
-	if count > 0 {
-		writeJSONError(c, http.StatusBadRequest, "setup already completed")
-		return
+
+	if isAdmin {
+		count, err := db.CountUsers(ctx)
+		if err != nil {
+			writeJSONError(c, http.StatusInternalServerError, "failed to load authentication state")
+			return
+		}
+		if count > 0 {
+			writeJSONError(c, http.StatusBadRequest, "setup already completed")
+			return
+		}
 	}
 
 	setupSession, ok := getSessionData(s, webauthnSetupSessionKey)
@@ -208,7 +282,7 @@ func SetupFinish(c flamego.Context, s session.Session, web *webauthn.WebAuthn) {
 	user := newWebAuthnUser(&db.User{
 		ID:          userID,
 		DisplayName: displayName,
-		IsAdmin:     true,
+		IsAdmin:     isAdmin,
 	}, nil)
 
 	credential, err := web.FinishRegistration(user, *setupSession, c.Request().Request)
@@ -217,10 +291,10 @@ func SetupFinish(c flamego.Context, s session.Session, web *webauthn.WebAuthn) {
 		return
 	}
 
-	createdUser, err := db.CreateUser(c.Request().Context(), db.CreateUserInput{
+	createdUser, err := db.CreateUser(ctx, db.CreateUserInput{
 		ID:          &userID,
 		DisplayName: displayName,
-		IsAdmin:     true,
+		IsAdmin:     isAdmin,
 	})
 	if err != nil {
 		writeJSONError(c, http.StatusInternalServerError, "failed to create user")
@@ -231,10 +305,24 @@ func SetupFinish(c flamego.Context, s session.Session, web *webauthn.WebAuthn) {
 	if label != "" {
 		labelPtr = &label
 	}
-	if _, err := db.AddUserPasskey(c.Request().Context(), createdUser.ID.String(), *credential, labelPtr); err != nil {
-		_ = db.DeleteUser(c.Request().Context(), createdUser.ID.String())
+	if _, err := db.AddUserPasskey(ctx, createdUser.ID.String(), *credential, labelPtr); err != nil {
+		_ = db.DeleteUser(ctx, createdUser.ID.String())
 		writeJSONError(c, http.StatusInternalServerError, "failed to save passkey")
 		return
+	}
+
+	if !isAdmin {
+		inviteID, ok := getInviteID(s)
+		if !ok {
+			_ = db.DeleteUser(ctx, createdUser.ID.String())
+			writeJSONError(c, http.StatusBadRequest, "invite token missing")
+			return
+		}
+		if err := db.MarkUserInviteUsed(ctx, inviteID); err != nil {
+			_ = db.DeleteUser(ctx, createdUser.ID.String())
+			writeJSONError(c, http.StatusInternalServerError, "failed to finalize invite")
+			return
+		}
 	}
 
 	setAuthenticatedSession(s, createdUser)
@@ -267,6 +355,7 @@ func PasskeyLoginFinish(c flamego.Context, s session.Session, web *webauthn.WebA
 		return loadWebAuthnUserByHandle(c.Request().Context(), rawID, userHandle)
 	}, *loginSession, c.Request().Request)
 	if err != nil {
+		log.Printf("passkey login verification failed: %v", err)
 		writeJSONError(c, http.StatusUnauthorized, "failed to verify passkey")
 		return
 	}
@@ -414,6 +503,7 @@ func BreakGlassFinish(c flamego.Context, s session.Session, web *webauthn.WebAut
 
 	credential, err := web.FinishLogin(waUser, *breakSession, c.Request().Request)
 	if err != nil {
+		log.Printf("break-glass passkey verification failed: %v", err)
 		writeJSONError(c, http.StatusUnauthorized, "failed to verify passkey")
 		return
 	}
@@ -438,6 +528,7 @@ func setAuthenticatedSession(s session.Session, user *db.User) {
 	s.Set("authenticated", true)
 	s.Set("user_id", user.ID.String())
 	s.Set("user_display_name", user.DisplayName)
+	s.Set("user_is_admin", user.IsAdmin)
 	s.Set("userID", user.ID.String())
 }
 
@@ -498,6 +589,9 @@ func clearSetupSession(s session.Session) {
 	s.Delete(webauthnSetupDisplayNameKey)
 	s.Delete(webauthnSetupLabelKey)
 	s.Delete(webauthnBootstrapAllowedKey)
+	s.Delete(webauthnInviteAllowedKey)
+	s.Delete(webauthnInviteIDKey)
+	s.Delete(webauthnSetupIsAdminKey)
 }
 
 func clearRegisterSession(s session.Session) {
@@ -509,6 +603,24 @@ func clearRegisterSession(s session.Session) {
 func isBootstrapAllowed(s session.Session) bool {
 	allowed, ok := s.Get(webauthnBootstrapAllowedKey).(bool)
 	return ok && allowed
+}
+
+func isInviteAllowed(s session.Session) bool {
+	allowed, ok := s.Get(webauthnInviteAllowedKey).(bool)
+	return ok && allowed
+}
+
+func getInviteID(s session.Session) (string, bool) {
+	val, ok := s.Get(webauthnInviteIDKey).(string)
+	if !ok || strings.TrimSpace(val) == "" {
+		return "", false
+	}
+	return val, true
+}
+
+func getSetupIsAdmin(s session.Session) (bool, bool) {
+	val, ok := s.Get(webauthnSetupIsAdminKey).(bool)
+	return val, ok
 }
 
 type webauthnUser struct {

@@ -27,11 +27,13 @@
     </div>
   </div>
   <div class="page-header-actions">
+    {{ if .IsAdmin }}
     <a href="/inventory/{{ .Item.InventoryID }}/edit" class="btn">Edit</a>
     <form method="POST" action="/inventory/{{ .Item.InventoryID }}/delete" class="inline-form" onsubmit="return confirm('Delete this inventory item? This cannot be undone.');">
       <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
       <button type="submit" class="btn btn-danger">Delete</button>
     </form>
+    {{ end }}
   </div>
 </div>
 
@@ -83,6 +85,7 @@
     {{ end }}
   </div>
 
+  {{ if .IsAdmin }}
   <!-- Comments Section -->
   <div class="detail-section">
     <h3>Comments</h3>
@@ -118,6 +121,7 @@
       </form>
     </details>
   </div>
+  {{ end }}
 </div>
 
 {{ template "foot" . }}

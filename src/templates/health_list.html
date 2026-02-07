@@ -22,7 +22,9 @@
 <div class="page-header">
   <h2>Health Profiles</h2>
   <div class="page-header-actions">
+    {{ if .IsAdmin }}
     <a href="/health/new" class="btn">Add Profile</a>
+    {{ end }}
   </div>
 </div>
 
@@ -48,7 +50,7 @@
   {{ end }}
 </div>
 {{ else }}
-<p class="muted-text">No health profiles found. <a href="/health/new">Add your first profile</a>.</p>
+<p class="muted-text">No health profiles found.{{ if .IsAdmin }} <a href="/health/new">Add your first profile</a>.{{ end }}</p>
 {{ end }}
 
 {{ template "foot" . }}

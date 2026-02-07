@@ -56,12 +56,18 @@
       <nav class="navbar">
         <div class="nav-menu">
           <a href="/"{{ if .IsWelcome }} class="nav-active"{{ end }}>Home</a>
+          {{ if .IsAdmin }}
           <a href="/todo"{{ if .IsTodo }} class="nav-active"{{ end }}>Todo</a>
+          <a href="/files"{{ if .IsFiles }} class="nav-active"{{ end }}>Files</a>
           <a href="/timeline"{{ if .IsTimeline }} class="nav-active"{{ end }}>Timeline</a>
           <a href="/contacts"{{ if .IsContacts }} class="nav-active"{{ end }}>Contacts</a>
           <a href="/qsl"{{ if .IsQSL }} class="nav-active"{{ end }}>QSL</a>
           <a href="/zk"{{ if .IsZettelkasten }} class="nav-active"{{ end }}>Zettelkasten</a>
+          {{ end }}
           <a href="/inventory"{{ if .IsInventory }} class="nav-active"{{ end }}>Inventory</a>
+          {{ if not .IsAdmin }}
+          <a href="/files"{{ if .IsFiles }} class="nav-active"{{ end }}>Files</a>
+          {{ end }}
           <a href="/health"{{ if .IsHealth }} class="nav-active"{{ end }}>Health</a>
         </div>
       </nav>

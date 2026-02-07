@@ -1,0 +1,78 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+<div class="page-header">
+  <div class="page-header-stack">
+    <h2>Files</h2>
+    <div class="page-header-meta">
+      <span class="muted-text">{{ .CurrentPathDisplay }}</span>
+      {{ if .EntriesCount }}
+      <span class="muted-text">{{ .EntriesCount }} item{{ if ne .EntriesCount 1 }}s{{ end }}</span>
+      {{ end }}
+      {{ if .IsRestricted }}
+      <span class="status-badge status-restricted">Restricted</span>
+      {{ end }}
+      {{ if .IsAdminOnly }}
+      <span class="status-badge status-admin">Admin</span>
+      {{ end }}
+    </div>
+  </div>
+  <div class="page-header-actions">
+    {{ if .HasParent }}
+    <a href="/files{{ if .ParentPath }}?path={{ .ParentPath | urlquery }}{{ end }}" class="btn">Up</a>
+    {{ end }}
+    {{ if .ParentPath }}
+    <a href="/files" class="btn">Root</a>
+    {{ end }}
+  </div>
+</div>
+
+{{ if .Error }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Error</h5>
+  <p>{{ .Error }}</p>
+</div>
+{{ end }}
+
+{{ if .Entries }}
+<div class="list-card-list">
+  {{ range .Entries }}
+  <div class="list-card">
+    {{ if .IsDir }}
+    <a href="/files?path={{ .Path | urlquery }}" class="list-card-link">
+      <div class="list-card-title">📁 {{ .Name }}</div>
+      <div class="list-card-meta">
+        <span class="muted-text">Folder</span>
+        {{ if .IsAdminOnly }}
+        <span class="status-badge status-admin">Admin</span>
+        {{ end }}
+      </div>
+    </a>
+    {{ else }}
+    <a href="/files/file?path={{ .Path | urlquery }}" class="list-card-link" target="_blank">
+      <div class="list-card-title">📄 {{ .Name }}</div>
+      <div class="list-card-meta">
+        <span class="muted-text">{{ formatFileSize .Size }}{{ if not .ModTime.IsZero }} • {{ .ModTime.Format "Jan 2, 2006" }}{{ end }}</span>
+      </div>
+    </a>
+    {{ end }}
+  </div>
+  {{ end }}
+</div>
+{{ else }}
+<p class="empty-state">No files here.</p>
+{{ end }}
+
+{{ template "foot" . }}

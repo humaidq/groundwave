@@ -5,6 +5,7 @@
   <p class="welcome-subtitle">Your personal database</p>
 
   <div class="stats-compact">
+    {{ if .IsAdmin }}
     <div class="stat-item">
       <span class="stat-item-label">Contacts</span>
       <span class="stat-item-value">{{ .TotalContacts }}</span>
@@ -25,22 +26,39 @@
       <span class="stat-item-label">Notes</span>
       <span class="stat-item-value">{{ .NotesCount }}</span>
     </div>
+    {{ else }}
+    <div class="stat-item">
+      <span class="stat-item-label">Inventory</span>
+      <span class="stat-item-value">{{ .InventoryCount }}</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-item-label">Shared Health</span>
+      <span class="stat-item-value">{{ .HealthProfileCount }}</span>
+    </div>
+    {{ end }}
   </div>
 
   <div class="welcome-actions">
-    {{ if gt .OverdueCount 0 }}
-    <a href="/overdue" class="btn">View Overdue Contacts ({{ .OverdueCount }})</a>
+    {{ if .IsAdmin }}
+      {{ if gt .OverdueCount 0 }}
+      <a href="/overdue" class="btn">View Overdue Contacts ({{ .OverdueCount }})</a>
+      {{ end }}
+      <a href="/bulk-contact-log" class="btn">Bulk Contact Log</a>
+      <a href="/whatsapp" class="btn{{ if eq .WhatsAppStatus "connected" }} btn-success{{ end }}">WhatsApp: {{ .WhatsAppStatus }}</a>
+      <a href="/security" class="btn">Security</a>
+    {{ else }}
+      <a href="/inventory" class="btn">Inventory</a>
+      <a href="/files" class="btn">Files</a>
+      <a href="/health" class="btn">Health</a>
+      <a href="/security" class="btn">Security</a>
     {{ end }}
-    <a href="/bulk-contact-log" class="btn">Bulk Contact Log</a>
-    <a href="/whatsapp" class="btn{{ if eq .WhatsAppStatus "connected" }} btn-success{{ end }}">WhatsApp: {{ .WhatsAppStatus }}</a>
-    <a href="/security" class="btn">Security</a>
     <form action="/logout" method="post" class="inline-form">
       <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
       <button type="submit" class="btn">Logout</button>
     </form>
   </div>
 
-  {{ if .RecentQSOs }}
+  {{ if and .IsAdmin .RecentQSOs }}
   <div class="recent-section">
     <h3>Recent QSOs</h3>
     <div class="list-card-list">
@@ -61,7 +79,7 @@
   </div>
   {{ end }}
 
-  {{ if .RecentContacts }}
+  {{ if and .IsAdmin .RecentContacts }}
   <div class="recent-section">
     <h3>Recently Updated</h3>
     <div class="list-card-list">

@@ -15,7 +15,9 @@
 
 <div class="page-header">
   <h2>Inventory</h2>
+  {{ if .IsAdmin }}
   <a href="/inventory/new" class="btn">+ Add Item</a>
+  {{ end }}
 </div>
 
 {{ if .Error }}
@@ -106,7 +108,7 @@
   {{ end }}
 </div>
 {{ else }}
-<p class="empty-state">No inventory items yet. <a href="/inventory/new">Add your first item</a>.</p>
+<p class="empty-state">No inventory items yet.{{ if .IsAdmin }} <a href="/inventory/new">Add your first item</a>.{{ end }}</p>
 {{ end }}
 
 {{ if .Items }}

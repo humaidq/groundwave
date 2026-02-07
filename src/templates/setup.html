@@ -1,7 +1,11 @@
 {{ template "head" . }}
 
 <div class="page-header">
+  {{ if .IsInviteSetup }}
+  <h2>Account Setup</h2>
+  {{ else }}
   <h2>Admin Setup</h2>
+  {{ end }}
 </div>
 
 {{ if .Error }}
@@ -17,7 +21,11 @@
 </div>
 
 {{ if .BootstrapReady }}
+  {{ if .IsInviteSetup }}
+  <p>Create your account using a passkey. This setup link works once.</p>
+  {{ else }}
   <p>Create the first admin account using a passkey. This account will be able to add more passkeys later.</p>
+  {{ end }}
 
   <div class="form-group">
     <label for="setup-display-name" class="item-title">Display name</label>

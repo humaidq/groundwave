@@ -61,6 +61,12 @@ func ViewInventoryItem(c flamego.Context, s session.Session, t template.Template
 	}
 
 	ctx := c.Request().Context()
+	isAdmin, err := resolveSessionIsAdmin(ctx, s)
+	if err != nil {
+		log.Printf("Error resolving admin state: %v", err)
+		isAdmin = false
+	}
+	data["IsAdmin"] = isAdmin
 
 	// Fetch item
 	item, err := db.GetInventoryItem(ctx, inventoryID)
@@ -71,12 +77,15 @@ func ViewInventoryItem(c flamego.Context, s session.Session, t template.Template
 		return
 	}
 
-	// Fetch comments
-	comments, err := db.GetCommentsForItem(ctx, item.ID)
-	if err != nil {
-		log.Printf("Error fetching comments for item %s: %v", inventoryID, err)
-		// Don't fail the page, just show empty comments
-		comments = []db.InventoryComment{}
+	// Fetch comments (admin only)
+	comments := []db.InventoryComment{}
+	if isAdmin {
+		comments, err = db.GetCommentsForItem(ctx, item.ID)
+		if err != nil {
+			log.Printf("Error fetching comments for item %s: %v", inventoryID, err)
+			// Don't fail the page, just show empty comments
+			comments = []db.InventoryComment{}
+		}
 	}
 
 	// Fetch WebDAV files (gracefully handle errors)

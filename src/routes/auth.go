@@ -23,6 +23,7 @@ func Logout(s session.Session, c flamego.Context) {
 	s.Delete("authenticated")
 	s.Delete("user_id")
 	s.Delete("user_display_name")
+	s.Delete("user_is_admin")
 	s.Delete("userID")
 	s.Delete(sensitiveAccessSessionKey)
 	s.Delete("private_mode")

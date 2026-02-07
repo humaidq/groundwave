@@ -1401,6 +1401,18 @@ code:not(pre code) {
   vertical-align: middle;
 }
 
+.status-restricted {
+  background-color: #dc3545;
+  border-color: #b02a37;
+  color: #ffffff;
+}
+
+.status-admin {
+  background-color: #134dae;
+  border-color: #0f3d8c;
+  color: #ffffff;
+}
+
 .contact-tier {
   min-width: 25px;
 }

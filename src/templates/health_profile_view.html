@@ -22,11 +22,13 @@
 <div class="page-header">
   <h2>{{ .Profile.Name }}</h2>
   <div class="page-header-actions">
+    {{ if .IsAdmin }}
     <a href="/health/{{ .Profile.ID }}/edit" class="btn">Edit</a>
     <form method="POST" action="/health/{{ .Profile.ID }}/delete" class="inline-form" onsubmit="return confirm('Delete this profile and all follow-ups? This cannot be undone.');">
       <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
       <button type="submit" class="btn btn-danger">Delete</button>
     </form>
+    {{ end }}
   </div>
 </div>
 
@@ -69,7 +71,9 @@
   <div class="detail-section">
     <h3>Medical Follow-ups</h3>
     <div class="section-actions">
+      {{ if .IsAdmin }}
       <a href="/health/{{ .Profile.ID }}/followup/new" class="btn">Add Follow-up</a>
+      {{ end }}
     </div>
 
     {{ if .Followups }}
@@ -91,7 +95,7 @@
       {{ end }}
     </div>
     {{ else }}
-    <p class="muted-text">No follow-ups recorded. <a href="/health/{{ .Profile.ID }}/followup/new">Add the first follow-up</a>.</p>
+    <p class="muted-text">No follow-ups recorded.{{ if .IsAdmin }} <a href="/health/{{ .Profile.ID }}/followup/new">Add the first follow-up</a>.{{ end }}</p>
     {{ end }}
   </div>
 

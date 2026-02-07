@@ -134,6 +134,45 @@ func GetUserByID(ctx context.Context, id string) (*User, error) {
 	return &user, nil
 }
 
+// ListUsers returns all users.
+func ListUsers(ctx context.Context) ([]User, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		SELECT id, display_name, is_admin, created_at, updated_at
+		FROM users
+		ORDER BY created_at ASC
+	`
+	rows, err := pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var user User
+		if err := rows.Scan(
+			&user.ID,
+			&user.DisplayName,
+			&user.IsAdmin,
+			&user.CreatedAt,
+			&user.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan user: %w", err)
+		}
+		users = append(users, user)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating users: %w", err)
+	}
+
+	return users, nil
+}
+
 // GetUserByWebAuthnID resolves a user by WebAuthn user handle bytes.
 func GetUserByWebAuthnID(ctx context.Context, userHandle []byte) (*User, error) {
 	userID, err := uuid.FromBytes(userHandle)

@@ -37,6 +37,7 @@ The following environment variables are used by the application:
 - `CARDDAV_PASSWORD` - Password for CardDAV authentication
 - `WEBDAV_ZK_PATH` - WebDAV URL to the Zettelkasten index `.org` file
 - `WEBDAV_INV_PATH` - WebDAV base URL for inventory files
+- `WEBDAV_FILES_PATH` - WebDAV base URL for file browsing
 - `WEBDAV_TODO_PATH` - WebDAV URL to the todo `.org` file
 - `WEBDAV_USERNAME` - Username for WebDAV authentication
 - `WEBDAV_PASSWORD` - Password for WebDAV authentication

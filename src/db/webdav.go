@@ -10,6 +10,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
+	"sort"
 	"strings"
 	"time"
 
@@ -18,10 +20,11 @@ import (
 
 // WebDAVConfig holds unified WebDAV configuration
 type WebDAVConfig struct {
-	Username string // Shared: WEBDAV_USERNAME
-	Password string // Shared: WEBDAV_PASSWORD
-	ZKPath   string // WEBDAV_ZK_PATH (for Zettelkasten)
-	InvPath  string // WEBDAV_INV_PATH (for Inventory)
+	Username  string // Shared: WEBDAV_USERNAME
+	Password  string // Shared: WEBDAV_PASSWORD
+	ZKPath    string // WEBDAV_ZK_PATH (for Zettelkasten)
+	InvPath   string // WEBDAV_INV_PATH (for Inventory)
+	FilesPath string // WEBDAV_FILES_PATH (for Files)
 }
 
 // WebDAVFile represents a file in WebDAV
@@ -34,24 +37,36 @@ type WebDAVFile struct {
 	ContentType string // Inferred from extension
 }
 
+// WebDAVEntry represents a file or directory in WebDAV
+type WebDAVEntry struct {
+	Name        string
+	Path        string
+	Size        int64
+	ModTime     time.Time
+	IsDir       bool
+	IsAdminOnly bool
+}
+
 // GetWebDAVConfig loads WebDAV configuration from environment
 func GetWebDAVConfig() (*WebDAVConfig, error) {
 	username := os.Getenv("WEBDAV_USERNAME")
 	password := os.Getenv("WEBDAV_PASSWORD")
 	zkPath := os.Getenv("WEBDAV_ZK_PATH")
 	invPath := os.Getenv("WEBDAV_INV_PATH")
+	filesPath := os.Getenv("WEBDAV_FILES_PATH")
 
 	// Username and password are optional (no auth if not provided)
 	// At least one path must be configured for this to be useful
-	if zkPath == "" && invPath == "" {
-		return nil, fmt.Errorf("neither WEBDAV_ZK_PATH nor WEBDAV_INV_PATH configured")
+	if zkPath == "" && invPath == "" && filesPath == "" {
+		return nil, fmt.Errorf("no WebDAV paths configured")
 	}
 
 	return &WebDAVConfig{
-		Username: username,
-		Password: password,
-		ZKPath:   zkPath,
-		InvPath:  invPath,
+		Username:  username,
+		Password:  password,
+		ZKPath:    zkPath,
+		InvPath:   invPath,
+		FilesPath: filesPath,
 	}, nil
 }
 
@@ -165,11 +180,230 @@ func FetchInventoryFile(ctx context.Context, inventoryID string, filename string
 	return body, contentType, nil
 }
 
+// ListFilesEntries lists files and directories in the WebDAV files directory.
+func ListFilesEntries(ctx context.Context, dirPath string) ([]WebDAVEntry, error) {
+	config, err := GetWebDAVConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	if config.FilesPath == "" {
+		return nil, fmt.Errorf("WEBDAV_FILES_PATH not configured")
+	}
+
+	client, err := newFilesWebDAVClient(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create WebDAV client: %w", err)
+	}
+
+	target := "."
+	if dirPath != "" {
+		target = dirPath
+	}
+
+	fileInfos, err := client.ReadDir(ctx, target, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list WebDAV directory: %w", err)
+	}
+
+	entries := make([]WebDAVEntry, 0, len(fileInfos))
+	for _, info := range fileInfos {
+		if isListingSelf(info.Path, dirPath) {
+			continue
+		}
+		name := extractFilename(info.Path)
+		if name == "" {
+			continue
+		}
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+
+		entry := WebDAVEntry{
+			Name:    name,
+			Path:    path.Join(dirPath, name),
+			Size:    info.Size,
+			ModTime: info.ModTime,
+			IsDir:   info.IsDir,
+		}
+		entries = append(entries, entry)
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].IsDir != entries[j].IsDir {
+			return entries[i].IsDir
+		}
+		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
+	})
+
+	return entries, nil
+}
+
+// FetchFilesFile downloads a file from WebDAV files directory.
+func FetchFilesFile(ctx context.Context, filePath string) ([]byte, string, error) {
+	config, err := GetWebDAVConfig()
+	if err != nil {
+		return nil, "", err
+	}
+
+	if config.FilesPath == "" {
+		return nil, "", fmt.Errorf("WEBDAV_FILES_PATH not configured")
+	}
+
+	client, err := newFilesWebDAVClient(config)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create WebDAV client: %w", err)
+	}
+
+	reader, err := client.Open(ctx, filePath)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to fetch WebDAV file: %w", err)
+	}
+	defer reader.Close()
+
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read file content: %w", err)
+	}
+
+	contentType := inferContentType(filePath)
+	return body, contentType, nil
+}
+
+// IsFilesPathRestricted reports whether a directory path is restricted by a break-glass marker.
+func IsFilesPathRestricted(ctx context.Context, dirPath string) (bool, error) {
+	config, err := GetWebDAVConfig()
+	if err != nil {
+		return false, err
+	}
+
+	if config.FilesPath == "" {
+		return false, fmt.Errorf("WEBDAV_FILES_PATH not configured")
+	}
+
+	client, err := newFilesWebDAVClient(config)
+	if err != nil {
+		return false, fmt.Errorf("failed to create WebDAV client: %w", err)
+	}
+
+	return isFilesPathMarked(ctx, client, dirPath, ".gw_btg")
+}
+
+// IsFilesPathAdminOnly reports whether a directory path is restricted to admins.
+func IsFilesPathAdminOnly(ctx context.Context, dirPath string) (bool, error) {
+	config, err := GetWebDAVConfig()
+	if err != nil {
+		return false, err
+	}
+
+	if config.FilesPath == "" {
+		return false, fmt.Errorf("WEBDAV_FILES_PATH not configured")
+	}
+
+	client, err := newFilesWebDAVClient(config)
+	if err != nil {
+		return false, fmt.Errorf("failed to create WebDAV client: %w", err)
+	}
+
+	return isFilesPathMarked(ctx, client, dirPath, ".gw_admin")
+}
+
+func newFilesWebDAVClient(config *WebDAVConfig) (*webdav.Client, error) {
+	basePath := strings.TrimRight(config.FilesPath, "/")
+	if basePath == "" {
+		return nil, fmt.Errorf("WEBDAV_FILES_PATH not configured")
+	}
+
+	endpoint := basePath + "/"
+	httpClient := newWebDAVHTTPClient(config)
+	client, err := webdav.NewClient(httpClient, endpoint)
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
+func isFilesPathMarked(ctx context.Context, client *webdav.Client, dirPath string, marker string) (bool, error) {
+	restricted, err := dirHasMarker(ctx, client, "", marker)
+	if err != nil {
+		return false, err
+	}
+	if restricted {
+		return true, nil
+	}
+
+	if dirPath == "" {
+		return false, nil
+	}
+
+	segments := strings.Split(dirPath, "/")
+	current := ""
+	for _, segment := range segments {
+		if segment == "" {
+			continue
+		}
+		if current == "" {
+			current = segment
+		} else {
+			current = current + "/" + segment
+		}
+
+		restricted, err := dirHasMarker(ctx, client, current, marker)
+		if err != nil {
+			return false, err
+		}
+		if restricted {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func dirHasMarker(ctx context.Context, client *webdav.Client, dirPath string, marker string) (bool, error) {
+	target := "."
+	if dirPath != "" {
+		target = dirPath
+	}
+
+	fileInfos, err := client.ReadDir(ctx, target, false)
+	if err != nil {
+		return false, err
+	}
+
+	for _, info := range fileInfos {
+		name := extractFilename(info.Path)
+		if name == marker {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 // Helper functions
 
 func extractFilename(path string) string {
-	parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
+	trimmed := strings.TrimSuffix(path, "/")
+	parts := strings.Split(strings.TrimPrefix(trimmed, "/"), "/")
+	if len(parts) == 0 {
+		return ""
+	}
 	return parts[len(parts)-1]
+}
+
+func isListingSelf(entryPath string, dirPath string) bool {
+	entry := strings.TrimSuffix(strings.TrimPrefix(entryPath, "/"), "/")
+	if entry == "." {
+		entry = ""
+	}
+
+	dir := strings.TrimSuffix(strings.TrimPrefix(dirPath, "/"), "/")
+	if dir == "." {
+		dir = ""
+	}
+
+	return entry == dir
 }
 
 func inferContentType(filename string) string {

@@ -308,6 +308,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		FuncMaps:   []template.FuncMap{funcMap},
 	}))
 	f.Use(routes.CSRFInjector())
+	f.Use(routes.UserContextInjector())
 	f.Use(routes.NoCacheHeaders())
 	// Session metadata middleware - captures device and IP info
 	f.Use(routes.SessionMetadataMiddleware())
@@ -361,7 +362,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	f.Post("/webauthn/setup/finish", csrf.Validate, routes.SetupFinish)
 	f.Get("/connectivity", func(c flamego.Context) { c.ResponseWriter().Write([]byte("1")) })
 	f.Get("/note/{id}", routes.ViewPublicNote)
-	f.Get("/ext/auth", routes.RequireAuth, routes.ExtensionAuth)
+	f.Get("/ext/auth", routes.RequireAuth, routes.RequireAdmin, routes.ExtensionAuth)
 	f.Get("/ext/complete", routes.ExtensionComplete)
 	f.Get("/ext/validate", routes.ExtensionValidate)
 	f.Get("/ext/contacts-no-linkedin", routes.ExtensionContactsWithoutLinkedIn)
@@ -374,17 +375,48 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 
 	// Protected routes (require authentication)
 	f.Group("", func() {
+		// Shared routes
 		f.Get("/", routes.Welcome)
-		f.Get("/todo", routes.Todo)
-		f.Get("/timeline", routes.Timeline)
-		f.Get("/journal/{date}", routes.ViewJournalEntry)
-		f.Post("/journal/{date}/location", csrf.Validate, routes.AddJournalLocation)
-		f.Post("/journal/{date}/location/{location_id}/delete", csrf.Validate, routes.DeleteJournalLocation)
 		f.Post("/logout", csrf.Validate, routes.Logout)
 		f.Post("/sensitive-access/lock", csrf.Validate, routes.LockSensitiveAccess)
 		f.Get("/break-glass", routes.BreakGlassForm)
 		f.Post("/break-glass/start", csrf.Validate, routes.BreakGlassStart)
 		f.Post("/break-glass/finish", csrf.Validate, routes.BreakGlassFinish)
+
+		// Inventory read-only routes
+		f.Get("/inventory", routes.InventoryList)
+		f.Get("/inventory/{id}", routes.ViewInventoryItem)
+		f.Get("/inventory/{id}/file/{filename}", routes.DownloadInventoryFile)
+
+		// Files read-only routes
+		f.Get("/files", routes.FilesList)
+		f.Get("/files/file", routes.DownloadFilesFile)
+
+		// Health read-only routes
+		f.Get("/health/break-glass", routes.BreakGlassForm)
+		f.Post("/health/break-glass/start", csrf.Validate, routes.BreakGlassStart)
+		f.Post("/health/break-glass/finish", csrf.Validate, routes.BreakGlassFinish)
+		f.Get("/health", routes.ListHealthProfiles)
+		f.Get("/health/{id}", routes.ViewHealthProfile)
+		f.Get("/health/{profile_id}/followup/{id}", routes.ViewFollowup)
+		f.Post("/health/{profile_id}/followup/{id}/ai-summary", csrf.Validate, routes.GenerateAISummary)
+
+		// Security & passkeys
+		f.Get("/security", routes.Security)
+		f.Post("/security/invalidate-other", csrf.Validate, routes.InvalidateOtherSessions)
+		f.Post("/security/sessions/{id}/invalidate", csrf.Validate, routes.InvalidateSession)
+		f.Post("/webauthn/passkey/start", csrf.Validate, routes.PasskeyRegistrationStart)
+		f.Post("/webauthn/passkey/finish", csrf.Validate, routes.PasskeyRegistrationFinish)
+		f.Post("/security/passkeys/{id}/delete", csrf.Validate, routes.DeletePasskey)
+	}, routes.RequireAuth, routes.RequireSensitiveAccessForHealth)
+
+	// Admin-only routes
+	f.Group("", func() {
+		f.Get("/todo", routes.Todo)
+		f.Get("/timeline", routes.Timeline)
+		f.Get("/journal/{date}", routes.ViewJournalEntry)
+		f.Post("/journal/{date}/location", csrf.Validate, routes.AddJournalLocation)
+		f.Post("/journal/{date}/location/{location_id}/delete", csrf.Validate, routes.DeleteJournalLocation)
 		f.Get("/contacts", routes.Home)
 		f.Get("/overdue", routes.Overdue)
 		f.Get("/qsl", routes.QSL)
@@ -447,36 +479,26 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Get("/zettel-inbox", routes.ZettelCommentsInbox)
 		f.Post("/rebuild-cache", csrf.Validate, routes.RebuildCache)
 
-		// Inventory routes
-		f.Get("/inventory", routes.InventoryList)
+		// Inventory routes (admin)
 		f.Get("/inventory/new", routes.NewInventoryItemForm)
 		f.Post("/inventory/new", csrf.Validate, routes.CreateInventoryItem)
-		f.Get("/inventory/{id}", routes.ViewInventoryItem)
 		f.Get("/inventory/{id}/edit", routes.EditInventoryItemForm)
 		f.Post("/inventory/{id}/edit", csrf.Validate, routes.UpdateInventoryItem)
 		f.Post("/inventory/{id}/delete", csrf.Validate, routes.DeleteInventoryItem)
 		f.Post("/inventory/{id}/comment", csrf.Validate, routes.AddInventoryComment)
 		f.Post("/inventory/{id}/comment/{comment_id}/delete", csrf.Validate, routes.DeleteInventoryComment)
-		f.Get("/inventory/{id}/file/{filename}", routes.DownloadInventoryFile)
 
-		// Health tracking routes
-		f.Get("/health/break-glass", routes.BreakGlassForm)
-		f.Post("/health/break-glass/start", csrf.Validate, routes.BreakGlassStart)
-		f.Post("/health/break-glass/finish", csrf.Validate, routes.BreakGlassFinish)
-		f.Get("/health", routes.ListHealthProfiles)
+		// Health tracking routes (admin)
 		f.Get("/health/new", routes.NewHealthProfileForm)
 		f.Post("/health/new", csrf.Validate, routes.CreateHealthProfile)
-		f.Get("/health/{id}", routes.ViewHealthProfile)
 		f.Get("/health/{id}/edit", routes.EditHealthProfileForm)
 		f.Post("/health/{id}/edit", csrf.Validate, routes.UpdateHealthProfile)
 		f.Post("/health/{id}/delete", csrf.Validate, routes.DeleteHealthProfile)
 		f.Get("/health/{profile_id}/followup/new", routes.NewFollowupForm)
 		f.Post("/health/{profile_id}/followup/new", csrf.Validate, routes.CreateFollowup)
-		f.Get("/health/{profile_id}/followup/{id}", routes.ViewFollowup)
 		f.Get("/health/{profile_id}/followup/{id}/edit", routes.EditFollowupForm)
 		f.Post("/health/{profile_id}/followup/{id}/edit", csrf.Validate, routes.UpdateFollowup)
 		f.Post("/health/{profile_id}/followup/{id}/delete", csrf.Validate, routes.DeleteFollowup)
-		f.Post("/health/{profile_id}/followup/{id}/ai-summary", csrf.Validate, routes.GenerateAISummary)
 		f.Post("/health/{profile_id}/followup/{followup_id}/result", csrf.Validate, routes.AddLabResult)
 		f.Get("/health/{profile_id}/followup/{followup_id}/result/{id}/edit", routes.EditLabResultForm)
 		f.Post("/health/{profile_id}/followup/{followup_id}/result/{id}/edit", csrf.Validate, routes.UpdateLabResult)
@@ -487,12 +509,12 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Post("/whatsapp/connect", csrf.Validate, routes.WhatsAppConnect)
 		f.Post("/whatsapp/disconnect", csrf.Validate, routes.WhatsAppDisconnect)
 		f.Get("/whatsapp/status", routes.WhatsAppStatusAPI)
-		f.Get("/security", routes.Security)
-		f.Post("/security/invalidate-other", csrf.Validate, routes.InvalidateOtherSessions)
-		f.Post("/webauthn/passkey/start", csrf.Validate, routes.PasskeyRegistrationStart)
-		f.Post("/webauthn/passkey/finish", csrf.Validate, routes.PasskeyRegistrationFinish)
-		f.Post("/security/passkeys/{id}/delete", csrf.Validate, routes.DeletePasskey)
-	}, routes.RequireAuth, routes.RequireSensitiveAccessForHealth)
+
+		// Security admin actions
+		f.Post("/security/invites", csrf.Validate, routes.CreateUserInvite)
+		f.Post("/security/invites/{id}/delete", csrf.Validate, routes.DeleteUserInvite)
+		f.Post("/security/users/{id}/health-shares", csrf.Validate, routes.UpdateHealthProfileShares)
+	}, routes.RequireAuth, routes.RequireAdmin, routes.RequireSensitiveAccessForHealth)
 
 	port := cmd.String("port")
 
