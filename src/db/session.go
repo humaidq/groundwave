@@ -159,10 +159,111 @@ func (s *PostgresSessionStore) Save(ctx context.Context, sess session.Session) e
 	return err
 }
 
+// SessionData represents a decoded session for the security page
+type SessionData struct {
+	ID            string
+	ExpiresAt     time.Time
+	DeviceLabel   string
+	DeviceIP      string
+	Authenticated bool
+}
+
 // GC performs a garbage collection operation on the session store
 func (s *PostgresSessionStore) GC(ctx context.Context) error {
 	_, err := pool.Exec(ctx,
 		`DELETE FROM `+s.config.TableName+` WHERE expires_at < NOW()`,
 	)
 	return err
+}
+
+// ListValidSessions returns all valid authenticated sessions for security page
+func (s *PostgresSessionStore) ListValidSessions(ctx context.Context) ([]SessionData, error) {
+	rows, err := pool.Query(ctx,
+		`SELECT id, data, expires_at FROM `+s.config.TableName+` WHERE expires_at > NOW() ORDER BY expires_at DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sessions []SessionData
+	for rows.Next() {
+		var id string
+		var data []byte
+		var expiresAt time.Time
+
+		if err := rows.Scan(&id, &data, &expiresAt); err != nil {
+			return nil, err
+		}
+
+		// Decode session data
+		sessionData, err := s.decoder(data)
+		if err != nil {
+			// Skip sessions that can't be decoded
+			continue
+		}
+
+		// Extract device info
+		deviceLabel := "Unknown device"
+		if val, ok := sessionData["device_label"]; ok && val != nil {
+			if str, ok := val.(string); ok && str != "" {
+				deviceLabel = str
+			}
+		}
+
+		deviceIP := "Unknown IP"
+		if val, ok := sessionData["device_ip"]; ok && val != nil {
+			if str, ok := val.(string); ok && str != "" {
+				deviceIP = str
+			}
+		}
+
+		// Check authentication status
+		authenticated := false
+		if val, ok := sessionData["authenticated"]; ok && val != nil {
+			if auth, ok := val.(bool); ok {
+				authenticated = auth
+			}
+		}
+
+		// Only include authenticated sessions
+		if !authenticated {
+			continue
+		}
+
+		sessions = append(sessions, SessionData{
+			ID:            id,
+			ExpiresAt:     expiresAt,
+			DeviceLabel:   deviceLabel,
+			DeviceIP:      deviceIP,
+			Authenticated: authenticated,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return sessions, nil
+}
+
+// InvalidateOtherSessions deletes all authenticated sessions except the current one.
+func (s *PostgresSessionStore) InvalidateOtherSessions(ctx context.Context, currentID string) (int, error) {
+	sessions, err := s.ListValidSessions(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	deleted := 0
+	for _, sess := range sessions {
+		if sess.ID == currentID {
+			continue
+		}
+		if err := s.Destroy(ctx, sess.ID); err != nil {
+			return deleted, err
+		}
+		deleted++
+	}
+
+	return deleted, nil
 }

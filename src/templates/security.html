@@ -1,0 +1,52 @@
+{{ template "head" . }}
+
+{{ if .Error }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Error</h5>
+  <p>{{.Error}}</p>
+</div>
+{{ end }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+<div class="page-header">
+  <h2>Security</h2>
+  <div class="page-header-actions">
+    <form method="POST" action="/security/invalidate-other" class="inline-form">
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+      <button type="submit" class="btn">Invalidate Other Sessions</button>
+    </form>
+  </div>
+</div>
+
+{{ if .Sessions }}
+<div class="list-card-list">
+  {{ range .Sessions }}
+  <div class="list-card">
+    <div class="list-card-title">
+      {{ .Device }}
+      {{ if .IsCurrent }}<span class="badge">Current</span>{{ end }}
+    </div>
+    <div class="list-card-meta">
+      <span class="muted-text">IP: {{ .IP }}</span>
+      <span class="muted-text" title="{{ .ExpiresAt.Format "Jan 2, 2006 15:04" }}">Expires {{ .ExpiresIn }}</span>
+    </div>
+  </div>
+  {{ end }}
+</div>
+{{ else }}
+<p class="muted-text">No active sessions found.</p>
+{{ end }}
+
+{{ template "foot" . }}

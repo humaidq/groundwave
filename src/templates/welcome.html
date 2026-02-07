@@ -33,6 +33,7 @@
     {{ end }}
     <a href="/bulk-contact-log" class="btn">Bulk Contact Log</a>
     <a href="/whatsapp" class="btn{{ if eq .WhatsAppStatus "connected" }} btn-success{{ end }}">WhatsApp: {{ .WhatsAppStatus }}</a>
+    <a href="/security" class="btn">Security</a>
     <form action="/logout" method="post" class="inline-form">
       <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
       <button type="submit" class="btn">Logout</button>

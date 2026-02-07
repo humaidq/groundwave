@@ -303,6 +303,8 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	}))
 	f.Use(routes.CSRFInjector())
 	f.Use(routes.NoCacheHeaders())
+	// Session metadata middleware - captures device and IP info
+	f.Use(routes.SessionMetadataMiddleware())
 	// Flash message middleware - retrieve flash from session and pass to templates
 	f.Use(func(data flamegoTemplate.Data, flash session.Flash) {
 		if msg, ok := flash.(routes.FlashMessage); ok {
@@ -473,6 +475,8 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Post("/whatsapp/connect", csrf.Validate, routes.WhatsAppConnect)
 		f.Post("/whatsapp/disconnect", csrf.Validate, routes.WhatsAppDisconnect)
 		f.Get("/whatsapp/status", routes.WhatsAppStatusAPI)
+		f.Get("/security", routes.Security)
+		f.Post("/security/invalidate-other", csrf.Validate, routes.InvalidateOtherSessions)
 	}, routes.RequireAuth, routes.RequireSensitiveAccessForHealth)
 
 	port := cmd.String("port")
