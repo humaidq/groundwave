@@ -319,6 +319,16 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 		}
 	}
 
+	if sensitiveAccess {
+		zkLinkIDs := db.GetContactLinksFromCache(contactID)
+		if len(zkLinkIDs) > 0 {
+			zkLinks := buildBacklinks(c.Request().Context(), zkLinkIDs, "/zk", false)
+			if len(zkLinks) > 0 {
+				data["ZKLinks"] = zkLinks
+			}
+		}
+	}
+
 	// Fetch all tags for autocomplete
 	allTags, err := db.ListAllTags(c.Request().Context())
 	if err != nil {

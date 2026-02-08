@@ -458,6 +458,17 @@
     </details>
   </div>
 
+  {{ if and .SensitiveAccess .ZKLinks }}
+  <div class="detail-section">
+    <h3>Zettelkasten Links ({{ len .ZKLinks }})</h3>
+    <ul class="backlinks-list">
+      {{ range .ZKLinks }}
+      <li><a href="{{ .URL }}">{{ .Title }}</a></li>
+      {{ end }}
+    </ul>
+  </div>
+  {{ end }}
+
   {{ if .QSOs }}
   <div class="detail-section">
     <h3>QSO Log ({{ len .QSOs }} contacts)</h3>

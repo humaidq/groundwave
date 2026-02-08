@@ -8,6 +8,8 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"net/url"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -24,6 +26,7 @@ var (
 	backlinkCache    = make(map[string][]string) // target ID -> slice of source IDs
 	forwardLinkCache = make(map[string][]string) // source ID -> slice of target IDs
 	publicNoteCache  = make(map[string]bool)     // note ID -> public access
+	contactLinkCache = make(map[string][]string) // contact ID -> slice of source IDs
 	backlinkMutex    sync.RWMutex
 	lastCacheBuild   time.Time
 )
@@ -82,6 +85,59 @@ func ExtractLinksFromContent(content string) []string {
 	return targetIDs
 }
 
+const contactUUIDPattern = `[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}`
+
+var (
+	contactProtocolPattern = regexp.MustCompile("(?i)\\bcontact:(" + contactUUIDPattern + ")")
+	contactRelativePattern = regexp.MustCompile("(?i)(?:^|[\\s\\[\\(])\\/contact\\/(" + contactUUIDPattern + ")(?:/)?")
+)
+
+func buildContactLinkMatchers(baseURL string) []*regexp.Regexp {
+	matchers := []*regexp.Regexp{contactProtocolPattern, contactRelativePattern}
+	trimmed := strings.TrimSpace(strings.TrimRight(baseURL, "/"))
+	if trimmed == "" {
+		return matchers
+	}
+
+	matchers = append(matchers, regexp.MustCompile("(?i)"+regexp.QuoteMeta(trimmed)+"/contact/("+contactUUIDPattern+")(?:/)?"))
+
+	parsed, err := url.Parse(trimmed)
+	if err != nil || parsed.Host == "" {
+		parsed, err = url.Parse("https://" + trimmed)
+	}
+	if err != nil || parsed.Host == "" {
+		return matchers
+	}
+
+	basePath := strings.TrimRight(parsed.Path, "/")
+	if basePath != "" && basePath != "/" {
+		matchers = append(matchers, regexp.MustCompile("(?i)https?://"+regexp.QuoteMeta(parsed.Host)+regexp.QuoteMeta(basePath)+"/contact/("+contactUUIDPattern+")(?:/)?"))
+		matchers = append(matchers, regexp.MustCompile("(?i)(?:^|[\\s\\[\\(])"+regexp.QuoteMeta(basePath)+"/contact/("+contactUUIDPattern+")(?:/)?"))
+		return matchers
+	}
+
+	matchers = append(matchers, regexp.MustCompile("(?i)https?://"+regexp.QuoteMeta(parsed.Host)+"/contact/("+contactUUIDPattern+")(?:/)?"))
+	return matchers
+}
+
+func extractContactLinksFromContent(content string, matchers []*regexp.Regexp) []string {
+	if strings.TrimSpace(content) == "" || len(matchers) == 0 {
+		return []string{}
+	}
+
+	contactIDs := make([]string, 0)
+	for _, matcher := range matchers {
+		matches := matcher.FindAllStringSubmatch(content, -1)
+		for _, match := range matches {
+			if len(match) > 1 {
+				contactIDs = append(contactIDs, strings.ToLower(match[1]))
+			}
+		}
+	}
+
+	return contactIDs
+}
+
 // BuildBacklinkCache scans all .org files and builds the backlink index
 // This function is designed to be called periodically by a background worker
 func BuildBacklinkCache(ctx context.Context) error {
@@ -120,6 +176,8 @@ func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []str
 	tempBacklinkCache := make(map[string][]string)
 	tempForwardCache := make(map[string][]string)
 	tempPublicCache := make(map[string]bool)
+	tempContactLinkCache := make(map[string][]string)
+	contactLinkMatchers := buildContactLinkMatchers(os.Getenv("GROUNDWAVE_BASE_URL"))
 	filesProcessed := 0
 	filesSkipped := 0
 
@@ -161,6 +219,7 @@ func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []str
 
 		// Extract all link targets from this note
 		targetIDs := ExtractLinksFromContent(content)
+		contactLinkIDs := extractContactLinksFromContent(content, contactLinkMatchers)
 
 		seenTargets := make(map[string]struct{}, len(targetIDs))
 		for _, targetID := range targetIDs {
@@ -181,6 +240,18 @@ func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []str
 		sort.Strings(forwardLinks)
 		tempForwardCache[sourceID] = forwardLinks
 
+		seenContacts := make(map[string]struct{}, len(contactLinkIDs))
+		for _, contactID := range contactLinkIDs {
+			if contactID == "" {
+				continue
+			}
+			if _, exists := seenContacts[contactID]; exists {
+				continue
+			}
+			seenContacts[contactID] = struct{}{}
+			tempContactLinkCache[contactID] = append(tempContactLinkCache[contactID], sourceID)
+		}
+
 		filesProcessed++
 	}
 
@@ -189,6 +260,7 @@ func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []str
 	backlinkCache = tempBacklinkCache
 	forwardLinkCache = tempForwardCache
 	publicNoteCache = tempPublicCache
+	contactLinkCache = tempContactLinkCache
 	lastCacheBuild = time.Now()
 	backlinkMutex.Unlock()
 
@@ -526,6 +598,25 @@ func GetBacklinksFromCache(targetID string) []string {
 	// Return a copy to prevent external modification
 	result := make([]string, len(backlinks))
 	copy(result, backlinks)
+	return result
+}
+
+func GetContactLinksFromCache(contactID string) []string {
+	contactID = strings.ToLower(strings.TrimSpace(contactID))
+	if contactID == "" {
+		return []string{}
+	}
+
+	backlinkMutex.RLock()
+	links, exists := contactLinkCache[contactID]
+	backlinkMutex.RUnlock()
+
+	if !exists {
+		return []string{}
+	}
+
+	result := make([]string, len(links))
+	copy(result, links)
 	return result
 }
 
