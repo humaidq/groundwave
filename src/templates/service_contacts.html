@@ -134,6 +134,26 @@
     const entries = Array.from(serviceList.getElementsByClassName('list-card'));
     const headers = Array.from(serviceList.getElementsByClassName('service-group-header'));
 
+    function matchesFuzzy(text, query) {
+      const trimmed = query.trim();
+      if (!trimmed) {
+        return true;
+      }
+
+      const tokens = trimmed.split(/\s+/);
+      let index = 0;
+      for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i];
+        const nextIndex = text.indexOf(token, index);
+        if (nextIndex === -1) {
+          return false;
+        }
+        index = nextIndex + token.length;
+      }
+
+      return true;
+    }
+
     searchInput.addEventListener('input', function(e) {
       const searchTerm = e.target.value.toLowerCase();
 
@@ -149,7 +169,7 @@
 
       entries.forEach(function(entry) {
         const text = entry.textContent.toLowerCase();
-        if (text.includes(searchTerm)) {
+        if (matchesFuzzy(text, searchTerm)) {
           entry.style.display = '';
           const org = entry.getAttribute('data-org');
           if (org) visibleOrgs.add(org);

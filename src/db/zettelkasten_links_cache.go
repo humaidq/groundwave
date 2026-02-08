@@ -90,10 +90,11 @@ const contactUUIDPattern = `[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f
 var (
 	contactProtocolPattern = regexp.MustCompile("(?i)\\bcontact:(" + contactUUIDPattern + ")")
 	contactRelativePattern = regexp.MustCompile("(?i)(?:^|[\\s\\[\\(])\\/contact\\/(" + contactUUIDPattern + ")(?:/)?")
+	contactOrgLinkPattern  = regexp.MustCompile("(?i)\\[\\[https?://[^\\s\\]]+/contact/(" + contactUUIDPattern + ")(?:/)?")
 )
 
 func buildContactLinkMatchers(baseURL string) []*regexp.Regexp {
-	matchers := []*regexp.Regexp{contactProtocolPattern, contactRelativePattern}
+	matchers := []*regexp.Regexp{contactProtocolPattern, contactRelativePattern, contactOrgLinkPattern}
 	trimmed := strings.TrimSpace(strings.TrimRight(baseURL, "/"))
 	if trimmed == "" {
 		return matchers

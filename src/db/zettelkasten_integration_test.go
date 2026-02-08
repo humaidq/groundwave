@@ -107,14 +107,20 @@ func TestZettelkastenWebDAVAndCaches(t *testing.T) {
 		t.Fatalf("expected contact links")
 	}
 	foundContactSource := false
+	foundDailySource := false
 	for _, sourceID := range contactLinks {
 		if sourceID == "22222222-2222-2222-2222-222222222222" {
 			foundContactSource = true
-			break
+		}
+		if sourceID == "daily:2024-01-01" {
+			foundDailySource = true
 		}
 	}
 	if !foundContactSource {
 		t.Fatalf("expected contact link source to include note one")
+	}
+	if !foundDailySource {
+		t.Fatalf("expected contact link source to include daily journal")
 	}
 	if !IsPublicNoteFromCache("22222222-2222-2222-2222-222222222222") {
 		t.Fatalf("expected note to be public")

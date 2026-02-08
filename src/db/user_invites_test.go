@@ -3,7 +3,11 @@
 
 package db
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/google/uuid"
+)
 
 func TestUserInvitesLifecycle(t *testing.T) {
 	resetDatabase(t)
@@ -65,5 +69,27 @@ func TestUserInvitesLifecycle(t *testing.T) {
 	}
 	if missing != nil {
 		t.Fatalf("expected nil for missing invite")
+	}
+}
+
+func TestUserInviteErrors(t *testing.T) {
+	resetDatabase(t)
+	ctx := testContext()
+
+	missingID := uuid.New().String()
+	missing, err := GetUserInviteByID(ctx, missingID)
+	if err != nil {
+		t.Fatalf("GetUserInviteByID failed: %v", err)
+	}
+	if missing != nil {
+		t.Fatalf("expected nil invite for missing id")
+	}
+
+	if err := MarkUserInviteUsed(ctx, missingID); err == nil {
+		t.Fatalf("expected error for missing invite")
+	}
+
+	if err := DeleteUserInvite(ctx, missingID); err == nil {
+		t.Fatalf("expected error for missing invite delete")
 	}
 }

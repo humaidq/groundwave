@@ -76,3 +76,17 @@ func TestQSOFormatters(t *testing.T) {
 		t.Fatalf("expected formatted timestamp, got %q", got)
 	}
 }
+
+func TestParseADIFDate(t *testing.T) {
+	got, err := parseADIFDate("20240115")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if got.Year() != 2024 || got.Month() != time.January || got.Day() != 15 {
+		t.Fatalf("unexpected parsed date: %v", got)
+	}
+
+	if _, err := parseADIFDate("20241"); err == nil {
+		t.Fatalf("expected error for invalid date length")
+	}
+}

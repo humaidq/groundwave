@@ -173,6 +173,11 @@ code, pre {
   appearance: none;
 }
 
+.btn-block {
+  display: block;
+  width: 100%;
+}
+
 .btn:focus {
   border: #888 1px solid;
 }

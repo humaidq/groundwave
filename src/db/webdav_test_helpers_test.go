@@ -79,7 +79,7 @@ func newWebDAVTestServer(t *testing.T) *webdavTestServer {
 	if err := os.WriteFile(filepath.Join(zkDir, "20240102020202-note-two.org"), []byte(noteTwoContent), 0o644); err != nil {
 		t.Fatalf("failed to write note two: %v", err)
 	}
-	dailyContent := "#+TITLE: Daily\n\nParagraph one.\n\nParagraph two.\n\nParagraph three."
+	dailyContent := "#+TITLE: Daily\n\nParagraph one.\n\nMet [[https://groundwave.example.com/contact/44444444-4444-4444-4444-444444444444][Contact]].\n\nParagraph three."
 	if err := os.WriteFile(filepath.Join(zkDailyDir, "2024-01-01.org"), []byte(dailyContent), 0o644); err != nil {
 		t.Fatalf("failed to write daily note: %v", err)
 	}

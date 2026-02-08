@@ -178,3 +178,112 @@ func TestHealthFollowupsAndLabResults(t *testing.T) {
 		t.Fatalf("DeleteFollowup failed: %v", err)
 	}
 }
+
+func TestLabResultsByTestNameWithCalculatedAbsoluteCounts(t *testing.T) {
+	resetDatabase(t)
+	ctx := testContext()
+
+	profileID := mustCreateHealthProfile(t, "Calc Profile", true)
+
+	followupDate1 := time.Date(2024, time.January, 10, 0, 0, 0, 0, time.UTC)
+	followupDate2 := time.Date(2024, time.February, 10, 0, 0, 0, 0, time.UTC)
+	followupID1 := mustCreateFollowup(t, profileID, followupDate1)
+	followupID2 := mustCreateFollowup(t, profileID, followupDate2)
+
+	unitWBC := "×10³/μL"
+	unitPercent := "%"
+	unitTriglycerides := "mg/dL"
+
+	if _, err := CreateLabResult(ctx, CreateLabResultInput{
+		FollowupID: followupID1,
+		TestName:   "White blood cells",
+		TestUnit:   &unitWBC,
+		TestValue:  5.0,
+	}); err != nil {
+		t.Fatalf("CreateLabResult failed: %v", err)
+	}
+	if _, err := CreateLabResult(ctx, CreateLabResultInput{
+		FollowupID: followupID1,
+		TestName:   "Neutrophils",
+		TestUnit:   &unitPercent,
+		TestValue:  40.0,
+	}); err != nil {
+		t.Fatalf("CreateLabResult failed: %v", err)
+	}
+	if _, err := CreateLabResult(ctx, CreateLabResultInput{
+		FollowupID: followupID1,
+		TestName:   "Neutrophils (Absolute)",
+		TestUnit:   &unitWBC,
+		TestValue:  2.5,
+	}); err != nil {
+		t.Fatalf("CreateLabResult failed: %v", err)
+	}
+
+	if _, err := CreateLabResult(ctx, CreateLabResultInput{
+		FollowupID: followupID2,
+		TestName:   "White blood cells",
+		TestUnit:   &unitWBC,
+		TestValue:  6.0,
+	}); err != nil {
+		t.Fatalf("CreateLabResult failed: %v", err)
+	}
+	if _, err := CreateLabResult(ctx, CreateLabResultInput{
+		FollowupID: followupID2,
+		TestName:   "Neutrophils",
+		TestUnit:   &unitPercent,
+		TestValue:  50.0,
+	}); err != nil {
+		t.Fatalf("CreateLabResult failed: %v", err)
+	}
+
+	if _, err := CreateLabResult(ctx, CreateLabResultInput{
+		FollowupID: followupID1,
+		TestName:   "Triglycerides",
+		TestUnit:   &unitTriglycerides,
+		TestValue:  150.0,
+	}); err != nil {
+		t.Fatalf("CreateLabResult failed: %v", err)
+	}
+	if _, err := CreateLabResult(ctx, CreateLabResultInput{
+		FollowupID: followupID2,
+		TestName:   "Triglycerides",
+		TestUnit:   &unitTriglycerides,
+		TestValue:  120.0,
+	}); err != nil {
+		t.Fatalf("CreateLabResult failed: %v", err)
+	}
+
+	absoluteResults, err := GetLabResultsByTestNameWithCalculated(ctx, profileID, "Neutrophils (Absolute)")
+	if err != nil {
+		t.Fatalf("GetLabResultsByTestNameWithCalculated failed: %v", err)
+	}
+	if len(absoluteResults) != 2 {
+		t.Fatalf("expected 2 absolute results, got %d", len(absoluteResults))
+	}
+	assertFloatClose(t, absoluteResults[0].TestValue, 2.5)
+	assertFloatClose(t, absoluteResults[1].TestValue, 3.0)
+	if absoluteResults[1].TestUnit == nil || *absoluteResults[1].TestUnit != unitWBC {
+		t.Fatalf("expected calculated unit to be %s", unitWBC)
+	}
+
+	nonCalc, err := GetLabResultsByTestNameWithCalculated(ctx, profileID, "Triglycerides")
+	if err != nil {
+		t.Fatalf("GetLabResultsByTestNameWithCalculated failed: %v", err)
+	}
+	if len(nonCalc) != 2 {
+		t.Fatalf("expected 2 triglycerides results, got %d", len(nonCalc))
+	}
+}
+
+func TestGetPrimaryHealthProfileNoRows(t *testing.T) {
+	resetDatabase(t)
+	ctx := testContext()
+
+	primary, err := GetPrimaryHealthProfile(ctx)
+	if err != nil {
+		t.Fatalf("GetPrimaryHealthProfile failed: %v", err)
+	}
+	if primary != nil {
+		t.Fatalf("expected no primary profile")
+	}
+}

@@ -6,6 +6,8 @@ package db
 import (
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func floatPtr(value float64) *float64 {
@@ -170,5 +172,57 @@ func TestReferenceRangeGetDisplayRange(t *testing.T) {
 			assertFloatPtrEqual(t, optMin, tc.wantOptMin)
 			assertFloatPtrEqual(t, optMax, tc.wantOptMax)
 		})
+	}
+}
+
+func TestQSOStatusHelpers(t *testing.T) {
+	qslSent := QSLSentYes
+	qslRcvd := QSLYes
+
+	contactID := uuid.New()
+	qso := QSO{
+		QSLSent:     &qslSent,
+		QSLRcvd:     &qslRcvd,
+		LoTWQSLSent: &qslSent,
+		LoTWQSLRcvd: &qslRcvd,
+		EQSLQSLSent: &qslSent,
+		EQSLQSLRcvd: &qslRcvd,
+		ContactID:   &contactID,
+	}
+
+	if !qso.IsPaperQSLSent() {
+		t.Fatalf("expected paper QSL sent to be true")
+	}
+	if !qso.IsPaperQSLReceived() {
+		t.Fatalf("expected paper QSL received to be true")
+	}
+	if !qso.IsLoTWQSLSent() {
+		t.Fatalf("expected LoTW QSL sent to be true")
+	}
+	if !qso.IsLoTWQSLReceived() {
+		t.Fatalf("expected LoTW QSL received to be true")
+	}
+	if !qso.IsEQSLQSLSent() {
+		t.Fatalf("expected eQSL sent to be true")
+	}
+	if !qso.IsEQSLQSLReceived() {
+		t.Fatalf("expected eQSL received to be true")
+	}
+	if !qso.HasContact() {
+		t.Fatalf("expected contact to be linked")
+	}
+	if qso.GetContactID() != contactID.String() {
+		t.Fatalf("expected contact ID to match")
+	}
+
+	empty := QSO{}
+	if empty.IsPaperQSLSent() {
+		t.Fatalf("expected paper QSL sent to be false")
+	}
+	if empty.HasContact() {
+		t.Fatalf("expected no contact to be linked")
+	}
+	if empty.GetContactID() != "" {
+		t.Fatalf("expected empty contact ID")
 	}
 }

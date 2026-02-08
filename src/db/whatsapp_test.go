@@ -6,6 +6,8 @@ package db
 import (
 	"testing"
 	"time"
+
+	"github.com/emersion/go-vcard"
 )
 
 func TestWhatsAppPhoneMatching(t *testing.T) {
@@ -35,5 +37,34 @@ func TestWhatsAppPhoneMatching(t *testing.T) {
 
 	if err := UpdateContactAutoTimestamp(ctx, contactID, time.Now().UTC()); err != nil {
 		t.Fatalf("UpdateContactAutoTimestamp failed: %v", err)
+	}
+}
+
+func TestFindContactByPhoneCardDAV(t *testing.T) {
+	resetDatabase(t)
+	ctx := testContext()
+
+	server := newCardDAVTestServer(t)
+	defer server.close()
+
+	card := make(vcard.Card)
+	card.SetValue(vcard.FieldUID, "card-1")
+	card.SetValue(vcard.FieldFormattedName, "Card User")
+	card.Add(vcard.FieldTelephone, &vcard.Field{Value: "+1 555 0000", Params: vcard.Params{vcard.ParamType: []string{"cell"}}})
+	server.cards["card-1.vcf"] = card
+
+	t.Setenv("CARDDAV_URL", server.server.URL+"/addressbook/")
+	t.Setenv("CARDDAV_USERNAME", "user")
+	t.Setenv("CARDDAV_PASSWORD", "pass")
+
+	carddavID := "card-1"
+	contactID := mustCreateContact(t, CreateContactInput{NameGiven: "Card", CardDAVUUID: &carddavID, Tier: TierB})
+
+	found, err := FindContactByPhone(ctx, "555-0000")
+	if err != nil {
+		t.Fatalf("FindContactByPhone failed: %v", err)
+	}
+	if found == nil || *found != contactID {
+		t.Fatalf("expected to find contact by CardDAV phone")
 	}
 }

@@ -74,3 +74,12 @@ func TestTagsLifecycle(t *testing.T) {
 		t.Fatalf("DeleteTag failed: %v", err)
 	}
 }
+
+func TestTagsErrors(t *testing.T) {
+	resetDatabase(t)
+	ctx := testContext()
+
+	if _, err := GetContactsByTags(ctx, []string{}); err == nil {
+		t.Fatalf("expected error for missing tag IDs")
+	}
+}

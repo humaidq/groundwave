@@ -6,6 +6,8 @@ package db
 import (
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func TestInventoryLifecycle(t *testing.T) {
@@ -86,5 +88,34 @@ func TestInventoryLifecycle(t *testing.T) {
 
 	if err := DeleteInventoryItem(ctx, inventoryID); err != nil {
 		t.Fatalf("DeleteInventoryItem failed: %v", err)
+	}
+}
+
+func TestInventoryErrors(t *testing.T) {
+	resetDatabase(t)
+	ctx := testContext()
+
+	if _, err := CreateInventoryItem(ctx, "", nil, nil, "", nil); err == nil {
+		t.Fatalf("expected error for missing inventory name")
+	}
+
+	if err := UpdateInventoryItem(ctx, "missing", "", nil, nil, InventoryStatusActive, nil); err == nil {
+		t.Fatalf("expected error for missing name on update")
+	}
+
+	if err := UpdateInventoryItem(ctx, "missing", "Name", nil, nil, InventoryStatusActive, nil); err == nil {
+		t.Fatalf("expected error for missing inventory item")
+	}
+
+	if err := DeleteInventoryItem(ctx, "missing"); err == nil {
+		t.Fatalf("expected error for missing inventory item delete")
+	}
+
+	if err := CreateInventoryComment(ctx, 1, ""); err == nil {
+		t.Fatalf("expected error for empty inventory comment")
+	}
+
+	if err := DeleteInventoryComment(ctx, uuid.New()); err == nil {
+		t.Fatalf("expected error for missing inventory comment")
 	}
 }

@@ -82,3 +82,38 @@ func TestPostgresSessionStoreLifecycle(t *testing.T) {
 		t.Fatalf("expected session to be removed")
 	}
 }
+
+func TestPostgresSessionStoreGCAndReadFallback(t *testing.T) {
+	resetDatabase(t)
+	ctx := testContext()
+
+	initer := PostgresSessionIniter()
+	store, err := initer(ctx, PostgresSessionConfig{Lifetime: time.Hour})
+	if err != nil {
+		t.Fatalf("PostgresSessionIniter failed: %v", err)
+	}
+	pgStore := store.(*PostgresSessionStore)
+
+	if _, err := pool.Exec(ctx, `INSERT INTO flamego_sessions (id, data, expires_at) VALUES ($1, $2, NOW() - interval '1 hour')`, "expired", []byte("bad")); err != nil {
+		t.Fatalf("failed to insert expired session: %v", err)
+	}
+
+	if err := pgStore.GC(ctx); err != nil {
+		t.Fatalf("GC failed: %v", err)
+	}
+	if pgStore.Exist(ctx, "expired") {
+		t.Fatalf("expected expired session to be removed")
+	}
+
+	if _, err := pool.Exec(ctx, `INSERT INTO flamego_sessions (id, data, expires_at) VALUES ($1, $2, NOW() + interval '1 hour')`, "corrupt", []byte("not-gob")); err != nil {
+		t.Fatalf("failed to insert corrupt session: %v", err)
+	}
+
+	sess, err := pgStore.Read(ctx, "corrupt")
+	if err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if sess.ID() != "corrupt" {
+		t.Fatalf("expected session id to match")
+	}
+}

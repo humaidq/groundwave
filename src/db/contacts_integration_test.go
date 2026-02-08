@@ -6,6 +6,8 @@ package db
 import (
 	"testing"
 	"time"
+
+	"github.com/humaidq/groundwave/utils"
 )
 
 func TestContactListFiltersAndServiceContacts(t *testing.T) {
@@ -368,5 +370,149 @@ func TestContactDetailsAndLogs(t *testing.T) {
 
 	if err := DeleteContact(ctx, contactID); err != nil {
 		t.Fatalf("DeleteContact failed: %v", err)
+	}
+}
+
+func TestContactPrimaryEmailPhoneBehavior(t *testing.T) {
+	resetDatabase(t)
+	ctx := testContext()
+
+	contactID := mustCreateContact(t, CreateContactInput{
+		NameGiven: "Primary",
+		Tier:      TierB,
+	})
+
+	if err := AddEmail(ctx, AddEmailInput{ContactID: contactID, Email: "first@example.com", EmailType: EmailWork, IsPrimary: false}); err != nil {
+		t.Fatalf("AddEmail failed: %v", err)
+	}
+	if err := AddEmail(ctx, AddEmailInput{ContactID: contactID, Email: "second@example.com", EmailType: EmailWork, IsPrimary: false}); err != nil {
+		t.Fatalf("AddEmail failed: %v", err)
+	}
+
+	detail, err := GetContact(ctx, contactID)
+	if err != nil {
+		t.Fatalf("GetContact failed: %v", err)
+	}
+	if len(detail.Emails) != 2 {
+		t.Fatalf("expected 2 emails, got %d", len(detail.Emails))
+	}
+
+	var firstEmailID, secondEmailID string
+	for _, email := range detail.Emails {
+		switch email.Email {
+		case "first@example.com":
+			firstEmailID = email.ID.String()
+		case "second@example.com":
+			secondEmailID = email.ID.String()
+		}
+	}
+	if firstEmailID == "" || secondEmailID == "" {
+		t.Fatalf("expected email IDs to be populated")
+	}
+
+	if err := UpdateEmail(ctx, UpdateEmailInput{ID: secondEmailID, ContactID: contactID, Email: "second@example.com", EmailType: EmailWork, IsPrimary: false}); err != nil {
+		t.Fatalf("UpdateEmail failed: %v", err)
+	}
+	if err := UpdateEmail(ctx, UpdateEmailInput{ID: firstEmailID, ContactID: contactID, Email: "first@example.com", EmailType: EmailWork, IsPrimary: false}); err != nil {
+		t.Fatalf("UpdateEmail failed: %v", err)
+	}
+
+	if err := AddPhone(ctx, AddPhoneInput{ContactID: contactID, Phone: "+1 555-0001", PhoneType: PhoneCell, IsPrimary: false}); err != nil {
+		t.Fatalf("AddPhone failed: %v", err)
+	}
+	if err := AddPhone(ctx, AddPhoneInput{ContactID: contactID, Phone: "+1 555-0002", PhoneType: PhoneCell, IsPrimary: false}); err != nil {
+		t.Fatalf("AddPhone failed: %v", err)
+	}
+
+	detail, err = GetContact(ctx, contactID)
+	if err != nil {
+		t.Fatalf("GetContact failed: %v", err)
+	}
+	if len(detail.Phones) != 2 {
+		t.Fatalf("expected 2 phones, got %d", len(detail.Phones))
+	}
+
+	var firstPhoneID, secondPhoneID string
+	for _, phone := range detail.Phones {
+		switch phone.Phone {
+		case "+1 555-0001":
+			firstPhoneID = phone.ID.String()
+		case "+1 555-0002":
+			secondPhoneID = phone.ID.String()
+		}
+	}
+	if firstPhoneID == "" || secondPhoneID == "" {
+		t.Fatalf("expected phone IDs to be populated")
+	}
+
+	if err := UpdatePhone(ctx, UpdatePhoneInput{ID: secondPhoneID, ContactID: contactID, Phone: "+1 555-0002", PhoneType: PhoneCell, IsPrimary: false}); err != nil {
+		t.Fatalf("UpdatePhone failed: %v", err)
+	}
+	if err := UpdatePhone(ctx, UpdatePhoneInput{ID: firstPhoneID, ContactID: contactID, Phone: "+1 555-0001", PhoneType: PhoneCell, IsPrimary: false}); err != nil {
+		t.Fatalf("UpdatePhone failed: %v", err)
+	}
+}
+
+func TestUpdateContactLinksQSOs(t *testing.T) {
+	resetDatabase(t)
+	ctx := testContext()
+
+	contactID := mustCreateContact(t, CreateContactInput{NameGiven: "Caller", Tier: TierB})
+	callSign := "K9XYZ"
+
+	qsos := []utils.QSO{
+		{Call: callSign, QSODate: "20240102", TimeOn: "120000", Mode: "SSB"},
+	}
+	if _, err := ImportADIFQSOs(ctx, qsos); err != nil {
+		t.Fatalf("ImportADIFQSOs failed: %v", err)
+	}
+
+	if err := UpdateContact(ctx, UpdateContactInput{ID: contactID, NameGiven: "Caller", CallSign: &callSign, Tier: TierB}); err != nil {
+		t.Fatalf("UpdateContact failed: %v", err)
+	}
+
+	all, err := ListQSOs(ctx)
+	if err != nil {
+		t.Fatalf("ListQSOs failed: %v", err)
+	}
+	if len(all) != 1 {
+		t.Fatalf("expected 1 QSO, got %d", len(all))
+	}
+
+	detail, err := GetQSO(ctx, all[0].ID)
+	if err != nil {
+		t.Fatalf("GetQSO failed: %v", err)
+	}
+	if detail.ContactID == nil || detail.ContactID.String() != contactID {
+		t.Fatalf("expected QSO contact link to be updated")
+	}
+}
+
+func TestAddChatDefaultsAndValidation(t *testing.T) {
+	resetDatabase(t)
+	ctx := testContext()
+
+	contactID := mustCreateContact(t, CreateContactInput{NameGiven: "Chat", Tier: TierB})
+
+	if err := AddChat(ctx, AddChatInput{ContactID: contactID, Message: " ", Sender: ChatSenderThem}); err == nil {
+		t.Fatalf("expected error for empty chat message")
+	}
+
+	if err := AddChat(ctx, AddChatInput{ContactID: contactID, Message: "Hello"}); err != nil {
+		t.Fatalf("AddChat failed: %v", err)
+	}
+
+	chats, err := GetContactChats(ctx, contactID)
+	if err != nil {
+		t.Fatalf("GetContactChats failed: %v", err)
+	}
+	if len(chats) != 1 {
+		t.Fatalf("expected 1 chat, got %d", len(chats))
+	}
+	if chats[0].Platform != ChatPlatformManual {
+		t.Fatalf("expected default platform manual")
+	}
+	if chats[0].Sender != ChatSenderThem {
+		t.Fatalf("expected default sender them")
 	}
 }

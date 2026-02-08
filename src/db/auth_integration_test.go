@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/google/uuid"
 )
 
 func TestUserLifecycle(t *testing.T) {
@@ -135,5 +136,26 @@ func TestUserPasskeyLifecycle(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatalf("expected zero passkeys, got %d", count)
+	}
+}
+
+func TestUserQueriesNoResults(t *testing.T) {
+	resetDatabase(t)
+	ctx := testContext()
+
+	first, err := GetFirstUser(ctx)
+	if err != nil {
+		t.Fatalf("GetFirstUser failed: %v", err)
+	}
+	if first != nil {
+		t.Fatalf("expected no first user")
+	}
+
+	if err := DeleteUser(ctx, uuid.New().String()); err == nil {
+		t.Fatalf("expected error for missing user")
+	}
+
+	if _, err := GetUserByWebAuthnID(ctx, []byte("short")); err == nil {
+		t.Fatalf("expected error for invalid user handle")
 	}
 }

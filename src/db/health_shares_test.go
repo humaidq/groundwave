@@ -52,3 +52,17 @@ func TestHealthProfileShares(t *testing.T) {
 		t.Fatalf("expected 1 share, got %d", len(shares))
 	}
 }
+
+func TestHealthProfileSharesErrors(t *testing.T) {
+	resetDatabase(t)
+	ctx := testContext()
+
+	if err := SetHealthProfileShares(ctx, "invalid", []string{}, ""); err == nil {
+		t.Fatalf("expected error for invalid user id")
+	}
+
+	user := mustCreateUser(t, "Share User")
+	if err := SetHealthProfileShares(ctx, user.ID.String(), []string{"invalid"}, user.ID.String()); err == nil {
+		t.Fatalf("expected error for invalid profile id")
+	}
+}
