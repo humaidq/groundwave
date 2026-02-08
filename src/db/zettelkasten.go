@@ -228,8 +228,14 @@ func ListOrgFiles(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("failed to create WebDAV client: %w", err)
 	}
 
+	baseURL, err := url.Parse(config.BaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse WebDAV base URL: %w", err)
+	}
+	basePath := strings.TrimRight(baseURL.Path, "/") + "/"
+
 	// List files in directory (use "." for current directory relative to BaseURL)
-	fileInfos, err := client.ReadDir(ctx, ".", false)
+	fileInfos, err := client.ReadDir(ctx, basePath, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list directory: %w", err)
 	}
@@ -264,7 +270,13 @@ func ListDailyOrgFiles(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("failed to create WebDAV client: %w", err)
 	}
 
-	fileInfos, err := client.ReadDir(ctx, ".", false)
+	dailyURL, err := url.Parse(dailyBaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse WebDAV daily URL: %w", err)
+	}
+	dailyPath := strings.TrimRight(dailyURL.Path, "/") + "/"
+
+	fileInfos, err := client.ReadDir(ctx, dailyPath, false)
 	if err != nil {
 		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found") {
 			return []string{}, nil

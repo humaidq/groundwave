@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -173,7 +175,60 @@ func isExternalLink(href string) bool {
 		}
 	}
 
+	if isGroundwaveBaseURLLink(href) {
+		return false
+	}
+
 	return true
+}
+
+func isGroundwaveBaseURLLink(href string) bool {
+	baseURL := strings.TrimSpace(os.Getenv("GROUNDWAVE_BASE_URL"))
+	if baseURL == "" {
+		return false
+	}
+
+	trimmedBase := strings.TrimRight(baseURL, "/")
+	if trimmedBase == "" {
+		return false
+	}
+
+	if strings.HasPrefix(href, trimmedBase) {
+		return true
+	}
+
+	parsedBase, ok := parseAbsoluteURL(trimmedBase)
+	if !ok {
+		return false
+	}
+
+	parsedHref, ok := parseAbsoluteURL(href)
+	if !ok {
+		return false
+	}
+
+	if !strings.EqualFold(parsedBase.Host, parsedHref.Host) {
+		return false
+	}
+
+	basePath := strings.TrimRight(parsedBase.Path, "/")
+	if basePath == "" || basePath == "/" {
+		return true
+	}
+
+	return parsedHref.Path == basePath || strings.HasPrefix(parsedHref.Path, basePath+"/")
+}
+
+func parseAbsoluteURL(raw string) (*url.URL, bool) {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		parsed, err = url.Parse("https://" + raw)
+	}
+	if err != nil || parsed.Host == "" {
+		return nil, false
+	}
+
+	return parsed, true
 }
 
 // IsPublicAccess checks for #+access: public in org content.

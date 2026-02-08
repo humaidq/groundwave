@@ -183,6 +183,19 @@ func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {
 			}
 		}
 
+		// Parse optional qso_date_off
+		dateOff := ""
+		if qso.QSODateOff != "" {
+			if d, err := parseADIFDate(qso.QSODateOff); err == nil {
+				dateOff = d.Format("2006-01-02")
+			}
+		}
+		if dateOff == "" && timeOff != nil {
+			if d, err := parseADIFDate(qso.QSODate); err == nil {
+				dateOff = d.Format("2006-01-02")
+			}
+		}
+
 		// Check if QSO already exists (by call, date, and time)
 		exists, err := qsoExists(ctx, qso.Call, timestamp)
 		if err != nil {
@@ -198,34 +211,35 @@ func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {
 					freq = CASE WHEN $2::text != '' THEN $2::double precision ELSE freq END,
 					mode = COALESCE(NULLIF($3, ''), mode),
 					time_off = COALESCE($4, time_off),
-					qso_date_off = COALESCE($4, qso_date_off),
-					rst_sent = COALESCE(NULLIF($5, ''), rst_sent),
-					rst_rcvd = COALESCE(NULLIF($6, ''), rst_rcvd),
-					qth = COALESCE(NULLIF($7, ''), qth),
-					name = COALESCE(NULLIF($8, ''), name),
-					comment = COALESCE(NULLIF($9, ''), comment),
-					gridsquare = COALESCE(NULLIF($10, ''), gridsquare),
-					country = COALESCE(NULLIF($11, ''), country),
-					dxcc = CASE WHEN $12::text != '' THEN $12::integer ELSE dxcc END,
-					my_gridsquare = COALESCE(NULLIF($13, ''), my_gridsquare),
-					station_callsign = COALESCE(NULLIF($14, ''), station_callsign),
-					my_rig = COALESCE(NULLIF($15, ''), my_rig),
-					my_antenna = COALESCE(NULLIF($16, ''), my_antenna),
-					tx_pwr = CASE WHEN $17::text != '' THEN $17::double precision ELSE tx_pwr END,
-					qsl_sent = CASE WHEN $18 != '' THEN $18::qsl_sent_status ELSE qsl_sent END,
-					qsl_rcvd = CASE WHEN $19 != '' THEN $19::qsl_status ELSE qsl_rcvd END,
-					lotw_qsl_sent = CASE WHEN $20 != '' THEN $20::qsl_sent_status ELSE lotw_qsl_sent END,
-					lotw_qsl_rcvd = CASE WHEN $21 != '' THEN $21::qsl_status ELSE lotw_qsl_rcvd END,
-					eqsl_qsl_sent = CASE WHEN $22 != '' THEN $22::qsl_sent_status ELSE eqsl_qsl_sent END,
-					eqsl_qsl_rcvd = CASE WHEN $23 != '' THEN $23::qsl_status ELSE eqsl_qsl_rcvd END,
+					qso_date_off = COALESCE(NULLIF($5, '')::date, qso_date_off),
+					rst_sent = COALESCE(NULLIF($6, ''), rst_sent),
+					rst_rcvd = COALESCE(NULLIF($7, ''), rst_rcvd),
+					qth = COALESCE(NULLIF($8, ''), qth),
+					name = COALESCE(NULLIF($9, ''), name),
+					comment = COALESCE(NULLIF($10, ''), comment),
+					gridsquare = COALESCE(NULLIF($11, ''), gridsquare),
+					country = COALESCE(NULLIF($12, ''), country),
+					dxcc = CASE WHEN $13::text != '' THEN $13::integer ELSE dxcc END,
+					my_gridsquare = COALESCE(NULLIF($14, ''), my_gridsquare),
+					station_callsign = COALESCE(NULLIF($15, ''), station_callsign),
+					my_rig = COALESCE(NULLIF($16, ''), my_rig),
+					my_antenna = COALESCE(NULLIF($17, ''), my_antenna),
+					tx_pwr = CASE WHEN $18::text != '' THEN $18::double precision ELSE tx_pwr END,
+					qsl_sent = CASE WHEN $19 != '' THEN $19::qsl_sent_status ELSE qsl_sent END,
+					qsl_rcvd = CASE WHEN $20 != '' THEN $20::qsl_status ELSE qsl_rcvd END,
+					lotw_qsl_sent = CASE WHEN $21 != '' THEN $21::qsl_sent_status ELSE lotw_qsl_sent END,
+					lotw_qsl_rcvd = CASE WHEN $22 != '' THEN $22::qsl_status ELSE lotw_qsl_rcvd END,
+					eqsl_qsl_sent = CASE WHEN $23 != '' THEN $23::qsl_sent_status ELSE eqsl_qsl_sent END,
+					eqsl_qsl_rcvd = CASE WHEN $24 != '' THEN $24::qsl_status ELSE eqsl_qsl_rcvd END,
 					updated_at = NOW()
-				WHERE call = $24 AND qso_date = $25 AND time_on = $26
+				WHERE call = $25 AND qso_date = $26 AND time_on = $27
 			`
 			_, err = pool.Exec(ctx, query,
 				qso.Band,
 				qso.Freq,
 				qso.Mode,
 				timeOff,
+				dateOff,
 				qso.RSTSent,
 				qso.RSTRcvd,
 				qso.QTH,
@@ -264,7 +278,7 @@ func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {
 					qsl_sent, qsl_rcvd, lotw_qsl_sent, lotw_qsl_rcvd,
 					eqsl_qsl_sent, eqsl_qsl_rcvd
 				) VALUES (
-					$1, $2, $3, $4, $5,
+					$1, $2, $3, $4, NULLIF($5, '')::date,
 					NULLIF($6, ''), CASE WHEN $7 != '' THEN $7::double precision ELSE NULL END, $8,
 					NULLIF($9, ''), NULLIF($10, ''),
 					NULLIF($11, ''), NULLIF($12, ''), NULLIF($13, ''),
@@ -285,7 +299,7 @@ func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {
 				timestamp,
 				timestamp,
 				timeOff,
-				timeOff,
+				dateOff,
 				qso.Band,
 				qso.Freq,
 				qso.Mode,
@@ -360,6 +374,14 @@ func parseADIFTimestamp(date, timeOn string) (time.Time, error) {
 	layout := "20060102150405"
 	dateTime := date + timeOn
 	return time.Parse(layout, dateTime)
+}
+
+// parseADIFDate parses ADIF date (YYYYMMDD) into a time.Time
+func parseADIFDate(date string) (time.Time, error) {
+	if len(date) != 8 {
+		return time.Time{}, fmt.Errorf("invalid date format: %s", date)
+	}
+	return time.Parse("20060102", date)
 }
 
 // GetQSO returns a single QSO by ID with contact information if linked

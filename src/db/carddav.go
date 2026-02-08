@@ -402,7 +402,8 @@ func normalizeCardDAVEmail(value string) string {
 	if strings.HasPrefix(lower, "mailto:") {
 		value = value[len("mailto:"):]
 	}
-	return strings.TrimSpace(value)
+	value = strings.TrimSpace(value)
+	return strings.ToLower(value)
 }
 
 func normalizeCardDAVPhone(value string) string {
@@ -415,7 +416,13 @@ func normalizeCardDAVPhone(value string) string {
 		value = value[len("tel:"):]
 	}
 	value = strings.TrimSpace(value)
-	return value
+	var b strings.Builder
+	for _, r := range value {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 func selectPrimaryEmail(preferredEmail string, insertedEmails []string) string {

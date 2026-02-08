@@ -202,12 +202,11 @@ func ListFilesEntries(ctx context.Context, dirPath string) ([]WebDAVEntry, error
 	}
 
 	basePath := filesBasePath(config)
-
-	target := "."
-	if dirPath != "" {
-		target = dirPath
+	if basePath == "" {
+		return nil, fmt.Errorf("WEBDAV_FILES_PATH not configured")
 	}
 
+	target := filesReadDirTarget(basePath, dirPath)
 	fileInfos, err := client.ReadDir(ctx, target, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list WebDAV directory: %w", err)
@@ -296,8 +295,12 @@ func IsFilesPathRestricted(ctx context.Context, dirPath string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to create WebDAV client: %w", err)
 	}
+	basePath := filesBasePath(config)
+	if basePath == "" {
+		return false, fmt.Errorf("WEBDAV_FILES_PATH not configured")
+	}
 
-	return isFilesPathMarked(ctx, client, dirPath, ".gw_btg")
+	return isFilesPathMarked(ctx, client, basePath, dirPath, ".gw_btg")
 }
 
 // IsFilesPathAdminOnly reports whether a directory path is restricted to admins.
@@ -315,8 +318,12 @@ func IsFilesPathAdminOnly(ctx context.Context, dirPath string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to create WebDAV client: %w", err)
 	}
+	basePath := filesBasePath(config)
+	if basePath == "" {
+		return false, fmt.Errorf("WEBDAV_FILES_PATH not configured")
+	}
 
-	return isFilesPathMarked(ctx, client, dirPath, ".gw_admin")
+	return isFilesPathMarked(ctx, client, basePath, dirPath, ".gw_admin")
 }
 
 func newFilesWebDAVClient(config *WebDAVConfig) (*webdav.Client, error) {
@@ -334,8 +341,8 @@ func newFilesWebDAVClient(config *WebDAVConfig) (*webdav.Client, error) {
 	return client, nil
 }
 
-func isFilesPathMarked(ctx context.Context, client *webdav.Client, dirPath string, marker string) (bool, error) {
-	restricted, err := dirHasMarker(ctx, client, "", marker)
+func isFilesPathMarked(ctx context.Context, client *webdav.Client, basePath string, dirPath string, marker string) (bool, error) {
+	restricted, err := dirHasMarker(ctx, client, basePath, "", marker)
 	if err != nil {
 		return false, err
 	}
@@ -359,7 +366,7 @@ func isFilesPathMarked(ctx context.Context, client *webdav.Client, dirPath strin
 			current = current + "/" + segment
 		}
 
-		restricted, err := dirHasMarker(ctx, client, current, marker)
+		restricted, err := dirHasMarker(ctx, client, basePath, current, marker)
 		if err != nil {
 			return false, err
 		}
@@ -371,12 +378,8 @@ func isFilesPathMarked(ctx context.Context, client *webdav.Client, dirPath strin
 	return false, nil
 }
 
-func dirHasMarker(ctx context.Context, client *webdav.Client, dirPath string, marker string) (bool, error) {
-	target := "."
-	if dirPath != "" {
-		target = dirPath
-	}
-
+func dirHasMarker(ctx context.Context, client *webdav.Client, basePath string, dirPath string, marker string) (bool, error) {
+	target := filesReadDirTarget(basePath, dirPath)
 	fileInfos, err := client.ReadDir(ctx, target, false)
 	if err != nil {
 		return false, err
@@ -406,7 +409,15 @@ func extractFilename(path string) string {
 func isListingSelf(entryPath string, dirPath string, basePath string) bool {
 	entry := normalizeFilesPathForCompare(entryPath, basePath)
 	dir := normalizeFilesPathForCompare(dirPath, "")
-	return entry == dir
+	if entry == dir {
+		return true
+	}
+	if dir == "" {
+		entryRoot := normalizeFilesPathForCompare(entryPath, "")
+		baseRoot := normalizeFilesPathForCompare(basePath, "")
+		return entryRoot == baseRoot
+	}
+	return false
 }
 
 func normalizeFilesPathForCompare(value string, basePath string) string {
@@ -422,12 +433,14 @@ func normalizeFilesPathForCompare(value string, basePath string) string {
 		if decoded, err := url.PathUnescape(base); err == nil {
 			base = decoded
 		}
-		original := trimmed
-		trimmed = strings.TrimPrefix(trimmed, base)
-		if trimmed == original {
-			altBase := strings.TrimSuffix(base, "/")
-			if altBase != "" && altBase != "/" {
-				trimmed = strings.TrimPrefix(trimmed, altBase)
+		if trimmed != base {
+			original := trimmed
+			trimmed = strings.TrimPrefix(trimmed, base)
+			if trimmed == original {
+				altBase := strings.TrimSuffix(base, "/")
+				if altBase != "" && altBase != "/" {
+					trimmed = strings.TrimPrefix(trimmed, altBase)
+				}
 			}
 		}
 	}
@@ -455,6 +468,27 @@ func filesBasePath(config *WebDAVConfig) string {
 		basePath += "/"
 	}
 	return basePath
+}
+
+func filesReadDirTarget(basePath string, dirPath string) string {
+	trimmed := strings.TrimSpace(dirPath)
+	if trimmed == "" || trimmed == "." || trimmed == "/" {
+		return basePath
+	}
+	trimmed = strings.TrimPrefix(trimmed, "/")
+	trimmed = strings.TrimSuffix(trimmed, "/")
+	if trimmed == "" {
+		return basePath
+	}
+	root := strings.TrimSuffix(basePath, "/")
+	target := path.Join(root, trimmed)
+	if !strings.HasPrefix(target, "/") {
+		target = "/" + target
+	}
+	if !strings.HasSuffix(target, "/") {
+		target += "/"
+	}
+	return target
 }
 
 func inferContentType(filename string) string {

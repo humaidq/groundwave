@@ -1620,7 +1620,6 @@ func GetRecentContacts(ctx context.Context, limit int) ([]ContactListItem, error
 			(SELECT phone FROM contact_phones WHERE contact_id = c.id
 			 ORDER BY is_primary DESC, created_at LIMIT 1) AS primary_phone
 		FROM contacts c
-		WHERE c.is_service = false
 		ORDER BY c.updated_at DESC
 		LIMIT $1
 	`

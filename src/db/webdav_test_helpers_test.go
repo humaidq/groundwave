@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 type webdavTestServer struct {
@@ -215,7 +214,7 @@ func (h *simpleWebDAVHandler) handlePropFind(w http.ResponseWriter, r *http.Requ
 
 func (h *simpleWebDAVHandler) buildResponse(href string, fsPath string, info os.FileInfo) davResponse {
 	prop := davProp{
-		LastModified: info.ModTime().UTC().Format(time.RFC1123),
+		LastModified: info.ModTime().UTC().Format(http.TimeFormat),
 	}
 	if info.IsDir() {
 		prop.ResourceType = davResourceType{Collection: &struct{}{}}

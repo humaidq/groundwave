@@ -28,6 +28,7 @@ func TestParseOrgToHTML(t *testing.T) {
 }
 
 func TestParseOrgToHTMLWithBasePathResolvesIDLinks(t *testing.T) {
+	t.Setenv("GROUNDWAVE_BASE_URL", "https://groundwave.example.com")
 	content := "[[id:075915aa-f7b9-499c-9858-8167d6b1e11b][My Note]] [[https://example.com][Ext]]"
 
 	rendered, err := ParseOrgToHTMLWithBasePath(content, "/notes/")
@@ -80,6 +81,7 @@ func TestParseOrgToHTMLHighlightCodeBlocks(t *testing.T) {
 }
 
 func TestAddExternalLinkPrefix(t *testing.T) {
+	t.Setenv("GROUNDWAVE_BASE_URL", "https://groundwave.example.com")
 	input := `<p><a href="https://example.com">Example</a> ` +
 		`<a href="/zk/123">Internal</a> ` +
 		`<a href="#section">Anchor</a> ` +
@@ -104,6 +106,24 @@ func TestAddExternalLinkPrefix(t *testing.T) {
 	}
 }
 
+func TestAddExternalLinkPrefixSkipsBaseURL(t *testing.T) {
+	t.Setenv("GROUNDWAVE_BASE_URL", "https://groundwave.example.com")
+	input := `<p><a href="https://groundwave.example.com/zk/123">Internal</a> ` +
+		`<a href="https://example.com">External</a></p>`
+
+	output, err := addExternalLinkPrefix(input)
+	if err != nil {
+		t.Fatalf("addExternalLinkPrefix failed: %v", err)
+	}
+
+	if strings.Contains(output, ">🗗 Internal</a>") {
+		t.Fatalf("expected base URL link to remain unprefixed, got %s", output)
+	}
+	if strings.Count(output, "🗗") != 1 {
+		t.Fatalf("expected one external link prefix, got %d", strings.Count(output, "🗗"))
+	}
+}
+
 func TestAddExternalLinkPrefixEmpty(t *testing.T) {
 	output, err := addExternalLinkPrefix("   ")
 	if err != nil {
@@ -115,6 +135,7 @@ func TestAddExternalLinkPrefixEmpty(t *testing.T) {
 }
 
 func TestAddExternalLinkPrefixEmptyAnchor(t *testing.T) {
+	t.Setenv("GROUNDWAVE_BASE_URL", "https://groundwave.example.com")
 	input := `<p><a href="https://example.com/empty"></a></p>`
 	output, err := addExternalLinkPrefix(input)
 	if err != nil {
@@ -141,6 +162,7 @@ func TestLinkHasPrefixNonTextChild(t *testing.T) {
 }
 
 func TestIsExternalLink(t *testing.T) {
+	t.Setenv("GROUNDWAVE_BASE_URL", "https://groundwave.example.com")
 	cases := []struct {
 		href     string
 		expected bool
@@ -149,6 +171,8 @@ func TestIsExternalLink(t *testing.T) {
 		{href: "#section", expected: false},
 		{href: "/zk/123", expected: false},
 		{href: "/note/123", expected: false},
+		{href: "https://groundwave.example.com", expected: false},
+		{href: "https://groundwave.example.com/zk/123", expected: false},
 		{href: "https://example.com", expected: true},
 	}
 

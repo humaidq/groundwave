@@ -65,6 +65,7 @@ func (c *carddavTestServer) handleGet(w http.ResponseWriter, path string) {
 		var buf bytes.Buffer
 		enc := vcard.NewEncoder(&buf)
 		for _, card := range cards {
+			vcard.ToV4(card)
 			_ = enc.Encode(card)
 		}
 		w.Header().Set("Content-Type", "text/vcard")
@@ -144,6 +145,7 @@ func buildCardDAVMultiStatus(cards map[string]vcard.Card) []byte {
 	responses := make([]cardDAVResponse, 0, len(cards))
 	for path, card := range cards {
 		var buf bytes.Buffer
+		vcard.ToV4(card)
 		_ = vcard.NewEncoder(&buf).Encode(card)
 		responses = append(responses, cardDAVResponse{
 			Href: "/addressbook/" + path,
