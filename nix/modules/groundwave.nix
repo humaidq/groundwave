@@ -89,6 +89,7 @@ in
         # Base environment variables
         Environment = [
           "DATABASE_URL=postgres:///groundwave"
+          "GROUNDWAVE_ENV=production"
         ];
       };
 

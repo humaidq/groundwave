@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -78,6 +79,12 @@ func NewWebAuthnFromEnv() (*webauthn.WebAuthn, error) {
 
 // SetupForm renders the admin bootstrap screen.
 func SetupForm(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+	authenticated, ok := s.Get("authenticated").(bool)
+	if ok && authenticated {
+		c.Redirect("/", http.StatusSeeOther)
+		return
+	}
+
 	data["HeaderOnly"] = true
 	s.Delete(webauthnInviteAllowedKey)
 	s.Delete(webauthnInviteIDKey)
@@ -151,6 +158,12 @@ func SetupForm(c flamego.Context, s session.Session, t template.Template, data t
 // SetupStart begins WebAuthn registration for setup or invite provisioning.
 func SetupStart(c flamego.Context, s session.Session, web *webauthn.WebAuthn) {
 	ctx := c.Request().Context()
+
+	authenticated, ok := s.Get("authenticated").(bool)
+	if ok && authenticated {
+		writeJSONError(c, http.StatusForbidden, "setup not permitted")
+		return
+	}
 
 	isBootstrap := isBootstrapAllowed(s)
 	isInvite := isInviteAllowed(s)
@@ -241,8 +254,15 @@ func SetupStart(c flamego.Context, s session.Session, web *webauthn.WebAuthn) {
 }
 
 // SetupFinish completes WebAuthn registration for setup or invite provisioning.
-func SetupFinish(c flamego.Context, s session.Session, web *webauthn.WebAuthn) {
+func SetupFinish(c flamego.Context, s session.Session, store session.Store, web *webauthn.WebAuthn) {
 	ctx := c.Request().Context()
+
+	authenticated, ok := s.Get("authenticated").(bool)
+	if ok && authenticated {
+		writeJSONError(c, http.StatusForbidden, "setup not permitted")
+		return
+	}
+
 	if !isBootstrapAllowed(s) && !isInviteAllowed(s) {
 		writeJSONError(c, http.StatusForbidden, "setup not permitted")
 		return
@@ -252,18 +272,6 @@ func SetupFinish(c flamego.Context, s session.Session, web *webauthn.WebAuthn) {
 	if !ok {
 		writeJSONError(c, http.StatusBadRequest, "setup state missing")
 		return
-	}
-
-	if isAdmin {
-		count, err := db.CountUsers(ctx)
-		if err != nil {
-			writeJSONError(c, http.StatusInternalServerError, "failed to load authentication state")
-			return
-		}
-		if count > 0 {
-			writeJSONError(c, http.StatusBadRequest, "setup already completed")
-			return
-		}
 	}
 
 	setupSession, ok := getSessionData(s, webauthnSetupSessionKey)
@@ -290,38 +298,45 @@ func SetupFinish(c flamego.Context, s session.Session, web *webauthn.WebAuthn) {
 		return
 	}
 
-	createdUser, err := db.CreateUser(ctx, db.CreateUserInput{
-		ID:          &userID,
-		DisplayName: displayName,
-		IsAdmin:     isAdmin,
-	})
-	if err != nil {
-		writeJSONError(c, http.StatusInternalServerError, "failed to create user")
-		return
-	}
-
 	var labelPtr *string
 	if label != "" {
 		labelPtr = &label
 	}
-	if _, err := db.AddUserPasskey(ctx, createdUser.ID.String(), *credential, labelPtr); err != nil {
-		_ = db.DeleteUser(ctx, createdUser.ID.String())
-		writeJSONError(c, http.StatusInternalServerError, "failed to save passkey")
-		return
-	}
 
+	var inviteID *string
 	if !isAdmin {
-		inviteID, ok := getInviteID(s)
+		value, ok := getInviteID(s)
 		if !ok {
-			_ = db.DeleteUser(ctx, createdUser.ID.String())
 			writeJSONError(c, http.StatusBadRequest, "invite token missing")
 			return
 		}
-		if err := db.MarkUserInviteUsed(ctx, inviteID); err != nil {
-			_ = db.DeleteUser(ctx, createdUser.ID.String())
-			writeJSONError(c, http.StatusInternalServerError, "failed to finalize invite")
-			return
+		inviteID = &value
+	}
+
+	createdUser, err := db.FinalizeSetupRegistration(ctx, db.FinalizeSetupRegistrationInput{
+		UserID:      userID,
+		DisplayName: displayName,
+		IsAdmin:     isAdmin,
+		InviteID:    inviteID,
+		Credential:  *credential,
+		Label:       labelPtr,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, db.ErrSetupAlreadyCompleted):
+			writeJSONError(c, http.StatusBadRequest, "setup already completed")
+		case errors.Is(err, db.ErrInviteInvalidOrUsed):
+			writeJSONError(c, http.StatusBadRequest, "invite is no longer valid")
+		default:
+			writeJSONError(c, http.StatusInternalServerError, "failed to finalize setup")
 		}
+		return
+	}
+
+	if err := rotateAuthenticatedSessionID(c, s, store); err != nil {
+		logger.Error("Failed to rotate session after setup", "error", err)
+		writeJSONError(c, http.StatusInternalServerError, "failed to rotate session")
+		return
 	}
 
 	setAuthenticatedSession(s, createdUser)
@@ -343,7 +358,7 @@ func PasskeyLoginStart(c flamego.Context, s session.Session, web *webauthn.WebAu
 }
 
 // PasskeyLoginFinish validates a passkey login.
-func PasskeyLoginFinish(c flamego.Context, s session.Session, web *webauthn.WebAuthn) {
+func PasskeyLoginFinish(c flamego.Context, s session.Session, store session.Store, web *webauthn.WebAuthn) {
 	loginSession, ok := getSessionData(s, webauthnLoginSessionKey)
 	if !ok {
 		writeJSONError(c, http.StatusBadRequest, "login session missing")
@@ -367,6 +382,12 @@ func PasskeyLoginFinish(c flamego.Context, s session.Session, web *webauthn.WebA
 
 	if err := db.UpdateUserPasskeyCredential(c.Request().Context(), waUser.user.ID.String(), *credential, time.Now()); err != nil {
 		writeJSONError(c, http.StatusInternalServerError, "failed to update passkey")
+		return
+	}
+
+	if err := rotateAuthenticatedSessionID(c, s, store); err != nil {
+		logger.Error("Failed to rotate session after login", "error", err)
+		writeJSONError(c, http.StatusInternalServerError, "failed to rotate session")
 		return
 	}
 
@@ -521,6 +542,23 @@ func BreakGlassFinish(c flamego.Context, s session.Session, web *webauthn.WebAut
 	}
 
 	writeJSON(c, map[string]string{"redirect": next})
+}
+
+func rotateAuthenticatedSessionID(c flamego.Context, s session.Session, store session.Store) error {
+	oldSessionID := s.ID()
+	if err := s.RegenerateID(c.ResponseWriter(), c.Request().Request); err != nil {
+		return fmt.Errorf("regenerate session ID: %w", err)
+	}
+
+	if oldSessionID == "" || oldSessionID == s.ID() {
+		return nil
+	}
+
+	if err := store.Destroy(c.Request().Context(), oldSessionID); err != nil {
+		logger.Warn("Failed to destroy old session after ID rotation", "error", err)
+	}
+
+	return nil
 }
 
 func setAuthenticatedSession(s session.Session, user *db.User) {

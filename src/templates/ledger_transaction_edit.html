@@ -39,7 +39,8 @@
     </div>
     <div class="form-group">
       <label>Amount (signed, AED)</label>
-      <input type="number" step="0.01" name="amount" class="form-item" value="{{ printf "%.2f" .Transaction.Amount }}" required />
+      <input type="text" inputmode="decimal" name="amount" class="form-item" value="{{ if gt .Transaction.Amount 0.0 }}+{{ end }}{{ printf "%.2f" .Transaction.Amount }}" required />
+      {{ if .AmountInputHint }}<p class="help-text">{{ .AmountInputHint }}</p>{{ end }}
     </div>
     <div class="form-group">
       <label>Status</label>

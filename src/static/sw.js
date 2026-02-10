@@ -1,4 +1,4 @@
-const CACHE_NAME = 'groundwave-v4';
+const CACHE_NAME = 'groundwave-v5';
 const STATIC_ASSETS = [
   '/main.css',
   '/normalize-8.0.1.min.css',
@@ -64,31 +64,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  const acceptHeader = event.request.headers.get('accept') || '';
-  const isPageRequest = event.request.mode === 'navigate' || acceptHeader.includes('text/html');
-  if (!isPageRequest) {
-    return;
-  }
-
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        if (response.ok) {
-          const responseClone = response.clone();
-          event.waitUntil(
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone))
-          );
-        }
-        return response;
-      })
-      .catch(() =>
-        caches.match(event.request).then((cached) =>
-          cached ||
-          new Response('<!DOCTYPE html><html><body><p>Page not available offline</p></body></html>', {
-            status: 503,
-            headers: { 'Content-Type': 'text/html' }
-          })
-        )
-      )
-  );
+  // Do not cache dynamic or HTML responses for security reasons.
+  // Non-static requests pass through to the network unchanged.
 });

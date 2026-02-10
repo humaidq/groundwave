@@ -415,6 +415,15 @@ func (qso QSO) FormatTime() string {
 
 // GetFlagCode returns the ISO 3166-1 alpha-2 country code for flagcdn.com
 func (qso QSO) GetFlagCode() string {
+	return CountryFlagCode(qso.Country)
+}
+
+// CountryFlagCode returns the ISO 3166-1 alpha-2 country code for flagcdn.com.
+func CountryFlagCode(country string) string {
+	if country == "" {
+		return ""
+	}
+
 	countryMap := map[string]string{
 		// From ADIF data analysis
 		"Albania":              "al",
@@ -506,7 +515,7 @@ func (qso QSO) GetFlagCode() string {
 		"Malaysia":       "my",
 	}
 
-	if code, exists := countryMap[qso.Country]; exists {
+	if code, exists := countryMap[country]; exists {
 		return code
 	}
 

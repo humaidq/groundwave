@@ -6,8 +6,11 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/humaidq/groundwave/utils"
 )
@@ -38,6 +41,49 @@ func (q *QSOListItem) FormatTime() string {
 // FormatQSOTime formats QSO timestamp for display
 func (q *QSOListItem) FormatQSOTime() string {
 	return q.TimeOn.UTC().Format("2006-01-02 15:04:05 UTC")
+}
+
+// TimestampUTC returns the QSO date+time in UTC.
+func (q *QSOListItem) TimestampUTC() time.Time {
+	timeOn := q.TimeOn.UTC()
+	return time.Date(
+		q.QSODate.Year(),
+		q.QSODate.Month(),
+		q.QSODate.Day(),
+		timeOn.Hour(),
+		timeOn.Minute(),
+		timeOn.Second(),
+		0,
+		time.UTC,
+	)
+}
+
+// UnixTimestamp returns the QSO timestamp as Unix seconds.
+func (q *QSOListItem) UnixTimestamp() int64 {
+	return q.TimestampUTC().Unix()
+}
+
+// GetFlagCode returns the ISO 3166-1 alpha-2 country code for flagcdn.com.
+func (q *QSOListItem) GetFlagCode() string {
+	if q.Country == nil {
+		return ""
+	}
+	return utils.CountryFlagCode(*q.Country)
+}
+
+// QSOHallOfFameItem represents a paper QSL hall of fame entry.
+type QSOHallOfFameItem struct {
+	Call    string  `db:"call"`
+	Name    *string `db:"name"`
+	Country *string `db:"country"`
+}
+
+// GetFlagCode returns the ISO 3166-1 alpha-2 country code for flagcdn.com.
+func (q *QSOHallOfFameItem) GetFlagCode() string {
+	if q.Country == nil {
+		return ""
+	}
+	return utils.CountryFlagCode(*q.Country)
 }
 
 // QSODetail represents a full QSO with all details
@@ -649,4 +695,106 @@ func GetQSOCount(ctx context.Context) (int, error) {
 	}
 
 	return count, nil
+}
+
+// GetUniqueCountriesCount returns the number of unique countries worked.
+func GetUniqueCountriesCount(ctx context.Context) (int, error) {
+	if pool == nil {
+		return 0, fmt.Errorf("database connection not initialized")
+	}
+
+	var count int
+	query := `SELECT COUNT(DISTINCT country) FROM qsos WHERE country IS NOT NULL AND country <> ''`
+	err := pool.QueryRow(ctx, query).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count unique countries: %w", err)
+	}
+
+	return count, nil
+}
+
+// GetLatestQSOTime returns the most recent QSO timestamp.
+func GetLatestQSOTime(ctx context.Context) (*time.Time, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	query := `SELECT MAX(qso_date + time_on) FROM qsos`
+	var latest *time.Time
+	err := pool.QueryRow(ctx, query).Scan(&latest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch latest QSO time: %w", err)
+	}
+
+	return latest, nil
+}
+
+// GetPaperQSLHallOfFame returns deduplicated QSOs where paper QSL was received.
+func GetPaperQSLHallOfFame(ctx context.Context) ([]QSOHallOfFameItem, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		SELECT DISTINCT ON (UPPER(call))
+			call,
+			name,
+			country
+		FROM qsos
+		WHERE qsl_rcvd = 'Y'
+		ORDER BY UPPER(call), (name IS NULL OR name = '') ASC, qso_date DESC, time_on DESC
+	`
+
+	rows, err := pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query paper QSL hall of fame: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []QSOHallOfFameItem
+	for rows.Next() {
+		var entry QSOHallOfFameItem
+		err := rows.Scan(
+			&entry.Call,
+			&entry.Name,
+			&entry.Country,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan hall of fame entry: %w", err)
+		}
+		entries = append(entries, entry)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating hall of fame entries: %w", err)
+	}
+
+	return entries, nil
+}
+
+// FindClosestQSOByCallAndTime finds the closest matching QSO within a tolerance window.
+func FindClosestQSOByCallAndTime(ctx context.Context, callSign string, searchTime time.Time, toleranceMinutes int) (*QSODetail, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		SELECT id
+		FROM qsos
+		WHERE UPPER(call) = UPPER($1)
+		  AND abs(extract(epoch FROM ((qso_date + time_on) - $2::timestamp))) <= $3 * 60
+		ORDER BY abs(extract(epoch FROM ((qso_date + time_on) - $2::timestamp))) ASC
+		LIMIT 1
+	`
+
+	var id string
+	err := pool.QueryRow(ctx, query, callSign, searchTime.UTC(), toleranceMinutes).Scan(&id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to search QSO: %w", err)
+	}
+
+	return GetQSO(ctx, id)
 }

@@ -1,0 +1,214 @@
+{{ template "head" . }}
+
+<h2 class="section-heading">OQRS Log Search</h2>
+
+<p>
+  Hello! This is my QSL log. If you had a QSO with me, you should be able to
+  find it below. Just make sure you find the timestamp of when we had the QSO so
+  it can be matched with my logs.
+</p>
+
+<form method="post" class="list-card">
+  <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+  {{ if .Error }}
+  <div class="alert alert-red">
+    <h5 class="alert-title">Uh-oh!</h5>
+    <p>{{ .Error }}</p>
+  </div>
+  {{ end }}
+
+  <div class="form-group">
+    <label for="callsign"><strong>Call Sign</strong></label>
+    <input
+      type="text"
+      name="callsign"
+      id="callsign"
+      class="form-item callsign-input"
+      placeholder="e.g. A62A"
+      required
+    />
+  </div>
+
+  <div class="form-group">
+    <label><strong>Date &amp; Time (UTC)</strong></label>
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem;">
+      <input
+        type="number"
+        name="year"
+        id="year"
+        placeholder="YYYY"
+        min="2000"
+        max="2100"
+        maxlength="4"
+        inputmode="numeric"
+        style="width: 5.2rem;"
+        required
+      />
+      <span>-</span>
+      <input
+        type="number"
+        name="month"
+        id="month"
+        placeholder="MM"
+        min="1"
+        max="12"
+        maxlength="2"
+        inputmode="numeric"
+        style="width: 3.6rem;"
+        required
+      />
+      <span>-</span>
+      <input
+        type="number"
+        name="day"
+        id="day"
+        placeholder="DD"
+        min="1"
+        max="31"
+        maxlength="2"
+        inputmode="numeric"
+        style="width: 3.6rem;"
+        required
+      />
+      <span>&nbsp;</span>
+      <input
+        type="number"
+        name="hour"
+        id="hour"
+        placeholder="HH"
+        min="0"
+        max="23"
+        maxlength="2"
+        inputmode="numeric"
+        style="width: 3.6rem;"
+        required
+      />
+      <span>:</span>
+      <input
+        type="number"
+        name="minute"
+        id="minute"
+        placeholder="MM"
+        min="0"
+        max="59"
+        maxlength="2"
+        inputmode="numeric"
+        style="width: 3.6rem;"
+        required
+      />
+    </div>
+    <small class="muted-text">Enter the approximate time of our QSO (24-hour format). We'll search within +/- 10 minutes.</small>
+  </div>
+
+  <button type="submit" class="btn btn-block">Find QSO -></button>
+</form>
+
+{{ if .LatestQSODate }}
+<p class="muted-text" style="margin-top: 0.5em; text-align: center;">
+  Latest QSO: {{ .LatestQSODate }} ({{ .LatestQSOTimeAgo }})
+</p>
+{{ end }}
+
+<h3 class="section-heading">Statistics</h3>
+<p><strong>Total QSOs:</strong> {{ .TotalQSOs }} | <strong>Unique Countries:</strong> {{ .UniqueCountries }}</p>
+
+{{ template "latest-qsos" . }}
+
+{{ template "hall-of-fame" . }}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const inputs = ['year', 'month', 'day', 'hour', 'minute'];
+  const maxLengths = [4, 2, 2, 2, 2];
+
+  const callsignInput = document.getElementById('callsign');
+  if (callsignInput) callsignInput.value = '';
+  inputs.forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.value = '';
+  });
+
+  function safeSetCursorToEnd(input) {
+    if (!input) return;
+    const len = (input.value || '').toString().length;
+    try {
+      input.setSelectionRange(len, len);
+    } catch (e) {
+      // number inputs don't support setSelectionRange in some browsers - ignore
+    }
+  }
+
+  setTimeout(() => {
+    if (callsignInput) {
+      callsignInput.focus();
+    }
+  }, 100);
+
+  inputs.forEach((id, index) => {
+    const input = document.getElementById(id);
+    if (!input) return;
+
+    input.addEventListener('input', function (e) {
+      if (this.value && this.value.toString().length > maxLengths[index]) {
+        this.value = this.value.toString().slice(0, maxLengths[index]);
+      }
+
+      const isDelete =
+        e.inputType && (e.inputType.startsWith('delete') || e.inputType === 'deleteContentBackward');
+      if (
+        !isDelete &&
+        this.value &&
+        this.value.toString().length >= maxLengths[index] &&
+        index < inputs.length - 1
+      ) {
+        const nextInput = document.getElementById(inputs[index + 1]);
+        if (nextInput) {
+          nextInput.focus();
+          safeSetCursorToEnd(nextInput);
+        }
+      }
+    });
+
+    input.addEventListener('keydown', function (e) {
+      const ignoredKeys = ['/', '-', ':', '.', ',', ' ', '_', '\\', '|', ';'];
+      if (ignoredKeys.includes(e.key)) {
+        e.preventDefault();
+        return;
+      }
+
+      if (index === 0) return;
+
+      const prevInput = document.getElementById(inputs[index - 1]);
+
+      if (e.key === 'Delete' && prevInput) {
+        e.preventDefault();
+        prevInput.focus();
+        safeSetCursorToEnd(prevInput);
+        return;
+      }
+
+      if (e.key === 'Backspace' && prevInput) {
+        const valueStr = (this.value || '').toString();
+        const atStart =
+          this.selectionStart === 0 &&
+          this.selectionEnd === 0;
+
+        if (valueStr.length === 0) {
+          e.preventDefault();
+          prevInput.focus();
+          safeSetCursorToEnd(prevInput);
+          return;
+        }
+
+        if (atStart) {
+          e.preventDefault();
+          prevInput.focus();
+          safeSetCursorToEnd(prevInput);
+        }
+      }
+    });
+  });
+});
+</script>
+
+{{ template "foot" . }}

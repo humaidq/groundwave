@@ -16,6 +16,10 @@
 <div class="page-header">
   <h2>QSL Contacts</h2>
   <div class="page-header-actions">
+    <form method="POST" action="/qsl/import/qrz" class="inline-form">
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+      <button type="submit" class="btn">Sync QRZ</button>
+    </form>
     <form method="POST" action="/qsl/import" enctype="multipart/form-data" id="adif-import-form" class="inline-form">
       <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
       <input type="file" name="adif_file" id="adif_file" accept=".adi,.adif" class="hidden-file-input" onchange="this.form.submit()">
@@ -27,6 +31,49 @@
 {{ if .Error }}
 <div class="alert alert-red">
   {{ .Error }}
+</div>
+{{ end }}
+
+{{ if .QSLCardRequestsError }}
+<div class="alert alert-yellow">
+  {{ .QSLCardRequestsError }}
+</div>
+{{ end }}
+
+{{ if .QSLCardRequests }}
+<h3 class="section-heading">QSL Card Requests ({{ len .QSLCardRequests }})</h3>
+<p class="muted-text">Submitted from public OQRS pages. Dismiss removes the card only.</p>
+
+<div class="list-card-list">
+  {{ range .QSLCardRequests }}
+  <div class="list-card qsl-request-card">
+    <div class="qsl-request-card-header">
+      <div>
+        <div><span class="qso-callsign">{{ .Call }}</span> • {{ .QSODate.Format "2006-01-02" }} {{ .TimeOn.Format "15:04" }}Z</div>
+        <div class="muted-text">
+          {{ .Mode }}{{ if .Band }} • {{ .Band }}{{ end }}{{ if .Country }} • {{ .Country }}{{ end }} • Requested {{ .CreatedAt.Format "2006-01-02 15:04" }}
+        </div>
+      </div>
+      <form method="POST" action="/qsl/requests/{{ .ID }}/dismiss" class="inline-form">
+        <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
+        <button type="submit" class="btn btn-small">Dismiss</button>
+      </form>
+    </div>
+
+    {{ if .RequesterName }}
+    <p><strong>Name:</strong> {{ .RequesterName }}</p>
+    {{ end }}
+
+    <p><strong>Mailing Address</strong></p>
+    <div class="qsl-request-address">{{ .MailingAddress }}</div>
+
+    {{ if .Note }}
+    <p><strong>Note:</strong> {{ .Note }}</p>
+    {{ end }}
+
+    <p><a href="/qsl/{{ .QSOID }}">Open QSO</a></p>
+  </div>
+  {{ end }}
 </div>
 {{ end }}
 
@@ -50,7 +97,7 @@
 {{ else }}
 <div class="alert alert-grey">
   <h5 class="alert-title">No QSOs Yet</h5>
-  <p>You haven't imported any QSOs yet. Use the "Import ADIF" button above to upload your logbook.</p>
+  <p>You haven't imported any QSOs yet. Use "Sync QRZ" or "Import ADIF" above to bring in your logbook.</p>
 </div>
 {{ end }}
 

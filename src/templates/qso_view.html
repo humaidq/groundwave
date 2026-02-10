@@ -16,6 +16,16 @@
 {{ with .QSO }}
 <h2>{{ .Call }}{{ if .HasContact }} - <a href="/contact/{{ .GetContactID }}">View Contact</a>{{ end }}</h2>
 
+{{ if $.PublicQSLPath }}
+<div class="zk-published" data-publish-path="{{ $.PublicQSLPath }}">
+  <div class="btn-pill">
+    <span class="btn-pill-label">Public Link</span>
+    <button type="button" class="btn-pill-action qsl-copy-link">Copy Link</button>
+  </div>
+  <span class="zk-copy-status" aria-live="polite"></span>
+</div>
+{{ end }}
+
 {{ if .MyRig }}
 <p>{{ .MyRig }}{{ if .TxPwr }} ({{ .TxPwr }}W){{ end }}</p>
 {{ end }}
@@ -74,11 +84,12 @@
             {{ if .IsPaperQSLSent }}
             <div class="status-dot active paper"></div>
             <span class="status-text active">Sent</span>
+            {{ else if .IsPaperQSLQueued }}
+            <div class="status-dot queued"></div>
+            <span class="status-text queued">Queued to Send</span>
             {{ else }}
-            <a href="mailto:qsl@huma.id?subject={{ .Call }}: QSL Card Request&body=Hello,%0A%0AI would like to request a QSL card for our contact:%0A%0ACall Sign: {{ .Call }}%0ADate/Time: {{ .FormatQSOTime }}%0A{{ if .Freq }}Frequency: {{ .Freq }} MHz%0A{{ end }}%0AMy mailing address:%0A[Please write your full mailing address here]%0A%0AThank you!" class="status-request-link">
-              <div class="status-dot inactive"></div>
-              <span class="status-text inactive">Request</span>
-            </a>
+            <div class="status-dot inactive"></div>
+            <span class="status-text inactive">Not Sent</span>
             {{ end }}
           </div>
           <div class="status-indicator">
@@ -166,5 +177,33 @@
     </div>
   </div>
 {{ end }}
+{{ end }}
+{{ if .PublicQSLPath }}
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const container = document.querySelector(".zk-published");
+    if (!container) {
+      return;
+    }
+    const button = container.querySelector(".qsl-copy-link");
+    const status = container.querySelector(".zk-copy-status");
+    const path = container.getAttribute("data-publish-path");
+    if (!button || !status || !path) {
+      return;
+    }
+    button.addEventListener("click", function() {
+      const url = new URL(path, window.location.origin);
+      if (!navigator.clipboard) {
+        status.textContent = "Clipboard unavailable";
+        return;
+      }
+      navigator.clipboard.writeText(url.toString()).then(function() {
+        status.textContent = "Copied";
+      }).catch(function() {
+        status.textContent = "Copy failed";
+      });
+    });
+  });
+</script>
 {{ end }}
 {{ template "foot" . }}

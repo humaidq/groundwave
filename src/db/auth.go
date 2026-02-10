@@ -7,7 +7,9 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
@@ -15,11 +17,120 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+var (
+	// ErrSetupAlreadyCompleted is returned when bootstrap setup already has at least one user.
+	ErrSetupAlreadyCompleted = errors.New("setup already completed")
+	// ErrInviteInvalidOrUsed is returned when an invite token is missing, invalid, or already consumed.
+	ErrInviteInvalidOrUsed = errors.New("invite is no longer valid")
+)
+
 // CreateUserInput defines data for creating a user.
 type CreateUserInput struct {
 	ID          *uuid.UUID
 	DisplayName string
 	IsAdmin     bool
+}
+
+// FinalizeSetupRegistrationInput defines data for transactional setup completion.
+type FinalizeSetupRegistrationInput struct {
+	UserID      uuid.UUID
+	DisplayName string
+	IsAdmin     bool
+	InviteID    *string
+	Credential  webauthn.Credential
+	Label       *string
+}
+
+// FinalizeSetupRegistration creates a user, saves the first passkey, and optionally consumes an invite.
+func FinalizeSetupRegistration(ctx context.Context, input FinalizeSetupRegistrationInput) (*User, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database connection not initialized")
+	}
+
+	displayName := strings.TrimSpace(input.DisplayName)
+	if displayName == "" {
+		return nil, fmt.Errorf("display name is required")
+	}
+
+	if !input.IsAdmin {
+		if input.InviteID == nil || strings.TrimSpace(*input.InviteID) == "" {
+			return nil, ErrInviteInvalidOrUsed
+		}
+		if _, err := uuid.Parse(strings.TrimSpace(*input.InviteID)); err != nil {
+			return nil, ErrInviteInvalidOrUsed
+		}
+	}
+
+	credentialData, err := encodeCredential(input.Credential)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start setup transaction: %w", err)
+	}
+	defer func() {
+		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil && !errors.Is(rollbackErr, pgx.ErrTxClosed) {
+			logger.Warn("Failed to rollback setup transaction", "error", rollbackErr)
+		}
+	}()
+
+	if input.IsAdmin {
+		if _, err := tx.Exec(ctx, `LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE`); err != nil {
+			return nil, fmt.Errorf("failed to lock users table: %w", err)
+		}
+
+		var count int
+		if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+			return nil, fmt.Errorf("failed to count users: %w", err)
+		}
+		if count > 0 {
+			return nil, ErrSetupAlreadyCompleted
+		}
+	} else {
+		command, err := tx.Exec(ctx, `
+			UPDATE user_invites
+			SET used_at = NOW()
+			WHERE id = $1
+			  AND used_at IS NULL
+			  AND created_at >= NOW() - INTERVAL '24 hours'
+		`, strings.TrimSpace(*input.InviteID))
+		if err != nil {
+			return nil, fmt.Errorf("failed to consume invite: %w", err)
+		}
+		if command.RowsAffected() == 0 {
+			return nil, ErrInviteInvalidOrUsed
+		}
+	}
+
+	var user User
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO users (id, display_name, is_admin)
+		VALUES ($1, $2, $3)
+		RETURNING id, display_name, is_admin, created_at, updated_at
+	`, input.UserID, displayName, input.IsAdmin).Scan(
+		&user.ID,
+		&user.DisplayName,
+		&user.IsAdmin,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	); err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO user_passkeys (user_id, credential_id, credential_data, label, last_used_at)
+		VALUES ($1, $2, $3, $4, NULL)
+	`, user.ID, input.Credential.ID, credentialData, input.Label); err != nil {
+		return nil, fmt.Errorf("failed to store passkey: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit setup transaction: %w", err)
+	}
+
+	return &user, nil
 }
 
 // CountUsers returns the number of users.

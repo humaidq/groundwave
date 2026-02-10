@@ -93,3 +93,50 @@ func TestUserInviteErrors(t *testing.T) {
 		t.Fatalf("expected error for missing invite delete")
 	}
 }
+
+func TestUserInviteExpiryAfter24Hours(t *testing.T) {
+	resetDatabase(t)
+	ctx := testContext()
+
+	owner := mustCreateUser(t, "Invite Owner")
+	invite, err := CreateUserInvite(ctx, owner.ID.String(), "Invitee")
+	if err != nil {
+		t.Fatalf("CreateUserInvite failed: %v", err)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE user_invites
+		SET created_at = NOW() - INTERVAL '25 hours'
+		WHERE id = $1
+	`, invite.ID); err != nil {
+		t.Fatalf("failed to age invite: %v", err)
+	}
+
+	byToken, err := GetUserInviteByToken(ctx, invite.Token)
+	if err != nil {
+		t.Fatalf("GetUserInviteByToken failed: %v", err)
+	}
+	if byToken != nil {
+		t.Fatalf("expected expired invite to be unavailable by token")
+	}
+
+	byID, err := GetUserInviteByID(ctx, invite.ID.String())
+	if err != nil {
+		t.Fatalf("GetUserInviteByID failed: %v", err)
+	}
+	if byID != nil {
+		t.Fatalf("expected expired invite to be unavailable by id")
+	}
+
+	pending, err := ListPendingUserInvites(ctx)
+	if err != nil {
+		t.Fatalf("ListPendingUserInvites failed: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("expected expired invite to be excluded from pending list")
+	}
+
+	if err := MarkUserInviteUsed(ctx, invite.ID.String()); err == nil {
+		t.Fatalf("expected expired invite to fail when marked used")
+	}
+}

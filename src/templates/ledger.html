@@ -17,11 +17,16 @@
   <div class="page-header-stack">
     <h2>Ledger</h2>
     <div class="page-header-meta">
-      <span class="ledger-networth">Net worth: {{ formatAmount .NetWorth }} AED</span>
-      <span class="muted-text">Month: {{ .PeriodLabel }}</span>
+      <div>
+        <div class="ledger-networth">Net worth: {{ formatAmount .NetWorth }} AED</div>
+        <div>Cash available: {{ formatAmount .CashAvailable }} AED</div>
+        <div>Total debt: {{ formatAmount .TotalDebt }} AED</div>
+        <div class="muted-text">Month: {{ .PeriodLabel }}</div>
+      </div>
     </div>
   </div>
   <div class="page-header-actions">
+    <a href="/ledger/history" class="btn">History</a>
     <a href="/ledger/budgets/new" class="btn">+ Budget</a>
     <a href="/ledger/accounts/new" class="btn">+ Account</a>
   </div>
@@ -34,7 +39,7 @@
 </div>
 {{ end }}
 
-<h3 class="section-heading">Budgets</h3>
+<h3 class="section-heading">Budgets <span class="muted-text">{{ formatAmount .BudgetUsageUsed }} / {{ formatAmount .BudgetUsageTotal }} {{ .BudgetUsageCurrency }}</span></h3>
 {{ if .Budgets }}
 <div class="ledger-budget-list">
   {{ range .Budgets }}
@@ -106,7 +111,7 @@
             <div class="ledger-account-meta">Reconciled {{ .LastReconciledAt.Format "Jan 2, 2006" }}</div>
             {{ end }}
           </div>
-          <div class="ledger-account-balance ledger-negative">{{ formatAmount .Balance }} AED</div>
+          <div class="ledger-account-balance {{ if lt .Balance 0.0 }}ledger-negative{{ else }}ledger-positive{{ end }}">{{ formatAmount .Balance }} AED</div>
         </div>
         <div class="ledger-account-actions">
           <a href="/ledger/accounts/{{ .ID }}/transactions/new" class="btn">Add transaction</a>

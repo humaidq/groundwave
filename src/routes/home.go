@@ -57,14 +57,6 @@ func Welcome(c flamego.Context, s session.Session, t template.Template, data tem
 		}
 		data["QSOCount"] = qsoCount
 
-		// Get recent contacts (last 5 modified)
-		recentContacts, err := db.GetRecentContacts(ctx, 5)
-		if err != nil {
-			logger.Error("Error fetching recent contacts", "error", err)
-		} else {
-			data["RecentContacts"] = recentContacts
-		}
-
 		// Get notes count (from zettelkasten cache)
 		orgFiles, err := db.ListOrgFiles(ctx)
 		if err != nil {
@@ -72,14 +64,6 @@ func Welcome(c flamego.Context, s session.Session, t template.Template, data tem
 			data["NotesCount"] = 0
 		} else {
 			data["NotesCount"] = len(orgFiles)
-		}
-
-		// Get recent QSOs (last 5)
-		recentQSOs, err := db.ListRecentQSOs(ctx, 5)
-		if err != nil {
-			logger.Error("Error fetching recent QSOs", "error", err)
-		} else {
-			data["RecentQSOs"] = recentQSOs
 		}
 
 		// Get WhatsApp status

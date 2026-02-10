@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/normalize-8.0.1.min.css" />
+    <link rel="stylesheet" href="/main.css" />
+    <title>A66H - Humaid Alqasimi</title>
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <style>
+      body {
+        max-width: none;
+        margin: 0;
+        padding: 1.1em 2em;
+        background-color: #fefefe;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body {
+          background-color: #303030;
+          color: #eee;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+          color: #eee;
+        }
+
+        a {
+          color: #acbbf9;
+        }
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        max-width: 800px;
+      }
+
+      table:not(.latest-qsos) td {
+        padding: 10px;
+        vertical-align: top;
+      }
+
+      img {
+        max-width: 100%;
+        height: auto;
+      }
+
+      @media only screen and (max-width: 860px) {
+        table:not(.latest-qsos),
+        table:not(.latest-qsos) tr,
+        table:not(.latest-qsos) td {
+          display: block;
+          width: 100%;
+        }
+
+        table:not(.latest-qsos) td {
+          text-align: center;
+        }
+
+        table:not(.latest-qsos) td img {
+          max-width: 90%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Hello!</h1>
+
+    <p>I work on software projects, including open source projects, and also maintain a blog. Visit my personal website: <a href="https://huma.id" target="_blank">huma.id</a></p>
+
+    <h2>Equipment</h2>
+
+    <ul>
+      <li><strong>Radio:</strong> Xiegu G90</li>
+      <li><strong>Ant:</strong> DX Commander Signature 9, Chameleon CHA OCF40</li>
+    </ul>
+
+    <hr />
+
+    <h2><strong>QSL Policy</strong></h2>
+
+    <ul>
+      <li><strong>Direct:</strong> I respond to all QSL cards free of charge. <u>Don't include</u> postage or cash!</li>
+      <li>I appreciate paper QSL and will respond!</li>
+      <li><strong>Bureau:</strong> <u>No bureau</u> in UAE (A6-land).</li>
+      <li><strong>Online:</strong> 100% of logs uploaded to <u>LoTW</u>, <u>QRZ</u>, <u>eQSL</u>.</li>
+      <li><strong>Log Search:</strong> <a href="https://qsl.huma.id" target="_blank">Search my logs &amp; request QSL card (free)</a></li>
+    </ul>
+
+    <hr />
+
+    <h2>The United Arab Emirates</h2>
+
+    <p>Located in the eastern part of the Arabian Peninsula, the UAE is known for its rapid modernisation, rich cultural heritage, and world-class infrastructure.</p>
+
+    <p>Learn about the UAE <a href="https://u.ae/en/about-the-uae/history" target="_blank">history</a> and <a href="https://u.ae/en/about-the-uae/fact-sheet" target="_blank">facts</a>.</p>
+
+    <table>
+      <tbody>
+        <tr>
+          <td>
+            <img alt="United Arab Emirates on the globe" src="https://upload.wikimedia.org/wikipedia/commons/6/6c/United_Arab_Emirates_on_the_globe_%28Afro-Eurasia_centered%29.svg" style="height:199px; width:200px" />
+          </td>
+          <td>
+            <img alt="Hatta Heritage Village" src="https://upload.wikimedia.org/wikipedia/commons/4/4c/Hatta_Heritage_Village.jpg" style="height:231px; width:350px" />
+          </td>
+          <td>
+            <img alt="Dubai nighttime view" src="https://live.staticflickr.com/640/31954377992_287b208a26_b.jpg" style="height:233px; width:350px" />
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <hr />
+
+    <h2>Battery</h2>
+
+    <p>
+      <img alt="Picture of a battery in a box, with banana plugs, anderson plugs, and USB outlets. Screen on top and power button on front." src="/battery_a61bn.jpg" style="height:226px; width:300px" />
+    </p>
+
+    <p>
+      I am using a custom battery designed and built by <a href="https://www.qrz.com/db/a61bn/" target="_blank">A61BN</a>.<br />
+      Great rugged battery with USB C charging, anderson plugs, banana pole and an LCD display.<br />
+      Consider ordering from <a href="https://www.qrz.com/db/a61bn/" target="_blank">A61BN</a>, I highly recommend it.
+    </p>
+
+    <hr />
+
+    <h2>Logs</h2>
+
+    <p>
+      <a href="https://qsl.huma.id" target="_blank" class="btn">Search QSO &amp; OQRS -></a>
+    </p>
+
+    {{ template "latest-qsos" . }}
+
+    {{ template "hall-of-fame" . }}
+  </body>
+</html>

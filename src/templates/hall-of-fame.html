@@ -1,0 +1,16 @@
+<h3 class="section-heading">Paper QSL Hall of Fame</h3>
+
+{{ if .PaperQSLHallOfFame }}
+<div class="tag-badges">
+  {{ range .PaperQSLHallOfFame }}
+  <span class="badge">
+    {{ if .GetFlagCode }}
+    <img src="https://flagcdn.com/{{ .GetFlagCode }}.svg" alt="{{ if .Country }}{{ .Country }}{{ else }}Flag{{ end }}" style="width: 16px; height: 12px; margin-right: 0.3em; vertical-align: middle; background-color: #f0f0f0; padding: 1px;" />
+    {{ end }}
+    {{ .Call }}{{ if .Name }} ({{ .Name }}){{ end }}
+  </span>
+  {{ end }}
+</div>
+{{ else }}
+<p class="muted-text">No paper QSLs received yet.</p>
+{{ end }}

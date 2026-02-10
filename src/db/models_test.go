@@ -177,6 +177,7 @@ func TestReferenceRangeGetDisplayRange(t *testing.T) {
 
 func TestQSOStatusHelpers(t *testing.T) {
 	qslSent := QSLSentYes
+	qslQueued := QSLSentQueued
 	qslRcvd := QSLYes
 
 	contactID := uuid.New()
@@ -192,6 +193,9 @@ func TestQSOStatusHelpers(t *testing.T) {
 
 	if !qso.IsPaperQSLSent() {
 		t.Fatalf("expected paper QSL sent to be true")
+	}
+	if qso.IsPaperQSLQueued() {
+		t.Fatalf("expected paper QSL queued to be false")
 	}
 	if !qso.IsPaperQSLReceived() {
 		t.Fatalf("expected paper QSL received to be true")
@@ -218,6 +222,17 @@ func TestQSOStatusHelpers(t *testing.T) {
 	empty := QSO{}
 	if empty.IsPaperQSLSent() {
 		t.Fatalf("expected paper QSL sent to be false")
+	}
+	if empty.IsPaperQSLQueued() {
+		t.Fatalf("expected paper QSL queued to be false")
+	}
+
+	queued := QSO{QSLSent: &qslQueued}
+	if !queued.IsPaperQSLQueued() {
+		t.Fatalf("expected paper QSL queued to be true")
+	}
+	if queued.IsPaperQSLSent() {
+		t.Fatalf("expected queued paper QSL not to be marked sent")
 	}
 	if empty.HasContact() {
 		t.Fatalf("expected no contact to be linked")

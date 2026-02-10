@@ -546,6 +546,11 @@ func (q *QSO) IsPaperQSLSent() bool {
 	return q.QSLSent != nil && *q.QSLSent == QSLSentYes
 }
 
+// IsPaperQSLQueued returns true if paper QSL is queued to be sent.
+func (q *QSO) IsPaperQSLQueued() bool {
+	return q.QSLSent != nil && *q.QSLSent == QSLSentQueued
+}
+
 // IsPaperQSLReceived returns true if paper QSL was received
 func (q *QSO) IsPaperQSLReceived() bool {
 	return q.QSLRcvd != nil && *q.QSLRcvd == QSLYes

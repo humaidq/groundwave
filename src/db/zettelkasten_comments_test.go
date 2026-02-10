@@ -52,4 +52,23 @@ func TestZettelkastenComments(t *testing.T) {
 	if err := DeleteZettelComment(ctx, comments[0].ID); err != nil {
 		t.Fatalf("DeleteZettelComment failed: %v", err)
 	}
+
+	if err := CreateZettelComment(ctx, zettelID, "Second"); err != nil {
+		t.Fatalf("CreateZettelComment failed: %v", err)
+	}
+	if err := CreateZettelComment(ctx, zettelID, "Third"); err != nil {
+		t.Fatalf("CreateZettelComment failed: %v", err)
+	}
+
+	if err := DeleteAllZettelComments(ctx, zettelID); err != nil {
+		t.Fatalf("DeleteAllZettelComments failed: %v", err)
+	}
+
+	comments, err = GetCommentsForZettel(ctx, zettelID)
+	if err != nil {
+		t.Fatalf("GetCommentsForZettel failed: %v", err)
+	}
+	if len(comments) != 0 {
+		t.Fatalf("expected 0 comments, got %d", len(comments))
+	}
 }

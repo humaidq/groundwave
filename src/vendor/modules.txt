@@ -6,6 +6,8 @@ filippo.io/edwards25519/field
 ## explicit; go 1.18
 github.com/alecthomas/participle/v2
 github.com/alecthomas/participle/v2/lexer
+# github.com/antihax/optional v1.0.0
+## explicit; go 1.13
 # github.com/aymanbagabas/go-osc52/v2 v2.0.1
 ## explicit; go 1.16
 github.com/aymanbagabas/go-osc52/v2
@@ -158,6 +160,8 @@ github.com/jackc/pgx/v5/stdlib
 ## explicit; go 1.19
 github.com/jackc/puddle/v2
 github.com/jackc/puddle/v2/internal/genstack
+# github.com/k0swe/qrz-api v0.3.10
+## explicit; go 1.24.0
 # github.com/lucasb-eyer/go-colorful v1.2.0
 ## explicit; go 1.12
 github.com/lucasb-eyer/go-colorful
@@ -372,6 +376,8 @@ golang.org/x/net/idna
 golang.org/x/net/internal/httpcommon
 golang.org/x/net/internal/socks
 golang.org/x/net/proxy
+# golang.org/x/oauth2 v0.34.0
+## explicit; go 1.24.0
 # golang.org/x/sync v0.19.0
 ## explicit; go 1.24.0
 golang.org/x/sync/errgroup

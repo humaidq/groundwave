@@ -605,6 +605,31 @@ func DeleteZettelComment(c flamego.Context, s session.Session, t template.Templa
 	c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
 }
 
+// DeleteAllZettelComments handles deleting all comments for a zettel
+func DeleteAllZettelComments(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+	zettelID := c.Param("id")
+	if zettelID == "" {
+		SetErrorFlash(s, "Zettel ID is required")
+		c.Redirect("/zk", http.StatusSeeOther)
+		return
+	}
+
+	// Strip "id:" prefix if present
+	zettelID = strings.TrimPrefix(zettelID, "id:")
+
+	ctx := c.Request().Context()
+
+	if err := db.DeleteAllZettelComments(ctx, zettelID); err != nil {
+		logger.Error("Error deleting zettel comments", "zettel_id", zettelID, "error", err)
+		SetErrorFlash(s, "Failed to delete comments")
+		c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
+		return
+	}
+
+	SetSuccessFlash(s, "All comments deleted")
+	c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
+}
+
 // RebuildCache manually triggers a full cache rebuild.
 func RebuildCache(c flamego.Context, s session.Session) {
 	// Trigger cache rebuild asynchronously to avoid blocking the HTTP request

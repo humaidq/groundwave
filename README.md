@@ -30,6 +30,10 @@ The following environment variables are used by the application:
   - Format: `postgres://user:password@host:port/dbname`
   - Example: `postgres:///groundwave` (Unix socket)
 - `CSRF_SECRET` - CSRF signing secret
+- `GROUNDWAVE_ENV` - Runtime mode (`development` or `production`)
+  - Default: `development`
+  - In `production`, auth session cookies are marked `Secure`
+  - This value is also propagated to Flamego's runtime environment
 - `AUTH_USERNAME` - Username for login
 - `AUTH_PASSWORD_HASH` - Bcrypt hash for login password
 - `CARDDAV_URL` - URL of the CardDAV server
@@ -43,3 +47,5 @@ The following environment variables are used by the application:
 - `WEBDAV_PASSWORD` - Password for WebDAV authentication
 - `OLLAMA_URL` - Base URL for the Ollama server
 - `OLLAMA_MODEL` - Ollama model name for AI summaries
+- `QRZ_API_KEY` - QRZ Logbook API key(s) for importing latest QSOs
+  - Comma separated for multiple logbooks (example: `QRZ_API_KEY=apikey1,apikey2`)

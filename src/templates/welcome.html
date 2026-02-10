@@ -58,44 +58,6 @@
     </form>
   </div>
 
-  {{ if and .IsAdmin .RecentQSOs }}
-  <div class="recent-section">
-    <h3>Recent QSOs</h3>
-    <div class="list-card-list">
-      {{ range .RecentQSOs }}
-      <a href="/qsl/{{ .ID }}">
-        <div class="list-card">
-          <div class="list-card-title">{{ .Call }}</div>
-          <div class="list-card-meta">
-            {{ .FormatDate }} {{ .FormatTime }}
-            {{ if .Mode }}• {{ .Mode }}{{ end }}
-            {{ if .Band }}• {{ .Band }}{{ end }}
-            {{ if .Country }}• {{ .Country }}{{ end }}
-          </div>
-        </div>
-      </a>
-      {{ end }}
-    </div>
-  </div>
-  {{ end }}
-
-  {{ if and .IsAdmin .RecentContacts }}
-  <div class="recent-section">
-    <h3>Recently Updated</h3>
-    <div class="list-card-list">
-      {{ range .RecentContacts }}
-      <a href="/contact/{{ .ID }}">
-        <div class="list-card">
-          <div class="list-card-title">{{ .NameDisplay }}</div>
-          {{ if .Organization }}
-          <div class="list-card-meta">{{ .Organization }}</div>
-          {{ end }}
-        </div>
-      </a>
-      {{ end }}
-    </div>
-  </div>
-  {{ end }}
 </div>
 
 {{ template "foot" . }}

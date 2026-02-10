@@ -59,19 +59,34 @@ func LedgerIndex(c flamego.Context, s session.Session, t template.Template, data
 	var debtAccounts []db.LedgerAccountSummary
 	var trackingAccounts []db.LedgerAccountSummary
 	var netWorth float64
+	var cashAvailable float64
+	var debtBalanceTotal float64
+	var budgetUsedTotal float64
+	var budgetAmountTotal float64
+
+	for _, budget := range budgets {
+		budgetUsedTotal += budget.Used
+		budgetAmountTotal += budget.Amount
+	}
 
 	for _, account := range accounts {
 		switch account.AccountType {
 		case db.LedgerAccountDebt:
 			debtAccounts = append(debtAccounts, account)
-			netWorth -= math.Abs(account.Balance)
+			debtBalanceTotal += account.Balance
 		case db.LedgerAccountTracking:
 			trackingAccounts = append(trackingAccounts, account)
-			netWorth += account.Balance
 		default:
 			regularAccounts = append(regularAccounts, account)
-			netWorth += account.Balance
+			cashAvailable += account.Balance
 		}
+
+		netWorth += account.Balance
+	}
+
+	totalDebt := 0.0
+	if debtBalanceTotal < 0 {
+		totalDebt = -debtBalanceTotal
 	}
 
 	data["Budgets"] = budgets
@@ -79,6 +94,11 @@ func LedgerIndex(c flamego.Context, s session.Session, t template.Template, data
 	data["AccountsDebt"] = debtAccounts
 	data["AccountsTracking"] = trackingAccounts
 	data["NetWorth"] = netWorth
+	data["CashAvailable"] = cashAvailable
+	data["TotalDebt"] = totalDebt
+	data["BudgetUsageUsed"] = budgetUsedTotal
+	data["BudgetUsageTotal"] = budgetAmountTotal
+	data["BudgetUsageCurrency"] = "AED"
 	data["PeriodLabel"] = periodLabel
 	data["IsLedger"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
@@ -217,7 +237,7 @@ func CreateLedgerAccount(c flamego.Context, s session.Session) {
 			c.Redirect("/ledger/accounts/new", http.StatusSeeOther)
 			return
 		}
-		openingBalance = value
+		openingBalance = normalizeLedgerDebtBalanceInput(openingStr, value, accountType)
 	}
 
 	input := db.CreateLedgerAccountInput{
@@ -438,7 +458,7 @@ func UpdateLedgerAccount(c flamego.Context, s session.Session) {
 			c.Redirect("/ledger/accounts/"+accountIDStr+"/edit", http.StatusSeeOther)
 			return
 		}
-		openingBalance = value
+		openingBalance = normalizeLedgerDebtBalanceInput(openingStr, value, accountType)
 	}
 
 	input := db.UpdateLedgerAccountInput{
@@ -518,6 +538,8 @@ func LedgerTransactionNewForm(c flamego.Context, s session.Session, t template.T
 	data["PeriodLabel"] = periodStart.Format("Jan 2006")
 	data["TransactionStatusOptions"] = ledgerTransactionStatusOptions()
 	data["DefaultOccurredAt"] = now.Format("2006-01-02T15:04")
+	data["DefaultAmountPlaceholder"] = ledgerTransactionAmountPlaceholder(accountSummary.AccountType)
+	data["AmountInputHint"] = ledgerTransactionAmountHint(accountSummary.AccountType)
 	data["IsLedger"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "Ledger", URL: "/ledger", IsCurrent: false},
@@ -570,6 +592,15 @@ func CreateLedgerTransaction(c flamego.Context, s session.Session) {
 		return
 	}
 
+	ctx := c.Request().Context()
+	account, err := db.GetLedgerAccount(ctx, accountID)
+	if err != nil {
+		logger.Error("Error fetching ledger account", "error", err)
+		SetErrorFlash(s, "Account not found")
+		c.Redirect("/ledger", http.StatusSeeOther)
+		return
+	}
+
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Error parsing ledger transaction form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
@@ -592,6 +623,7 @@ func CreateLedgerTransaction(c flamego.Context, s session.Session) {
 		c.Redirect("/ledger/accounts/"+accountIDStr+"/transactions/new", http.StatusSeeOther)
 		return
 	}
+	amount = normalizeLedgerTransactionAmount(amountStr, amount, account.AccountType)
 
 	status := db.LedgerTransactionStatus(strings.TrimSpace(form.Get("status")))
 	if status == "" {
@@ -631,7 +663,6 @@ func CreateLedgerTransaction(c flamego.Context, s session.Session) {
 		Note:       getOptionalString(form.Get("note")),
 	}
 
-	ctx := c.Request().Context()
 	_, err = db.CreateLedgerTransaction(ctx, input)
 	if err != nil {
 		logger.Error("Error creating ledger transaction", "error", err)
@@ -695,6 +726,7 @@ func LedgerTransactionEditForm(c flamego.Context, s session.Session, t template.
 	data["Budgets"] = budgets
 	data["PeriodLabel"] = periodStart.Format("Jan 2006")
 	data["TransactionStatusOptions"] = ledgerTransactionStatusOptions()
+	data["AmountInputHint"] = ledgerTransactionAmountHint(accountSummary.AccountType)
 	if transaction.BudgetID != nil {
 		data["SelectedBudgetID"] = transaction.BudgetID.String()
 	} else {
@@ -728,6 +760,15 @@ func UpdateLedgerTransaction(c flamego.Context, s session.Session) {
 		return
 	}
 
+	ctx := c.Request().Context()
+	account, err := db.GetLedgerAccount(ctx, accountID)
+	if err != nil {
+		logger.Error("Error fetching ledger account", "error", err)
+		SetErrorFlash(s, "Account not found")
+		c.Redirect("/ledger", http.StatusSeeOther)
+		return
+	}
+
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Error parsing ledger transaction form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
@@ -750,6 +791,7 @@ func UpdateLedgerTransaction(c flamego.Context, s session.Session) {
 		c.Redirect("/ledger/accounts/"+accountIDStr+"/transactions/"+transactionIDStr+"/edit", http.StatusSeeOther)
 		return
 	}
+	amount = normalizeLedgerTransactionAmount(amountStr, amount, account.AccountType)
 
 	status := db.LedgerTransactionStatus(strings.TrimSpace(form.Get("status")))
 	if status == "" {
@@ -790,7 +832,6 @@ func UpdateLedgerTransaction(c flamego.Context, s session.Session) {
 		Note:       getOptionalString(form.Get("note")),
 	}
 
-	ctx := c.Request().Context()
 	if err := db.UpdateLedgerTransaction(ctx, input); err != nil {
 		logger.Error("Error updating ledger transaction", "error", err)
 		SetErrorFlash(s, "Failed to update transaction")
@@ -842,6 +883,15 @@ func CreateLedgerReconciliation(c flamego.Context, s session.Session) {
 		return
 	}
 
+	ctx := c.Request().Context()
+	account, err := db.GetLedgerAccount(ctx, accountID)
+	if err != nil {
+		logger.Error("Error fetching ledger account", "error", err)
+		SetErrorFlash(s, "Account not found")
+		c.Redirect("/ledger", http.StatusSeeOther)
+		return
+	}
+
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Error parsing ledger reconciliation form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
@@ -857,6 +907,7 @@ func CreateLedgerReconciliation(c flamego.Context, s session.Session) {
 		c.Redirect("/ledger/accounts/"+accountIDStr+"/reconcile/new", http.StatusSeeOther)
 		return
 	}
+	balance = normalizeLedgerDebtBalanceInput(balanceStr, balance, account.AccountType)
 
 	reconciledAt, err := parseLedgerDateTime(form.Get("reconciled_at"))
 	if err != nil {
@@ -872,7 +923,6 @@ func CreateLedgerReconciliation(c flamego.Context, s session.Session) {
 		Note:         getOptionalString(form.Get("note")),
 	}
 
-	ctx := c.Request().Context()
 	_, err = db.CreateLedgerReconciliation(ctx, input)
 	if err != nil {
 		logger.Error("Error creating ledger reconciliation", "error", err)
@@ -950,6 +1000,15 @@ func UpdateLedgerReconciliation(c flamego.Context, s session.Session) {
 		return
 	}
 
+	ctx := c.Request().Context()
+	account, err := db.GetLedgerAccount(ctx, accountID)
+	if err != nil {
+		logger.Error("Error fetching ledger account", "error", err)
+		SetErrorFlash(s, "Account not found")
+		c.Redirect("/ledger", http.StatusSeeOther)
+		return
+	}
+
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Error parsing reconciliation form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
@@ -965,6 +1024,7 @@ func UpdateLedgerReconciliation(c flamego.Context, s session.Session) {
 		c.Redirect("/ledger/accounts/"+accountIDStr+"/reconciliations/"+recIDStr+"/edit", http.StatusSeeOther)
 		return
 	}
+	balance = normalizeLedgerDebtBalanceInput(balanceStr, balance, account.AccountType)
 
 	reconciledAt, err := parseLedgerDateTime(form.Get("reconciled_at"))
 	if err != nil {
@@ -981,7 +1041,6 @@ func UpdateLedgerReconciliation(c flamego.Context, s session.Session) {
 		Note:         getOptionalString(form.Get("note")),
 	}
 
-	ctx := c.Request().Context()
 	if err := db.UpdateLedgerReconciliation(ctx, input); err != nil {
 		logger.Error("Error updating ledger reconciliation", "error", err)
 		SetErrorFlash(s, "Failed to update reconciliation")
@@ -1061,6 +1120,60 @@ func isValidLedgerTransactionStatus(status db.LedgerTransactionStatus) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func hasExplicitLedgerSign(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return false
+	}
+
+	first := trimmed[0]
+	return first == '+' || first == '-'
+}
+
+func normalizeLedgerTransactionAmount(rawValue string, amount float64, accountType db.LedgerAccountType) float64 {
+	switch accountType {
+	case db.LedgerAccountRegular, db.LedgerAccountDebt:
+		if hasExplicitLedgerSign(rawValue) {
+			return amount
+		}
+		return -math.Abs(amount)
+	default:
+		return amount
+	}
+}
+
+func normalizeLedgerDebtBalanceInput(rawValue string, amount float64, accountType db.LedgerAccountType) float64 {
+	if accountType != db.LedgerAccountDebt {
+		return amount
+	}
+
+	if hasExplicitLedgerSign(rawValue) {
+		return amount
+	}
+
+	return -math.Abs(amount)
+}
+
+func ledgerTransactionAmountPlaceholder(accountType db.LedgerAccountType) string {
+	switch accountType {
+	case db.LedgerAccountRegular, db.LedgerAccountDebt:
+		return "-0.00"
+	default:
+		return "0.00"
+	}
+}
+
+func ledgerTransactionAmountHint(accountType db.LedgerAccountType) string {
+	switch accountType {
+	case db.LedgerAccountDebt:
+		return "No sign defaults to negative (new debt). Use + for payments."
+	case db.LedgerAccountRegular:
+		return "No sign defaults to negative. Use + for deposits or refunds."
+	default:
+		return "Use - for outflow and + for inflow."
 	}
 }
 

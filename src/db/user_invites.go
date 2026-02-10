@@ -72,7 +72,7 @@ func CreateUserInvite(ctx context.Context, createdBy string, displayName string)
 	return &invite, nil
 }
 
-// ListPendingUserInvites returns all unused invites.
+// ListPendingUserInvites returns all unused, unexpired invites.
 func ListPendingUserInvites(ctx context.Context) ([]UserInvite, error) {
 	if pool == nil {
 		return nil, fmt.Errorf("database connection not initialized")
@@ -82,6 +82,7 @@ func ListPendingUserInvites(ctx context.Context) ([]UserInvite, error) {
 		SELECT id, token, display_name, created_at, used_at, created_by
 		FROM user_invites
 		WHERE used_at IS NULL
+		  AND created_at >= NOW() - INTERVAL '24 hours'
 		ORDER BY created_at DESC
 	`
 	rows, err := pool.Query(ctx, query)
@@ -113,7 +114,7 @@ func ListPendingUserInvites(ctx context.Context) ([]UserInvite, error) {
 	return invites, nil
 }
 
-// GetUserInviteByToken returns an invite by its token.
+// GetUserInviteByToken returns an active invite by its token.
 func GetUserInviteByToken(ctx context.Context, token string) (*UserInvite, error) {
 	if pool == nil {
 		return nil, fmt.Errorf("database connection not initialized")
@@ -124,6 +125,8 @@ func GetUserInviteByToken(ctx context.Context, token string) (*UserInvite, error
 		SELECT id, token, display_name, created_at, used_at, created_by
 		FROM user_invites
 		WHERE token = $1
+		  AND used_at IS NULL
+		  AND created_at >= NOW() - INTERVAL '24 hours'
 	`
 	err := pool.QueryRow(ctx, query, token).Scan(
 		&invite.ID,
@@ -143,7 +146,7 @@ func GetUserInviteByToken(ctx context.Context, token string) (*UserInvite, error
 	return &invite, nil
 }
 
-// GetUserInviteByID returns an invite by its ID.
+// GetUserInviteByID returns an active invite by its ID.
 func GetUserInviteByID(ctx context.Context, id string) (*UserInvite, error) {
 	if pool == nil {
 		return nil, fmt.Errorf("database connection not initialized")
@@ -154,6 +157,8 @@ func GetUserInviteByID(ctx context.Context, id string) (*UserInvite, error) {
 		SELECT id, token, display_name, created_at, used_at, created_by
 		FROM user_invites
 		WHERE id = $1
+		  AND used_at IS NULL
+		  AND created_at >= NOW() - INTERVAL '24 hours'
 	`
 	err := pool.QueryRow(ctx, query, id).Scan(
 		&invite.ID,
@@ -173,13 +178,19 @@ func GetUserInviteByID(ctx context.Context, id string) (*UserInvite, error) {
 	return &invite, nil
 }
 
-// MarkUserInviteUsed marks an invite as used.
+// MarkUserInviteUsed marks an active invite as used.
 func MarkUserInviteUsed(ctx context.Context, id string) error {
 	if pool == nil {
 		return fmt.Errorf("database connection not initialized")
 	}
 
-	command, err := pool.Exec(ctx, `UPDATE user_invites SET used_at = NOW() WHERE id = $1 AND used_at IS NULL`, id)
+	command, err := pool.Exec(ctx, `
+		UPDATE user_invites
+		SET used_at = NOW()
+		WHERE id = $1
+		  AND used_at IS NULL
+		  AND created_at >= NOW() - INTERVAL '24 hours'
+	`, id)
 	if err != nil {
 		return fmt.Errorf("failed to mark invite used: %w", err)
 	}

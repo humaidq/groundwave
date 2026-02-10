@@ -18,7 +18,7 @@
     <h2>{{ .Account.Name }}</h2>
     <div class="page-header-meta">
       <span class="status-badge ledger-account-type">{{ .Account.AccountType }}</span>
-      <span class="ledger-account-balance {{ if eq .Account.AccountType "debt" }}ledger-negative{{ else if lt .Account.Balance 0.0 }}ledger-negative{{ else }}ledger-positive{{ end }}">{{ formatAmount .Account.Balance }} AED</span>
+      <span class="ledger-account-balance {{ if lt .Account.Balance 0.0 }}ledger-negative{{ else }}ledger-positive{{ end }}">{{ formatAmount .Account.Balance }} AED</span>
       {{ if .Account.LastReconciledAt }}
       <span class="muted-text">Reconciled {{ .Account.LastReconciledAt.Format "Jan 2, 2006" }}</span>
       {{ end }}

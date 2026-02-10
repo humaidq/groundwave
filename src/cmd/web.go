@@ -45,10 +45,28 @@ var CmdStart = &cli.Command{
 		&cli.BoolFlag{
 			Name:  "dev",
 			Value: false,
-			Usage: "enables development mode (for templates)",
+			Usage: "enables development mode (overrides GROUNDWAVE_ENV)",
 		},
 	},
 	Action: start,
+}
+
+const runtimeEnvVar = "GROUNDWAVE_ENV"
+
+func resolveRuntimeEnv(cmd *cli.Command) (flamego.EnvType, error) {
+	if cmd.Bool("dev") {
+		return flamego.EnvTypeDev, nil
+	}
+
+	rawEnv := strings.ToLower(strings.TrimSpace(os.Getenv(runtimeEnvVar)))
+	switch rawEnv {
+	case "", "development", "dev":
+		return flamego.EnvTypeDev, nil
+	case "production", "prod":
+		return flamego.EnvTypeProd, nil
+	default:
+		return "", fmt.Errorf("%s must be one of: development, dev, production, prod", runtimeEnvVar)
+	}
 }
 
 func start(ctx context.Context, cmd *cli.Command) (err error) {
@@ -62,6 +80,13 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	if csrfSecret == "" {
 		return fmt.Errorf("CSRF_SECRET is required")
 	}
+
+	runtimeEnv, err := resolveRuntimeEnv(cmd)
+	if err != nil {
+		return err
+	}
+	flamego.SetEnv(runtimeEnv)
+	isProduction := runtimeEnv == flamego.EnvTypeProd
 
 	webAuthn, err := routes.NewWebAuthnFromEnv()
 	if err != nil {
@@ -319,6 +344,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		},
 		Cookie: session.CookieOptions{
 			MaxAge:   30 * 24 * 60 * 60, // 30 days in seconds
+			Secure:   isProduction,
 			HTTPOnly: true,
 			SameSite: http.SameSiteLaxMode,
 		},
@@ -360,15 +386,22 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	})
 	f.Get("/login", routes.LoginForm)
 	f.Get("/setup", routes.SetupForm)
-	f.Post("/webauthn/login/start", csrf.Validate, routes.PasskeyLoginStart)
-	f.Post("/webauthn/login/finish", csrf.Validate, routes.PasskeyLoginFinish)
-	f.Post("/webauthn/setup/start", csrf.Validate, routes.SetupStart)
-	f.Post("/webauthn/setup/finish", csrf.Validate, routes.SetupFinish)
+	f.Group("", func() {
+		f.Post("/webauthn/login/start", routes.PasskeyLoginStart)
+		f.Post("/webauthn/login/finish", routes.PasskeyLoginFinish)
+		f.Post("/webauthn/setup/start", routes.SetupStart)
+		f.Post("/webauthn/setup/finish", routes.SetupFinish)
+		f.Post("/oqrs", routes.OQRSFind)
+		f.Post("/oqrs/request", routes.OQRSRequestCard)
+	}, csrf.Validate)
 	f.Get("/connectivity", func(c flamego.Context) {
 		if _, err := c.ResponseWriter().Write([]byte("1")); err != nil {
 			appLogger.Error("Error writing connectivity response", "error", err)
 		}
 	})
+	f.Get("/oqrs", routes.OQRSIndex)
+	f.Get("/oqrs/{path: **}", routes.OQRSView)
+	f.Get("/qrz", routes.QRZ)
 	f.Get("/note/{id}", routes.ViewPublicNote)
 	f.Get("/ext/auth", routes.RequireAuth, routes.RequireAdmin, routes.ExtensionAuth)
 	f.Get("/ext/complete", routes.ExtensionComplete)
@@ -385,11 +418,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	f.Group("", func() {
 		// Shared routes
 		f.Get("/", routes.Welcome)
-		f.Post("/logout", csrf.Validate, routes.Logout)
-		f.Post("/sensitive-access/lock", csrf.Validate, routes.LockSensitiveAccess)
 		f.Get("/break-glass", routes.BreakGlassForm)
-		f.Post("/break-glass/start", csrf.Validate, routes.BreakGlassStart)
-		f.Post("/break-glass/finish", csrf.Validate, routes.BreakGlassFinish)
 
 		// Inventory read-only routes
 		f.Get("/inventory", routes.InventoryList)
@@ -403,88 +432,93 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 
 		// Health read-only routes
 		f.Get("/health/break-glass", routes.BreakGlassForm)
-		f.Post("/health/break-glass/start", csrf.Validate, routes.BreakGlassStart)
-		f.Post("/health/break-glass/finish", csrf.Validate, routes.BreakGlassFinish)
 		f.Get("/health", routes.ListHealthProfiles)
 		f.Get("/health/{id}", routes.ViewHealthProfile)
 		f.Get("/health/{profile_id}/followup/{id}", routes.ViewFollowup)
-		f.Post("/health/{profile_id}/followup/{id}/ai-summary", csrf.Validate, routes.GenerateAISummary)
 
 		// Security & passkeys
 		f.Get("/security", routes.Security)
-		f.Post("/security/invalidate-other", csrf.Validate, routes.InvalidateOtherSessions)
-		f.Post("/security/sessions/{id}/invalidate", csrf.Validate, routes.InvalidateSession)
-		f.Post("/webauthn/passkey/start", csrf.Validate, routes.PasskeyRegistrationStart)
-		f.Post("/webauthn/passkey/finish", csrf.Validate, routes.PasskeyRegistrationFinish)
-		f.Post("/security/passkeys/{id}/delete", csrf.Validate, routes.DeletePasskey)
+
+		f.Group("", func() {
+			f.Post("/logout", routes.Logout)
+			f.Post("/sensitive-access/lock", routes.LockSensitiveAccess)
+			f.Post("/break-glass/start", routes.BreakGlassStart)
+			f.Post("/break-glass/finish", routes.BreakGlassFinish)
+			f.Post("/health/break-glass/start", routes.BreakGlassStart)
+			f.Post("/health/break-glass/finish", routes.BreakGlassFinish)
+			f.Post("/health/{profile_id}/followup/{id}/ai-summary", routes.GenerateAISummary)
+			f.Post("/security/invalidate-other", routes.InvalidateOtherSessions)
+			f.Post("/security/sessions/{id}/invalidate", routes.InvalidateSession)
+			f.Post("/webauthn/passkey/start", routes.PasskeyRegistrationStart)
+			f.Post("/webauthn/passkey/finish", routes.PasskeyRegistrationFinish)
+			f.Post("/security/passkeys/{id}/delete", routes.DeletePasskey)
+		}, csrf.Validate)
 	}, routes.RequireAuth, routes.RequireSensitiveAccessForHealth)
 
 	// Admin-only routes
 	f.Group("", func() {
 		f.Get("/todo", routes.Todo)
-		f.Get("/timeline", routes.RequireSensitiveAccess, routes.Timeline)
-		f.Get("/journal/{date}", routes.RequireSensitiveAccess, routes.ViewJournalEntry)
-		f.Post("/journal/{date}/location", routes.RequireSensitiveAccess, csrf.Validate, routes.AddJournalLocation)
-		f.Post("/journal/{date}/location/{location_id}/delete", routes.RequireSensitiveAccess, csrf.Validate, routes.DeleteJournalLocation)
-		f.Get("/ledger", routes.RequireSensitiveAccess, routes.LedgerIndex)
-		f.Get("/ledger/budgets/new", routes.RequireSensitiveAccess, routes.LedgerBudgetNewForm)
-		f.Get("/ledger/budgets/{id}/edit", routes.RequireSensitiveAccess, routes.LedgerBudgetEditForm)
-		f.Get("/ledger/accounts/new", routes.RequireSensitiveAccess, routes.LedgerAccountNewForm)
-		f.Get("/ledger/accounts/{id}", routes.RequireSensitiveAccess, routes.LedgerAccountView)
-		f.Get("/ledger/accounts/{id}/edit", routes.RequireSensitiveAccess, routes.LedgerAccountEditForm)
-		f.Get("/ledger/accounts/{id}/transactions/new", routes.RequireSensitiveAccess, routes.LedgerTransactionNewForm)
-		f.Get("/ledger/accounts/{id}/transactions/{tx_id}/edit", routes.RequireSensitiveAccess, routes.LedgerTransactionEditForm)
-		f.Get("/ledger/accounts/{id}/reconcile/new", routes.RequireSensitiveAccess, routes.LedgerReconcileNewForm)
-		f.Get("/ledger/accounts/{id}/reconciliations/{rec_id}/edit", routes.RequireSensitiveAccess, routes.LedgerReconciliationEditForm)
-		f.Post("/ledger/budgets/new", routes.RequireSensitiveAccess, csrf.Validate, routes.CreateLedgerBudget)
-		f.Post("/ledger/budgets/{id}/edit", routes.RequireSensitiveAccess, csrf.Validate, routes.UpdateLedgerBudget)
-		f.Post("/ledger/budgets/{id}/delete", routes.RequireSensitiveAccess, csrf.Validate, routes.DeleteLedgerBudget)
-		f.Post("/ledger/accounts/new", routes.RequireSensitiveAccess, csrf.Validate, routes.CreateLedgerAccount)
-		f.Post("/ledger/accounts/{id}/edit", routes.RequireSensitiveAccess, csrf.Validate, routes.UpdateLedgerAccount)
-		f.Post("/ledger/accounts/{id}/delete", routes.RequireSensitiveAccess, csrf.Validate, routes.DeleteLedgerAccount)
-		f.Post("/ledger/accounts/{id}/transactions", routes.RequireSensitiveAccess, csrf.Validate, routes.CreateLedgerTransaction)
-		f.Post("/ledger/accounts/{id}/transactions/{tx_id}/edit", routes.RequireSensitiveAccess, csrf.Validate, routes.UpdateLedgerTransaction)
-		f.Post("/ledger/accounts/{id}/transactions/{tx_id}/delete", routes.RequireSensitiveAccess, csrf.Validate, routes.DeleteLedgerTransaction)
-		f.Post("/ledger/accounts/{id}/reconcile", routes.RequireSensitiveAccess, csrf.Validate, routes.CreateLedgerReconciliation)
-		f.Post("/ledger/accounts/{id}/reconciliations/{rec_id}/edit", routes.RequireSensitiveAccess, csrf.Validate, routes.UpdateLedgerReconciliation)
-		f.Post("/ledger/accounts/{id}/reconciliations/{rec_id}/delete", routes.RequireSensitiveAccess, csrf.Validate, routes.DeleteLedgerReconciliation)
+
+		// Sensitive admin routes
+		f.Group("", func() {
+			f.Get("/timeline", routes.Timeline)
+			f.Get("/journal/{date}", routes.ViewJournalEntry)
+			f.Get("/ledger", routes.LedgerIndex)
+			f.Get("/ledger/history", routes.LedgerHistoryView)
+			f.Get("/ledger/budgets/new", routes.LedgerBudgetNewForm)
+			f.Get("/ledger/budgets/{id}/edit", routes.LedgerBudgetEditForm)
+			f.Get("/ledger/accounts/new", routes.LedgerAccountNewForm)
+			f.Get("/ledger/accounts/{id}", routes.LedgerAccountView)
+			f.Get("/ledger/accounts/{id}/edit", routes.LedgerAccountEditForm)
+			f.Get("/ledger/accounts/{id}/transactions/new", routes.LedgerTransactionNewForm)
+			f.Get("/ledger/accounts/{id}/transactions/{tx_id}/edit", routes.LedgerTransactionEditForm)
+			f.Get("/ledger/accounts/{id}/reconcile/new", routes.LedgerReconcileNewForm)
+			f.Get("/ledger/accounts/{id}/reconciliations/{rec_id}/edit", routes.LedgerReconciliationEditForm)
+			f.Get("/contact/new", routes.NewContactForm)
+			f.Get("/contact/{id}/edit", routes.EditContactForm)
+
+			// Bulk contact operations
+			f.Get("/bulk-contact-log", routes.BulkContactLogForm)
+
+			f.Group("", func() {
+				f.Post("/journal/{date}/location", routes.AddJournalLocation)
+				f.Post("/journal/{date}/location/{location_id}/delete", routes.DeleteJournalLocation)
+				f.Post("/ledger/budgets/new", routes.CreateLedgerBudget)
+				f.Post("/ledger/budgets/{id}/edit", routes.UpdateLedgerBudget)
+				f.Post("/ledger/budgets/{id}/delete", routes.DeleteLedgerBudget)
+				f.Post("/ledger/accounts/new", routes.CreateLedgerAccount)
+				f.Post("/ledger/accounts/{id}/edit", routes.UpdateLedgerAccount)
+				f.Post("/ledger/accounts/{id}/delete", routes.DeleteLedgerAccount)
+				f.Post("/ledger/accounts/{id}/transactions", routes.CreateLedgerTransaction)
+				f.Post("/ledger/accounts/{id}/transactions/{tx_id}/edit", routes.UpdateLedgerTransaction)
+				f.Post("/ledger/accounts/{id}/transactions/{tx_id}/delete", routes.DeleteLedgerTransaction)
+				f.Post("/ledger/accounts/{id}/reconcile", routes.CreateLedgerReconciliation)
+				f.Post("/ledger/accounts/{id}/reconciliations/{rec_id}/edit", routes.UpdateLedgerReconciliation)
+				f.Post("/ledger/accounts/{id}/reconciliations/{rec_id}/delete", routes.DeleteLedgerReconciliation)
+				f.Post("/contact/new", routes.CreateContact)
+				f.Post("/contact/{id}/edit", routes.UpdateContact)
+				f.Post("/contact/{id}/log", routes.AddLog)
+				f.Post("/contact/{id}/log/{log_id}/delete", routes.DeleteLog)
+				f.Post("/contact/{id}/note", routes.AddNote)
+				f.Post("/contact/{id}/note/{note_id}/delete", routes.DeleteNote)
+				f.Post("/contact/{id}/carddav/link", routes.LinkCardDAV)
+				f.Post("/contact/{id}/carddav/unlink", routes.UnlinkCardDAV)
+				f.Post("/contact/{id}/carddav/migrate", routes.MigrateToCardDAV)
+				f.Post("/contact/{id}/delete", routes.DeleteContact)
+				f.Post("/contact/{id}/tag", routes.AddTag)
+				f.Post("/contact/{id}/tag/{tag_id}/delete", routes.RemoveTag)
+				f.Post("/bulk-contact-log", routes.BulkAddLog)
+			}, csrf.Validate)
+		}, routes.RequireSensitiveAccess)
+
 		f.Get("/contacts", routes.Home)
 		f.Get("/overdue", routes.Overdue)
 		f.Get("/qsl", routes.QSL)
 		f.Get("/qsl/{id}", routes.ViewQSO)
-		f.Post("/qsl/import", csrf.Validate, routes.ImportADIF)
-		f.Get("/contact/new", routes.RequireSensitiveAccess, routes.NewContactForm)
-		f.Post("/contact/new", routes.RequireSensitiveAccess, csrf.Validate, routes.CreateContact)
 		f.Get("/contact/{id}", routes.ViewContact)
 		f.Get("/contact/{id}/chats", routes.ViewContactChats)
-		f.Post("/contact/{id}/chats", csrf.Validate, routes.AddContactChat)
-		f.Post("/contact/{id}/chat-summary", csrf.Validate, routes.GenerateContactChatSummary)
-		f.Get("/contact/{id}/edit", routes.RequireSensitiveAccess, routes.EditContactForm)
-		f.Post("/contact/{id}/edit", routes.RequireSensitiveAccess, csrf.Validate, routes.UpdateContact)
-		f.Post("/contact/{id}/email", csrf.Validate, routes.AddEmail)
-		f.Post("/contact/{id}/phone", csrf.Validate, routes.AddPhone)
-		f.Post("/contact/{id}/url", csrf.Validate, routes.AddURL)
-		f.Post("/contact/{id}/email/{email_id}/delete", csrf.Validate, routes.DeleteEmail)
-		f.Post("/contact/{id}/email/{email_id}/edit", csrf.Validate, routes.UpdateEmail)
-		f.Post("/contact/{id}/phone/{phone_id}/delete", csrf.Validate, routes.DeletePhone)
-		f.Post("/contact/{id}/phone/{phone_id}/edit", csrf.Validate, routes.UpdatePhone)
-		f.Post("/contact/{id}/url/{url_id}/delete", csrf.Validate, routes.DeleteURL)
-		f.Post("/contact/{id}/log", routes.RequireSensitiveAccess, csrf.Validate, routes.AddLog)
-		f.Post("/contact/{id}/log/{log_id}/delete", routes.RequireSensitiveAccess, csrf.Validate, routes.DeleteLog)
-		f.Post("/contact/{id}/note", routes.RequireSensitiveAccess, csrf.Validate, routes.AddNote)
-		f.Post("/contact/{id}/note/{note_id}/delete", routes.RequireSensitiveAccess, csrf.Validate, routes.DeleteNote)
-		f.Post("/contact/{id}/carddav/link", routes.RequireSensitiveAccess, csrf.Validate, routes.LinkCardDAV)
-		f.Post("/contact/{id}/carddav/unlink", routes.RequireSensitiveAccess, csrf.Validate, routes.UnlinkCardDAV)
-		f.Post("/contact/{id}/carddav/migrate", routes.RequireSensitiveAccess, csrf.Validate, routes.MigrateToCardDAV)
 		f.Get("/carddav/contacts", routes.ListCardDAVContacts)
 		f.Get("/carddav/picker", routes.CardDAVPicker)
-		f.Post("/contact/{id}/delete", routes.RequireSensitiveAccess, csrf.Validate, routes.DeleteContact)
-		f.Post("/contact/{id}/tag", routes.RequireSensitiveAccess, csrf.Validate, routes.AddTag)
-		f.Post("/contact/{id}/tag/{tag_id}/delete", routes.RequireSensitiveAccess, csrf.Validate, routes.RemoveTag)
-
-		// Bulk contact operations
-		f.Get("/bulk-contact-log", routes.RequireSensitiveAccess, routes.BulkContactLogForm)
-		f.Post("/bulk-contact-log", routes.RequireSensitiveAccess, csrf.Validate, routes.BulkAddLog)
 
 		// Service contacts routes
 		f.Get("/service-contacts", routes.ListServiceContacts)
@@ -493,59 +527,74 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Get("/tags", routes.ListTags)
 		f.Get("/tags/{id}", routes.ViewTagContacts)
 		f.Get("/tags/{id}/edit", routes.EditTagForm)
-		f.Post("/tags/{id}/edit", csrf.Validate, routes.UpdateTag)
-		f.Post("/tags/{id}/delete", csrf.Validate, routes.DeleteTag)
 
 		// Zettelkasten routes
 		f.Get("/zk", routes.ZettelkastenIndex)
 		f.Get("/zk/random", routes.ZettelkastenRandom)
 		f.Get("/zk/list", routes.ZettelkastenList)
 		f.Get("/zk/chat", routes.ZettelkastenChat)
-		f.Post("/zk/chat/links", csrf.Validate, routes.ZettelkastenChatLinks)
-		f.Post("/zk/chat/backlinks", csrf.Validate, routes.ZettelkastenChatBacklinks)
-		f.Post("/zk/chat/stream", csrf.Validate, routes.ZettelkastenChatStream)
 		f.Get("/zk/{id}", routes.ViewZKNote)
-		f.Post("/zk/{id}/comment", csrf.Validate, routes.AddZettelComment)
-		f.Post("/zk/{id}/comment/{comment_id}/delete", csrf.Validate, routes.DeleteZettelComment)
 		f.Get("/zettel-inbox", routes.ZettelCommentsInbox)
-		f.Post("/rebuild-cache", csrf.Validate, routes.RebuildCache)
 
 		// Inventory routes (admin)
 		f.Get("/inventory/new", routes.NewInventoryItemForm)
-		f.Post("/inventory/new", csrf.Validate, routes.CreateInventoryItem)
 		f.Get("/inventory/{id}/edit", routes.EditInventoryItemForm)
-		f.Post("/inventory/{id}/edit", csrf.Validate, routes.UpdateInventoryItem)
-		f.Post("/inventory/{id}/delete", csrf.Validate, routes.DeleteInventoryItem)
-		f.Post("/inventory/{id}/comment", csrf.Validate, routes.AddInventoryComment)
-		f.Post("/inventory/{id}/comment/{comment_id}/delete", csrf.Validate, routes.DeleteInventoryComment)
 
 		// Health tracking routes (admin)
 		f.Get("/health/new", routes.NewHealthProfileForm)
-		f.Post("/health/new", csrf.Validate, routes.CreateHealthProfile)
 		f.Get("/health/{id}/edit", routes.EditHealthProfileForm)
-		f.Post("/health/{id}/edit", csrf.Validate, routes.UpdateHealthProfile)
-		f.Post("/health/{id}/delete", csrf.Validate, routes.DeleteHealthProfile)
 		f.Get("/health/{profile_id}/followup/new", routes.NewFollowupForm)
-		f.Post("/health/{profile_id}/followup/new", csrf.Validate, routes.CreateFollowup)
 		f.Get("/health/{profile_id}/followup/{id}/edit", routes.EditFollowupForm)
-		f.Post("/health/{profile_id}/followup/{id}/edit", csrf.Validate, routes.UpdateFollowup)
-		f.Post("/health/{profile_id}/followup/{id}/delete", csrf.Validate, routes.DeleteFollowup)
-		f.Post("/health/{profile_id}/followup/{followup_id}/result", csrf.Validate, routes.AddLabResult)
 		f.Get("/health/{profile_id}/followup/{followup_id}/result/{id}/edit", routes.EditLabResultForm)
-		f.Post("/health/{profile_id}/followup/{followup_id}/result/{id}/edit", csrf.Validate, routes.UpdateLabResult)
-		f.Post("/health/{profile_id}/followup/{followup_id}/result/{id}/delete", csrf.Validate, routes.DeleteLabResult)
 
 		// WhatsApp routes
 		f.Get("/whatsapp", routes.WhatsAppPairing)
-		f.Post("/whatsapp/connect", csrf.Validate, routes.WhatsAppConnect)
-		f.Post("/whatsapp/disconnect", csrf.Validate, routes.WhatsAppDisconnect)
 		f.Get("/whatsapp/status", routes.WhatsAppStatusAPI)
 
-		// Security admin actions
-		f.Post("/security/invites", csrf.Validate, routes.CreateUserInvite)
-		f.Post("/security/invites/{id}/delete", csrf.Validate, routes.DeleteUserInvite)
-		f.Post("/security/users/{id}/delete", csrf.Validate, routes.DeleteUserAccount)
-		f.Post("/security/users/{id}/health-shares", csrf.Validate, routes.UpdateHealthProfileShares)
+		f.Group("", func() {
+			f.Post("/qsl/import", routes.ImportADIF)
+			f.Post("/qsl/import/qrz", routes.ImportQRZLogs)
+			f.Post("/qsl/requests/{id}/dismiss", routes.DismissQSLCardRequest)
+			f.Post("/contact/{id}/chats", routes.AddContactChat)
+			f.Post("/contact/{id}/chat-summary", routes.GenerateContactChatSummary)
+			f.Post("/contact/{id}/email", routes.AddEmail)
+			f.Post("/contact/{id}/phone", routes.AddPhone)
+			f.Post("/contact/{id}/url", routes.AddURL)
+			f.Post("/contact/{id}/email/{email_id}/delete", routes.DeleteEmail)
+			f.Post("/contact/{id}/email/{email_id}/edit", routes.UpdateEmail)
+			f.Post("/contact/{id}/phone/{phone_id}/delete", routes.DeletePhone)
+			f.Post("/contact/{id}/phone/{phone_id}/edit", routes.UpdatePhone)
+			f.Post("/contact/{id}/url/{url_id}/delete", routes.DeleteURL)
+			f.Post("/tags/{id}/edit", routes.UpdateTag)
+			f.Post("/tags/{id}/delete", routes.DeleteTag)
+			f.Post("/zk/chat/links", routes.ZettelkastenChatLinks)
+			f.Post("/zk/chat/backlinks", routes.ZettelkastenChatBacklinks)
+			f.Post("/zk/chat/stream", routes.ZettelkastenChatStream)
+			f.Post("/zk/{id}/comment", routes.AddZettelComment)
+			f.Post("/zk/{id}/comment/{comment_id}/delete", routes.DeleteZettelComment)
+			f.Post("/zk/{id}/comments/delete", routes.DeleteAllZettelComments)
+			f.Post("/rebuild-cache", routes.RebuildCache)
+			f.Post("/inventory/new", routes.CreateInventoryItem)
+			f.Post("/inventory/{id}/edit", routes.UpdateInventoryItem)
+			f.Post("/inventory/{id}/delete", routes.DeleteInventoryItem)
+			f.Post("/inventory/{id}/comment", routes.AddInventoryComment)
+			f.Post("/inventory/{id}/comment/{comment_id}/delete", routes.DeleteInventoryComment)
+			f.Post("/health/new", routes.CreateHealthProfile)
+			f.Post("/health/{id}/edit", routes.UpdateHealthProfile)
+			f.Post("/health/{id}/delete", routes.DeleteHealthProfile)
+			f.Post("/health/{profile_id}/followup/new", routes.CreateFollowup)
+			f.Post("/health/{profile_id}/followup/{id}/edit", routes.UpdateFollowup)
+			f.Post("/health/{profile_id}/followup/{id}/delete", routes.DeleteFollowup)
+			f.Post("/health/{profile_id}/followup/{followup_id}/result", routes.AddLabResult)
+			f.Post("/health/{profile_id}/followup/{followup_id}/result/{id}/edit", routes.UpdateLabResult)
+			f.Post("/health/{profile_id}/followup/{followup_id}/result/{id}/delete", routes.DeleteLabResult)
+			f.Post("/whatsapp/connect", routes.WhatsAppConnect)
+			f.Post("/whatsapp/disconnect", routes.WhatsAppDisconnect)
+			f.Post("/security/invites", routes.CreateUserInvite)
+			f.Post("/security/invites/{id}/delete", routes.DeleteUserInvite)
+			f.Post("/security/users/{id}/delete", routes.DeleteUserAccount)
+			f.Post("/security/users/{id}/health-shares", routes.UpdateHealthProfileShares)
+		}, csrf.Validate)
 	}, routes.RequireAuth, routes.RequireAdmin, routes.RequireSensitiveAccessForHealth)
 
 	port := cmd.String("port")

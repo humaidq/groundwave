@@ -29,20 +29,28 @@ type PostgresSessionConfig struct {
 
 // PostgresSessionStore implements session.Store interface for PostgreSQL
 type PostgresSessionStore struct {
-	config  PostgresSessionConfig
-	encoder session.Encoder
-	decoder session.Decoder
+	config   PostgresSessionConfig
+	encoder  session.Encoder
+	decoder  session.Decoder
+	idWriter session.IDWriter
 }
 
 // PostgresSessionIniter returns the Initer for the PostgreSQL session store
 func PostgresSessionIniter() session.Initer {
 	return func(ctx context.Context, args ...interface{}) (session.Store, error) {
 		var config PostgresSessionConfig
-		if len(args) > 0 {
-			var ok bool
-			config, ok = args[0].(PostgresSessionConfig)
-			if !ok {
-				return nil, errors.New("invalid PostgresSessionConfig")
+		var idWriter session.IDWriter
+
+		for _, arg := range args {
+			switch value := arg.(type) {
+			case PostgresSessionConfig:
+				config = value
+			case session.IDWriter:
+				idWriter = value
+			case nil:
+				continue
+			default:
+				return nil, errors.New("invalid PostgresSessionIniter argument")
 			}
 		}
 
@@ -59,11 +67,15 @@ func PostgresSessionIniter() session.Initer {
 		if config.Decoder == nil {
 			config.Decoder = session.GobDecoder
 		}
+		if idWriter == nil {
+			idWriter = func(http.ResponseWriter, *http.Request, string) {}
+		}
 
 		store := &PostgresSessionStore{
-			config:  config,
-			encoder: config.Encoder,
-			decoder: config.Decoder,
+			config:   config,
+			encoder:  config.Encoder,
+			decoder:  config.Decoder,
+			idWriter: idWriter,
 		}
 
 		return store, nil
@@ -93,25 +105,19 @@ func (s *PostgresSessionStore) Read(ctx context.Context, sid string) (session.Se
 		return nil, err
 	}
 
-	// Create custom IDWriter that writes to cookie
-	idWriter := func(w http.ResponseWriter, r *http.Request, newSid string) {
-		// This is handled by Flamego's session middleware
-		// We don't need to do anything here
-	}
-
 	// If session doesn't exist, create a new one
 	if errors.Is(err, pgx.ErrNoRows) || len(data) == 0 {
-		return session.NewBaseSession(sid, s.encoder, idWriter), nil
+		return session.NewBaseSession(sid, s.encoder, s.idWriter), nil
 	}
 
 	// Decode session data
 	sessionData, err := s.decoder(data)
 	if err != nil {
 		// If we can't decode, create a new session
-		return session.NewBaseSession(sid, s.encoder, idWriter), nil
+		return session.NewBaseSession(sid, s.encoder, s.idWriter), nil
 	}
 
-	return session.NewBaseSessionWithData(sid, s.encoder, idWriter, sessionData), nil
+	return session.NewBaseSessionWithData(sid, s.encoder, s.idWriter, sessionData), nil
 }
 
 // Destroy deletes session with given ID from the session store completely

@@ -108,6 +108,26 @@ func DeleteZettelComment(ctx context.Context, commentID uuid.UUID) error {
 	return nil
 }
 
+// DeleteAllZettelComments deletes all comments for a zettel ID
+func DeleteAllZettelComments(ctx context.Context, zettelID string) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	if err := utils.ValidateUUID(zettelID); err != nil {
+		return fmt.Errorf("invalid zettel ID: %w", err)
+	}
+
+	query := `DELETE FROM zettel_comments WHERE zettel_id = $1`
+
+	_, err := pool.Exec(ctx, query, zettelID)
+	if err != nil {
+		return fmt.Errorf("failed to delete zettel comments: %w", err)
+	}
+
+	return nil
+}
+
 // GetAllZettelComments fetches all comments grouped by zettel for the inbox view
 // Returns comments with zettel metadata (title, filename, orphaned status)
 func GetAllZettelComments(ctx context.Context) ([]ZettelCommentWithNote, error) {

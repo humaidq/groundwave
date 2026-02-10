@@ -1,0 +1,78 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+<div class="page-header">
+  <div class="page-header-stack">
+    <h2>Ledger History</h2>
+    <div class="page-header-meta">
+      <span class="muted-text">Each point shows end-of-month state. Through {{ .AsOfMonth }}</span>
+    </div>
+  </div>
+  <div class="page-header-actions">
+    <a href="/ledger" class="btn">Back</a>
+  </div>
+</div>
+
+<div class="ledger-history-controls">
+  <span class="muted-text">Range:</span>
+  <div class="ledger-history-range-list">
+    {{ range .HistoryRangeOptions }}
+      {{ if .IsSelected }}
+      <span class="ledger-history-range ledger-history-range-active">{{ .Label }}</span>
+      {{ else }}
+      <a href="{{ .URL }}" class="ledger-history-range">{{ .Label }}</a>
+      {{ end }}
+    {{ end }}
+  </div>
+</div>
+
+{{ if .Error }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Error</h5>
+  <p>{{ .Error }}</p>
+</div>
+{{ end }}
+
+<p class="muted-text">Debt account charts are hidden, but debt balances are still included in net worth.</p>
+
+{{ if .NetWorthChart }}
+<div class="detail-section">
+  <h3>Net Worth</h3>
+  <div class="chart-item">
+    {{ .NetWorthChart }}
+  </div>
+</div>
+{{ end }}
+
+{{ if .AccountChartCategories }}
+<div class="detail-section">
+  <h3>Account History</h3>
+
+  {{ range .AccountChartCategories }}
+  <div class="chart-category">
+    <h4 class="category-header">{{ .CategoryName }}</h4>
+    {{ range .Charts }}
+    <div class="chart-item">
+      {{ .HTML }}
+    </div>
+    {{ end }}
+  </div>
+  {{ end }}
+</div>
+{{ else if not .NetWorthChart }}
+<p class="empty-state">No account history to chart for {{ .SelectedHistoryRangeLabel }}.</p>
+{{ end }}
+
+{{ template "foot" . }}

@@ -5,6 +5,7 @@
 package routes
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -20,13 +21,21 @@ import (
 	"github.com/humaidq/groundwave/utils"
 )
 
-// QSL renders the QSL contacts list
-func QSL(c flamego.Context, t template.Template, data template.Data) {
-	// Fetch QSOs from database
-	qsos, err := db.ListQSOs(c.Request().Context())
+func populateQSLPageData(ctx context.Context, data template.Data) {
+	requests, err := db.ListOpenQSLCardRequests(ctx)
+	if err != nil {
+		logger.Error("Error fetching QSL card requests", "error", err)
+		data["QSLCardRequestsError"] = "Failed to load pending card requests"
+	} else {
+		data["QSLCardRequests"] = requests
+	}
+
+	qsos, err := db.ListQSOs(ctx)
 	if err != nil {
 		logger.Error("Error fetching QSOs", "error", err)
-		data["Error"] = "Failed to load QSOs"
+		if _, exists := data["Error"]; !exists {
+			data["Error"] = "Failed to load QSOs"
+		}
 	} else {
 		data["QSOs"] = qsos
 	}
@@ -35,7 +44,32 @@ func QSL(c flamego.Context, t template.Template, data template.Data) {
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "QSL", URL: "/qsl", IsCurrent: true},
 	}
+}
+
+// QSL renders the QSL contacts list
+func QSL(c flamego.Context, t template.Template, data template.Data) {
+	populateQSLPageData(c.Request().Context(), data)
 	t.HTML(http.StatusOK, "qsl")
+}
+
+// DismissQSLCardRequest hides a request card from the /qsl inbox.
+func DismissQSLCardRequest(c flamego.Context, s session.Session) {
+	requestID := strings.TrimSpace(c.Param("id"))
+	if requestID == "" {
+		SetErrorFlash(s, "Invalid QSL card request")
+		c.Redirect("/qsl", http.StatusSeeOther)
+		return
+	}
+
+	if err := db.DismissQSLCardRequest(c.Request().Context(), requestID); err != nil {
+		logger.Error("Error dismissing QSL card request", "request_id", requestID, "error", err)
+		SetErrorFlash(s, "Failed to dismiss QSL card request")
+		c.Redirect("/qsl", http.StatusSeeOther)
+		return
+	}
+
+	SetSuccessFlash(s, "QSL card request dismissed")
+	c.Redirect("/qsl", http.StatusSeeOther)
 }
 
 // ViewQSO renders the QSO detail page
@@ -70,13 +104,16 @@ func ViewQSO(c flamego.Context, t template.Template, data template.Data) {
 		mapFileName := fmt.Sprintf("%s-%s.png", safeCallsign, qsoID)
 		encodedCallsign := url.QueryEscape(qso.Call)
 		mapURL = fmt.Sprintf("/%s-%s.png", encodedCallsign, qsoID)
-
-		// Generate map in background if it doesn't exist
-		go generateMapIfNeeded(mapFileName, *qso.MyGridSquare, *qso.GridSquare)
+		generateMapIfNeeded(mapFileName, *qso.MyGridSquare, *qso.GridSquare)
 	}
 
 	data["QSO"] = qso
 	data["MapURL"] = mapURL
+	qsoTimestamp := qsoTimestampUTC(qso.QSO)
+	if !qsoTimestamp.IsZero() {
+		encodedCallsign := url.QueryEscape(qso.Call)
+		data["PublicQSLPath"] = fmt.Sprintf("/oqrs/%s-%d", encodedCallsign, qsoTimestamp.Unix())
+	}
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "QSL", URL: "/qsl", IsCurrent: false},
 		{Name: qso.Call, URL: "", IsCurrent: true},
@@ -113,11 +150,7 @@ func ImportADIF(c flamego.Context, s session.Session, t template.Template, data 
 	if err != nil {
 		logger.Error("Error parsing form", "error", err)
 		data["Error"] = "Failed to parse upload form"
-		data["IsQSL"] = true
-
-		// Fetch QSOs to show list again
-		qsos, _ := db.ListQSOs(c.Request().Context())
-		data["QSOs"] = qsos
+		populateQSLPageData(c.Request().Context(), data)
 		t.HTML(http.StatusBadRequest, "qsl")
 		return
 	}
@@ -127,11 +160,7 @@ func ImportADIF(c flamego.Context, s session.Session, t template.Template, data 
 	if err != nil {
 		logger.Error("Error getting file", "error", err)
 		data["Error"] = "No file uploaded or invalid file"
-		data["IsQSL"] = true
-
-		// Fetch QSOs to show list again
-		qsos, _ := db.ListQSOs(c.Request().Context())
-		data["QSOs"] = qsos
+		populateQSLPageData(c.Request().Context(), data)
 		t.HTML(http.StatusBadRequest, "qsl")
 		return
 	}
@@ -149,11 +178,7 @@ func ImportADIF(c flamego.Context, s session.Session, t template.Template, data 
 	if err != nil {
 		logger.Error("Error parsing ADIF file", "error", err)
 		data["Error"] = "Failed to parse ADIF file: " + err.Error()
-		data["IsQSL"] = true
-
-		// Fetch QSOs to show list again
-		qsos, _ := db.ListQSOs(c.Request().Context())
-		data["QSOs"] = qsos
+		populateQSLPageData(c.Request().Context(), data)
 		t.HTML(http.StatusBadRequest, "qsl")
 		return
 	}
@@ -165,11 +190,7 @@ func ImportADIF(c flamego.Context, s session.Session, t template.Template, data 
 	if err != nil {
 		logger.Error("Error importing QSOs", "error", err)
 		data["Error"] = "Failed to import QSOs: " + err.Error()
-		data["IsQSL"] = true
-
-		// Fetch QSOs to show list again
-		qsos, _ := db.ListQSOs(c.Request().Context())
-		data["QSOs"] = qsos
+		populateQSLPageData(c.Request().Context(), data)
 		t.HTML(http.StatusInternalServerError, "qsl")
 		return
 	}
@@ -183,5 +204,38 @@ func ImportADIF(c flamego.Context, s session.Session, t template.Template, data 
 	} else {
 		SetSuccessFlash(s, fmt.Sprintf("Successfully imported %d QSOs", processed))
 	}
+	c.Redirect("/qsl", http.StatusSeeOther)
+}
+
+// ImportQRZLogs fetches the latest QRZ logbook entries and imports them.
+func ImportQRZLogs(c flamego.Context, s session.Session) {
+	apiKeys := splitEnvList(os.Getenv("QRZ_API_KEY"))
+	if len(apiKeys) == 0 {
+		SetErrorFlash(s, "QRZ_API_KEY is not configured")
+		c.Redirect("/qsl", http.StatusSeeOther)
+		return
+	}
+
+	result, err := db.SyncQRZLogbooks(c.Request().Context(), apiKeys)
+	if err != nil {
+		logger.Error("Error syncing QRZ logs", "error", err)
+		SetErrorFlash(s, "Failed to sync QRZ logs")
+		c.Redirect("/qsl", http.StatusSeeOther)
+		return
+	}
+
+	if result.FailedLogbooks > 0 {
+		SetWarningFlash(s, fmt.Sprintf("Synced %d QSOs from %d QRZ logbook(s); %d failed", result.ProcessedQSOs, result.SyncedLogbooks, result.FailedLogbooks))
+		c.Redirect("/qsl", http.StatusSeeOther)
+		return
+	}
+
+	if result.ProcessedQSOs == 0 {
+		SetInfoFlash(s, fmt.Sprintf("QRZ sync complete. No new QSOs found across %d logbook(s)", result.SyncedLogbooks))
+		c.Redirect("/qsl", http.StatusSeeOther)
+		return
+	}
+
+	SetSuccessFlash(s, fmt.Sprintf("Synced %d QSOs from %d QRZ logbook(s)", result.ProcessedQSOs, result.SyncedLogbooks))
 	c.Redirect("/qsl", http.StatusSeeOther)
 }
