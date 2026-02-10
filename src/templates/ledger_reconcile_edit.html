@@ -1,0 +1,51 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+<div class="page-header">
+  <div class="page-header-stack">
+    <h2>Edit Reconciliation</h2>
+    <div class="page-header-meta">
+      <span class="ledger-account-name">{{ .Account.Name }}</span>
+    </div>
+  </div>
+  <div class="page-header-actions">
+    <a href="/ledger/accounts/{{ .Account.ID }}" class="btn">Back</a>
+    <form method="POST" action="/ledger/accounts/{{ .Account.ID }}/reconciliations/{{ .Reconciliation.ID }}/delete" class="inline-form" onsubmit="return confirm('Delete this reconciliation?');">
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+      <button type="submit" class="btn btn-danger">Delete</button>
+    </form>
+  </div>
+</div>
+
+<div class="ledger-form-card">
+  <form method="POST" action="/ledger/accounts/{{ .Account.ID }}/reconciliations/{{ .Reconciliation.ID }}/edit">
+    <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+    <div class="form-group">
+      <label>Balance (AED)</label>
+      <input type="number" step="0.01" name="balance" class="form-item" value="{{ printf "%.2f" .Reconciliation.Balance }}" required />
+    </div>
+    <div class="form-group">
+      <label>Reconciled at</label>
+      <input type="datetime-local" name="reconciled_at" class="form-item" value="{{ .Reconciliation.ReconciledAt.Format "2006-01-02T15:04" }}" required />
+    </div>
+    <div class="form-group">
+      <label>Note</label>
+      <textarea name="note" class="form-item" rows="2">{{ with .Reconciliation.Note }}{{ . }}{{ end }}</textarea>
+    </div>
+    <button type="submit" class="btn">Save</button>
+  </form>
+</div>
+
+{{ template "foot" . }}

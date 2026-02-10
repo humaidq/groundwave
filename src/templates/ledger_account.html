@@ -1,0 +1,112 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+<div class="page-header">
+  <div class="page-header-stack">
+    <h2>{{ .Account.Name }}</h2>
+    <div class="page-header-meta">
+      <span class="status-badge ledger-account-type">{{ .Account.AccountType }}</span>
+      <span class="ledger-account-balance {{ if eq .Account.AccountType "debt" }}ledger-negative{{ else if lt .Account.Balance 0.0 }}ledger-negative{{ else }}ledger-positive{{ end }}">{{ formatAmount .Account.Balance }} AED</span>
+      {{ if .Account.LastReconciledAt }}
+      <span class="muted-text">Reconciled {{ .Account.LastReconciledAt.Format "Jan 2, 2006" }}</span>
+      {{ end }}
+    </div>
+  </div>
+  <div class="page-header-actions">
+    <a href="/ledger/accounts/{{ .Account.ID }}/edit" class="btn">Edit</a>
+    <form method="POST" action="/ledger/accounts/{{ .Account.ID }}/delete" class="inline-form" onsubmit="return confirm('Delete this account and all related transactions and reconciliations?');">
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+      <button type="submit" class="btn btn-danger">Delete</button>
+    </form>
+    <a href="/ledger/accounts/{{ .Account.ID }}/transactions/new" class="btn">Add transaction</a>
+    <a href="/ledger/accounts/{{ .Account.ID }}/reconcile/new" class="btn">Reconcile</a>
+    <a href="/ledger" class="btn">Back</a>
+  </div>
+</div>
+
+{{ if .Error }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Error</h5>
+  <p>{{ .Error }}</p>
+</div>
+{{ end }}
+
+<div class="ledger-account-details">
+  {{ with .Account.BankName }}<div><strong>Bank:</strong> {{ . }}</div>{{ end }}
+  {{ with .Account.AccountNumber }}<div><strong>Account:</strong> {{ . }}</div>{{ end }}
+  {{ with .Account.IBAN }}<div><strong>IBAN:</strong> {{ . }}</div>{{ end }}
+  {{ with .Account.Description }}<div class="ledger-account-description">{{ . }}</div>{{ end }}
+</div>
+
+<h3 class="section-heading">Activity</h3>
+{{ if .AccountActivity }}
+<div class="list-card-list ledger-transaction-list">
+  {{ range .AccountActivity }}
+  <div class="list-card list-card-compact">
+    {{ if eq .Type "transaction" }}
+    <div class="ledger-transaction-row">
+      <div class="ledger-transaction-main">
+        <div class="ledger-transaction-merchant">{{ .Transaction.Merchant }}</div>
+        <div class="ledger-transaction-meta">
+          {{ if .Transaction.BudgetName }}
+          <span class="ledger-transaction-budget">{{ .Transaction.BudgetName }}</span>
+          {{ else }}
+          <span class="muted-text">Uncategorized</span>
+          {{ end }}
+          <span class="status-badge ledger-status-inline ledger-status-{{ .Transaction.Status }}">{{ .Transaction.Status }}</span>
+          <span class="muted-text">{{ .Transaction.OccurredAt.Format "Jan 2, 2006 15:04" }}</span>
+        </div>
+        {{ if .Transaction.Note }}
+        <div class="ledger-transaction-note">{{ .Transaction.Note }}</div>
+        {{ end }}
+      </div>
+      <div class="ledger-transaction-aside">
+        <div class="ledger-transaction-amount {{ if lt .Transaction.Amount 0.0 }}ledger-negative{{ else }}ledger-positive{{ end }}">{{ formatAmount .Transaction.Amount }} AED</div>
+        <div class="detail-card-actions ledger-transaction-actions">
+          <a href="/ledger/accounts/{{ $.Account.ID }}/transactions/{{ .Transaction.ID }}/edit" class="btn-edit" title="Edit">Edit</a>
+          <form method="POST" action="/ledger/accounts/{{ $.Account.ID }}/transactions/{{ .Transaction.ID }}/delete" class="item-delete-form" onsubmit="return confirm('Delete this transaction?');">
+            <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
+            <button type="submit" class="btn-delete" title="Delete">×</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {{ else }}
+    <div class="ledger-reconcile-row">
+      <div>
+        <div class="ledger-transaction-meta">
+          <span class="ledger-activity-label">Reconciliation</span>
+          <span class="muted-text">{{ .Reconciliation.ReconciledAt.Format "Jan 2, 2006 15:04" }}</span>
+        </div>
+        <div class="ledger-reconcile-balance {{ if lt .Reconciliation.Balance 0.0 }}ledger-negative{{ else }}ledger-positive{{ end }}">{{ formatAmount .Reconciliation.Balance }} AED</div>
+        {{ if .Reconciliation.Note }}<div class="ledger-reconcile-note">{{ .Reconciliation.Note }}</div>{{ end }}
+      </div>
+      <div class="detail-card-actions ledger-reconcile-actions">
+        <a href="/ledger/accounts/{{ $.Account.ID }}/reconciliations/{{ .Reconciliation.ID }}/edit" class="btn-edit" title="Edit">Edit</a>
+        <form method="POST" action="/ledger/accounts/{{ $.Account.ID }}/reconciliations/{{ .Reconciliation.ID }}/delete" class="item-delete-form" onsubmit="return confirm('Delete this reconciliation?');">
+          <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
+          <button type="submit" class="btn-delete" title="Delete">×</button>
+        </form>
+      </div>
+    </div>
+    {{ end }}
+  </div>
+  {{ end }}
+</div>
+{{ else }}
+<p class="empty-state">No activity yet.</p>
+{{ end }}
+
+{{ template "foot" . }}

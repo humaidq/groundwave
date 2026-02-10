@@ -485,6 +485,11 @@ section {
   padding: 1rem;
 }
 
+.list-card-compact {
+  padding: 0.55rem 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
 .list-card-content {
   display: flex;
   align-items: center;
@@ -856,6 +861,281 @@ code:not(pre code) {
 
 .contact-social-link i {
   font-size: 1rem;
+}
+
+/* Ledger */
+.ledger-networth {
+  font-weight: 600;
+}
+
+.ledger-budget-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.ledger-budget-card {
+  border: 1px solid #ddd;
+  background-color: #f9f9f9;
+  padding: 0.9rem;
+}
+
+.ledger-budget-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.ledger-budget-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.ledger-budget-name {
+  font-weight: 600;
+}
+
+.ledger-budget-meta {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.ledger-budget-remaining {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.ledger-budget-bar {
+  height: 6px;
+  background-color: #e6e6e6;
+  border: 1px solid #d8d8d8;
+  margin-top: 0.6rem;
+}
+
+.ledger-budget-bar-fill {
+  height: 100%;
+  background-color: #134dae;
+}
+
+.ledger-accounts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.ledger-accounts-group h4 {
+  margin-top: 0;
+}
+
+.ledger-account-card {
+  border: 1px solid #ddd;
+  background-color: #f9f9f9;
+  padding: 0.9rem;
+  margin-bottom: 0.75rem;
+}
+
+.ledger-account-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ledger-account-name {
+  font-weight: 600;
+  text-decoration: none;
+  color: inherit;
+}
+
+.ledger-account-name:hover {
+  text-decoration: underline;
+}
+
+.ledger-account-meta {
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 0.2rem;
+}
+
+.ledger-account-balance {
+  font-weight: 600;
+}
+
+.ledger-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.ledger-form-card {
+  border: 1px solid #ddd;
+  background-color: #f9f9f9;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.ledger-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ledger-account-details {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.ledger-account-description {
+  color: #666;
+}
+
+.ledger-transaction-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.ledger-transaction-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ledger-transaction-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+.ledger-transaction-merchant {
+  font-weight: 600;
+}
+
+.ledger-transaction-meta {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 0.15rem;
+}
+
+.ledger-transaction-budget {
+  border: 1px solid #d0d7de;
+  background-color: #eef2f8;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.8rem;
+}
+
+.ledger-transaction-note {
+  margin-top: 0.2rem;
+  color: #555;
+}
+
+.ledger-transaction-amount {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ledger-status {
+  text-transform: capitalize;
+  margin-top: 0.35rem;
+}
+
+.ledger-status-inline {
+  text-transform: capitalize;
+  font-size: 0.75rem;
+  padding: 0.1rem 0.35rem;
+}
+
+.ledger-status-pending {
+  background-color: #fff3cd;
+  border-color: #ffc107;
+  color: #856404;
+}
+
+.ledger-status-cleared {
+  background-color: #d4edda;
+  border-color: #28a745;
+  color: #1e7e34;
+}
+
+.ledger-status-refunded {
+  background-color: #e2e3ff;
+  border-color: #6f42c1;
+  color: #4b2d8c;
+}
+
+.ledger-status-rejected {
+  background-color: #f8d7da;
+  border-color: #dc3545;
+  color: #b02a37;
+}
+
+.ledger-account-type {
+  text-transform: capitalize;
+}
+
+.ledger-negative {
+  color: #dc3545;
+}
+
+.ledger-positive {
+  color: #1e7e34;
+}
+
+.ledger-reconcile-card {
+  padding: 0.9rem;
+}
+
+.ledger-reconcile-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ledger-reconcile-actions {
+  margin-left: auto;
+}
+
+.ledger-reconcile-balance {
+  font-weight: 600;
+}
+
+.ledger-activity-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid #d0d7de;
+  background-color: #f0f0f0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #555;
+}
+
+.ledger-reconcile-meta {
+  color: #666;
+  font-size: 0.85rem;
+  margin-top: 0.2rem;
+}
+
+.ledger-reconcile-note {
+  margin-top: 0.4rem;
+  color: #555;
 }
 
 /* Contact Detail View */
@@ -2708,7 +2988,6 @@ pre.file-text-block {
   padding: 3rem 2rem;
   background-color: #f9f9f9;
   border-radius: 0;
-  margin: 2rem 0;
 }
 
 .empty-state p {

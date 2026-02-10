@@ -1,0 +1,62 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+<div class="page-header">
+  <h2>New Account</h2>
+  <div class="page-header-actions">
+    <a href="/ledger" class="btn">Back</a>
+  </div>
+</div>
+
+<div class="ledger-form-card">
+  <form method="POST" action="/ledger/accounts/new">
+    <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+    <div class="form-group">
+      <label>Name</label>
+      <input type="text" name="name" class="form-item" placeholder="Main Checking" required />
+    </div>
+    <div class="form-group">
+      <label>Type</label>
+      <select name="account_type" class="form-item" required>
+        {{ range .AccountTypeOptions }}
+        <option value="{{ .Value }}">{{ .Label }}</option>
+        {{ end }}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Opening balance (AED)</label>
+      <input type="number" step="0.01" name="opening_balance" class="form-item" placeholder="0.00" />
+    </div>
+    <div class="form-group">
+      <label>IBAN</label>
+      <input type="text" name="iban" class="form-item" />
+    </div>
+    <div class="form-group">
+      <label>Bank name</label>
+      <input type="text" name="bank_name" class="form-item" />
+    </div>
+    <div class="form-group">
+      <label>Account number</label>
+      <input type="text" name="account_number" class="form-item" />
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <textarea name="description" class="form-item" rows="2"></textarea>
+    </div>
+    <button type="submit" class="btn">Create account</button>
+  </form>
+</div>
+
+{{ template "foot" . }}

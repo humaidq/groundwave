@@ -1,0 +1,148 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+<div class="page-header">
+  <div class="page-header-stack">
+    <h2>Ledger</h2>
+    <div class="page-header-meta">
+      <span class="ledger-networth">Net worth: {{ formatAmount .NetWorth }} AED</span>
+      <span class="muted-text">Month: {{ .PeriodLabel }}</span>
+    </div>
+  </div>
+  <div class="page-header-actions">
+    <a href="/ledger/budgets/new" class="btn">+ Budget</a>
+    <a href="/ledger/accounts/new" class="btn">+ Account</a>
+  </div>
+</div>
+
+{{ if .Error }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Error</h5>
+  <p>{{ .Error }}</p>
+</div>
+{{ end }}
+
+<h3 class="section-heading">Budgets</h3>
+{{ if .Budgets }}
+<div class="ledger-budget-list">
+  {{ range .Budgets }}
+  <div class="ledger-budget-card">
+    <div class="ledger-budget-row">
+      <div class="ledger-budget-title">
+        <div class="ledger-budget-name">{{ .CategoryName }}</div>
+        <div class="ledger-budget-meta">{{ formatAmount .Used }} / {{ formatAmount .Amount }} {{ .Currency }}</div>
+      </div>
+      {{ if .IsOver }}
+      <div class="ledger-budget-remaining ledger-negative">Over {{ formatAmount .RemainingAbs }} {{ .Currency }}</div>
+      {{ else }}
+      <div class="ledger-budget-remaining ledger-positive">Remaining {{ formatAmount .RemainingAbs }} {{ .Currency }}</div>
+      {{ end }}
+      <div class="detail-card-actions">
+        <a href="/ledger/budgets/{{ .ID }}/edit" class="btn-edit" title="Edit">Edit</a>
+        <form method="POST" action="/ledger/budgets/{{ .ID }}/delete" class="item-delete-form" onsubmit="return confirm('Delete this budget? Transactions will be left uncategorized.');">
+          <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
+          <button type="submit" class="btn-delete" title="Delete">×</button>
+        </form>
+      </div>
+    </div>
+    <div class="ledger-budget-bar">
+      <div class="ledger-budget-bar-fill" style="width: {{ printf "%.1f" .Progress }}%;"></div>
+    </div>
+  </div>
+  {{ end }}
+</div>
+{{ else }}
+<p class="empty-state">No budgets for {{ .PeriodLabel }} yet.</p>
+{{ end }}
+
+<h3 class="section-heading">Accounts</h3>
+<div class="ledger-accounts-grid">
+  <div class="ledger-accounts-group">
+    <h4>Regular</h4>
+    {{ if .AccountsRegular }}
+      {{ range .AccountsRegular }}
+      <div class="ledger-account-card">
+        <div class="ledger-account-row">
+          <div>
+            <a class="ledger-account-name" href="/ledger/accounts/{{ .ID }}">{{ .Name }}</a>
+            {{ if .LastReconciledAt }}
+            <div class="ledger-account-meta">Reconciled {{ .LastReconciledAt.Format "Jan 2, 2006" }}</div>
+            {{ end }}
+          </div>
+          <div class="ledger-account-balance {{ if lt .Balance 0.0 }}ledger-negative{{ else }}ledger-positive{{ end }}">{{ formatAmount .Balance }} AED</div>
+        </div>
+        <div class="ledger-account-actions">
+          <a href="/ledger/accounts/{{ .ID }}/transactions/new" class="btn">Add transaction</a>
+          <a href="/ledger/accounts/{{ .ID }}/reconcile/new" class="btn">Reconcile</a>
+        </div>
+      </div>
+      {{ end }}
+    {{ else }}
+      <p class="empty-state">No regular accounts yet.</p>
+    {{ end }}
+  </div>
+
+  <div class="ledger-accounts-group">
+    <h4>Debt</h4>
+    {{ if .AccountsDebt }}
+      {{ range .AccountsDebt }}
+      <div class="ledger-account-card">
+        <div class="ledger-account-row">
+          <div>
+            <a class="ledger-account-name" href="/ledger/accounts/{{ .ID }}">{{ .Name }}</a>
+            {{ if .LastReconciledAt }}
+            <div class="ledger-account-meta">Reconciled {{ .LastReconciledAt.Format "Jan 2, 2006" }}</div>
+            {{ end }}
+          </div>
+          <div class="ledger-account-balance ledger-negative">{{ formatAmount .Balance }} AED</div>
+        </div>
+        <div class="ledger-account-actions">
+          <a href="/ledger/accounts/{{ .ID }}/transactions/new" class="btn">Add transaction</a>
+          <a href="/ledger/accounts/{{ .ID }}/reconcile/new" class="btn">Reconcile</a>
+        </div>
+      </div>
+      {{ end }}
+    {{ else }}
+      <p class="empty-state">No debt accounts yet.</p>
+    {{ end }}
+  </div>
+
+  <div class="ledger-accounts-group">
+    <h4>Tracking</h4>
+    {{ if .AccountsTracking }}
+      {{ range .AccountsTracking }}
+      <div class="ledger-account-card">
+        <div class="ledger-account-row">
+          <div>
+            <a class="ledger-account-name" href="/ledger/accounts/{{ .ID }}">{{ .Name }}</a>
+            {{ if .LastReconciledAt }}
+            <div class="ledger-account-meta">Reconciled {{ .LastReconciledAt.Format "Jan 2, 2006" }}</div>
+            {{ end }}
+          </div>
+          <div class="ledger-account-balance {{ if lt .Balance 0.0 }}ledger-negative{{ else }}ledger-positive{{ end }}">{{ formatAmount .Balance }} AED</div>
+        </div>
+        <div class="ledger-account-actions">
+          <a href="/ledger/accounts/{{ .ID }}/transactions/new" class="btn">Add transaction</a>
+          <a href="/ledger/accounts/{{ .ID }}/reconcile/new" class="btn">Reconcile</a>
+        </div>
+      </div>
+      {{ end }}
+    {{ else }}
+      <p class="empty-state">No tracking accounts yet.</p>
+    {{ end }}
+  </div>
+</div>
+
+{{ template "foot" . }}

@@ -687,6 +687,74 @@ type InventoryComment struct {
 	UpdatedAt time.Time `db:"updated_at"`
 }
 
+// LedgerAccountType represents the type of financial account.
+type LedgerAccountType string
+
+const (
+	LedgerAccountRegular  LedgerAccountType = "regular"
+	LedgerAccountDebt     LedgerAccountType = "debt"
+	LedgerAccountTracking LedgerAccountType = "tracking"
+)
+
+// LedgerTransactionStatus represents the status of a ledger transaction.
+type LedgerTransactionStatus string
+
+const (
+	LedgerTransactionPending  LedgerTransactionStatus = "pending"
+	LedgerTransactionCleared  LedgerTransactionStatus = "cleared"
+	LedgerTransactionRefunded LedgerTransactionStatus = "refunded"
+	LedgerTransactionRejected LedgerTransactionStatus = "rejected"
+)
+
+// LedgerBudget represents a monthly budget category.
+type LedgerBudget struct {
+	ID           uuid.UUID `db:"id"`
+	CategoryName string    `db:"category_name"`
+	Amount       float64   `db:"amount"`
+	Currency     string    `db:"currency"`
+	PeriodStart  time.Time `db:"period_start"`
+	CreatedAt    time.Time `db:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at"`
+}
+
+// LedgerAccount represents a ledger account.
+type LedgerAccount struct {
+	ID             uuid.UUID         `db:"id"`
+	Name           string            `db:"name"`
+	AccountType    LedgerAccountType `db:"account_type"`
+	OpeningBalance float64           `db:"opening_balance"`
+	IBAN           *string           `db:"iban"`
+	BankName       *string           `db:"bank_name"`
+	AccountNumber  *string           `db:"account_number"`
+	Description    *string           `db:"description"`
+	CreatedAt      time.Time         `db:"created_at"`
+	UpdatedAt      time.Time         `db:"updated_at"`
+}
+
+// LedgerTransaction represents a transaction in an account.
+type LedgerTransaction struct {
+	ID         uuid.UUID               `db:"id"`
+	AccountID  uuid.UUID               `db:"account_id"`
+	BudgetID   *uuid.UUID              `db:"budget_id"`
+	Amount     float64                 `db:"amount"`
+	Merchant   string                  `db:"merchant"`
+	Status     LedgerTransactionStatus `db:"status"`
+	OccurredAt time.Time               `db:"occurred_at"`
+	Note       *string                 `db:"note"`
+	CreatedAt  time.Time               `db:"created_at"`
+	UpdatedAt  time.Time               `db:"updated_at"`
+}
+
+// LedgerReconciliation represents a reconciled balance snapshot.
+type LedgerReconciliation struct {
+	ID           uuid.UUID `db:"id"`
+	AccountID    uuid.UUID `db:"account_id"`
+	Balance      float64   `db:"balance"`
+	ReconciledAt time.Time `db:"reconciled_at"`
+	Note         *string   `db:"note"`
+	CreatedAt    time.Time `db:"created_at"`
+}
+
 // LabTestCategory represents the category of a lab test
 type LabTestCategory string
 

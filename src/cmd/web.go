@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"math"
 	"net/http"
 	"os"
 	"strings"
@@ -290,6 +291,24 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 				return "Link"
 			}
 		},
+		"formatAmount": func(value float64) string {
+			sign := ""
+			if value < 0 {
+				sign = "-"
+				value = math.Abs(value)
+			}
+			formatted := fmt.Sprintf("%.2f", value)
+			parts := strings.SplitN(formatted, ".", 2)
+			integer := parts[0]
+			fraction := "00"
+			if len(parts) == 2 {
+				fraction = parts[1]
+			}
+			for i := len(integer) - 3; i > 0; i -= 3 {
+				integer = integer[:i] + "," + integer[i:]
+			}
+			return sign + integer + "." + fraction
+		},
 	}
 	// Configure PostgreSQL session store with 30-day expiry
 	f.Use(session.Sessioner(session.Options{
@@ -407,6 +426,28 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Get("/journal/{date}", routes.RequireSensitiveAccess, routes.ViewJournalEntry)
 		f.Post("/journal/{date}/location", routes.RequireSensitiveAccess, csrf.Validate, routes.AddJournalLocation)
 		f.Post("/journal/{date}/location/{location_id}/delete", routes.RequireSensitiveAccess, csrf.Validate, routes.DeleteJournalLocation)
+		f.Get("/ledger", routes.RequireSensitiveAccess, routes.LedgerIndex)
+		f.Get("/ledger/budgets/new", routes.RequireSensitiveAccess, routes.LedgerBudgetNewForm)
+		f.Get("/ledger/budgets/{id}/edit", routes.RequireSensitiveAccess, routes.LedgerBudgetEditForm)
+		f.Get("/ledger/accounts/new", routes.RequireSensitiveAccess, routes.LedgerAccountNewForm)
+		f.Get("/ledger/accounts/{id}", routes.RequireSensitiveAccess, routes.LedgerAccountView)
+		f.Get("/ledger/accounts/{id}/edit", routes.RequireSensitiveAccess, routes.LedgerAccountEditForm)
+		f.Get("/ledger/accounts/{id}/transactions/new", routes.RequireSensitiveAccess, routes.LedgerTransactionNewForm)
+		f.Get("/ledger/accounts/{id}/transactions/{tx_id}/edit", routes.RequireSensitiveAccess, routes.LedgerTransactionEditForm)
+		f.Get("/ledger/accounts/{id}/reconcile/new", routes.RequireSensitiveAccess, routes.LedgerReconcileNewForm)
+		f.Get("/ledger/accounts/{id}/reconciliations/{rec_id}/edit", routes.RequireSensitiveAccess, routes.LedgerReconciliationEditForm)
+		f.Post("/ledger/budgets/new", routes.RequireSensitiveAccess, csrf.Validate, routes.CreateLedgerBudget)
+		f.Post("/ledger/budgets/{id}/edit", routes.RequireSensitiveAccess, csrf.Validate, routes.UpdateLedgerBudget)
+		f.Post("/ledger/budgets/{id}/delete", routes.RequireSensitiveAccess, csrf.Validate, routes.DeleteLedgerBudget)
+		f.Post("/ledger/accounts/new", routes.RequireSensitiveAccess, csrf.Validate, routes.CreateLedgerAccount)
+		f.Post("/ledger/accounts/{id}/edit", routes.RequireSensitiveAccess, csrf.Validate, routes.UpdateLedgerAccount)
+		f.Post("/ledger/accounts/{id}/delete", routes.RequireSensitiveAccess, csrf.Validate, routes.DeleteLedgerAccount)
+		f.Post("/ledger/accounts/{id}/transactions", routes.RequireSensitiveAccess, csrf.Validate, routes.CreateLedgerTransaction)
+		f.Post("/ledger/accounts/{id}/transactions/{tx_id}/edit", routes.RequireSensitiveAccess, csrf.Validate, routes.UpdateLedgerTransaction)
+		f.Post("/ledger/accounts/{id}/transactions/{tx_id}/delete", routes.RequireSensitiveAccess, csrf.Validate, routes.DeleteLedgerTransaction)
+		f.Post("/ledger/accounts/{id}/reconcile", routes.RequireSensitiveAccess, csrf.Validate, routes.CreateLedgerReconciliation)
+		f.Post("/ledger/accounts/{id}/reconciliations/{rec_id}/edit", routes.RequireSensitiveAccess, csrf.Validate, routes.UpdateLedgerReconciliation)
+		f.Post("/ledger/accounts/{id}/reconciliations/{rec_id}/delete", routes.RequireSensitiveAccess, csrf.Validate, routes.DeleteLedgerReconciliation)
 		f.Get("/contacts", routes.Home)
 		f.Get("/overdue", routes.Overdue)
 		f.Get("/qsl", routes.QSL)

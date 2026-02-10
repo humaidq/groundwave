@@ -34,8 +34,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	rand.Seed(time.Now().UnixNano())
-	testSchemaName = fmt.Sprintf("test_%d_%d", time.Now().UnixNano(), rand.Intn(100000))
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	testSchemaName = fmt.Sprintf("test_%d_%d", time.Now().UnixNano(), rng.Intn(100000))
 
 	if err := createTestSchema(ctx, baseDatabaseURL, testSchemaName); err != nil {
 		fmt.Fprintln(os.Stderr, "failed to create test schema:", err)

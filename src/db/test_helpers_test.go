@@ -17,10 +17,6 @@ func stringPtr(value string) *string {
 	return &value
 }
 
-func timePtr(value time.Time) *time.Time {
-	return &value
-}
-
 func mustCreateUser(t *testing.T, displayName string) *User {
 	t.Helper()
 	user, err := CreateUser(testContext(), CreateUserInput{DisplayName: displayName, IsAdmin: false})

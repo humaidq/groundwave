@@ -1,0 +1,66 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+<div class="page-header">
+  <h2>Edit Account</h2>
+  <div class="page-header-actions">
+    <a href="/ledger/accounts/{{ .Account.ID }}" class="btn">Back</a>
+    <form method="POST" action="/ledger/accounts/{{ .Account.ID }}/delete" class="inline-form" onsubmit="return confirm('Delete this account and all related transactions and reconciliations?');">
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+      <button type="submit" class="btn btn-danger">Delete</button>
+    </form>
+  </div>
+</div>
+
+<div class="ledger-form-card">
+  <form method="POST" action="/ledger/accounts/{{ .Account.ID }}/edit">
+    <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+    <div class="form-group">
+      <label>Name</label>
+      <input type="text" name="name" class="form-item" value="{{ .Account.Name }}" required />
+    </div>
+    <div class="form-group">
+      <label>Type</label>
+      <select name="account_type" class="form-item" required>
+        {{ range .AccountTypeOptions }}
+        <option value="{{ .Value }}"{{ if eq .Value (printf "%s" $.Account.AccountType) }} selected{{ end }}>{{ .Label }}</option>
+        {{ end }}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Opening balance (AED)</label>
+      <input type="number" step="0.01" name="opening_balance" class="form-item" value="{{ printf "%.2f" .Account.OpeningBalance }}" />
+    </div>
+    <div class="form-group">
+      <label>IBAN</label>
+      <input type="text" name="iban" class="form-item" value="{{ with .Account.IBAN }}{{ . }}{{ end }}" />
+    </div>
+    <div class="form-group">
+      <label>Bank name</label>
+      <input type="text" name="bank_name" class="form-item" value="{{ with .Account.BankName }}{{ . }}{{ end }}" />
+    </div>
+    <div class="form-group">
+      <label>Account number</label>
+      <input type="text" name="account_number" class="form-item" value="{{ with .Account.AccountNumber }}{{ . }}{{ end }}" />
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <textarea name="description" class="form-item" rows="2">{{ with .Account.Description }}{{ . }}{{ end }}</textarea>
+    </div>
+    <button type="submit" class="btn">Save</button>
+  </form>
+</div>
+
+{{ template "foot" . }}

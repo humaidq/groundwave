@@ -175,11 +175,7 @@ func isExternalLink(href string) bool {
 		}
 	}
 
-	if isGroundwaveBaseURLLink(href) {
-		return false
-	}
-
-	return true
+	return !isGroundwaveBaseURLLink(href)
 }
 
 func isGroundwaveBaseURLLink(href string) bool {

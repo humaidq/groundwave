@@ -1,0 +1,48 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+<div class="page-header">
+  <div class="page-header-stack">
+    <h2>Edit Budget</h2>
+    <div class="page-header-meta">
+      <span class="muted-text">Month: {{ .PeriodLabel }}</span>
+    </div>
+  </div>
+  <div class="page-header-actions">
+    <a href="/ledger" class="btn">Back</a>
+    <form method="POST" action="/ledger/budgets/{{ .Budget.ID }}/delete" class="inline-form" onsubmit="return confirm('Delete this budget? Transactions will be left uncategorized.');">
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+      <button type="submit" class="btn btn-danger">Delete</button>
+    </form>
+  </div>
+</div>
+
+<div class="ledger-form-card">
+  <form method="POST" action="/ledger/budgets/{{ .Budget.ID }}/edit">
+    <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+    <input type="hidden" name="currency" value="{{ .Budget.Currency }}" />
+    <div class="form-group">
+      <label>Category</label>
+      <input type="text" name="category_name" class="form-item" value="{{ .Budget.CategoryName }}" required />
+    </div>
+    <div class="form-group">
+      <label>Amount (AED)</label>
+      <input type="number" step="0.01" name="amount" class="form-item" value="{{ printf "%.2f" .Budget.Amount }}" required />
+    </div>
+    <button type="submit" class="btn">Save</button>
+  </form>
+</div>
+
+{{ template "foot" . }}
