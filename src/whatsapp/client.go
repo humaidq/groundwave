@@ -331,6 +331,10 @@ func resolveOtherPartyJID(info types.MessageInfo) types.JID {
 			if destinationJID != "" {
 				parsedDestinationJID, err := types.ParseJID(destinationJID)
 				if err == nil && !parsedDestinationJID.IsEmpty() {
+					if recipient := preferPhoneNumberJID(parsedDestinationJID, preferPhoneNumberJID(info.Chat, info.RecipientAlt)); !recipient.IsEmpty() {
+						return recipient
+					}
+
 					return parsedDestinationJID.ToNonAD()
 				}
 			}
@@ -367,11 +371,19 @@ func preferPhoneNumberJID(primary, alternate types.JID) types.JID {
 		return primary
 	}
 
-	if primary.Server == types.HiddenUserServer && alternate.Server == types.DefaultUserServer {
+	if isLIDServer(primary.Server) && isPhoneNumberServer(alternate.Server) {
 		return alternate
 	}
 
 	return primary
+}
+
+func isPhoneNumberServer(server string) bool {
+	return server == types.DefaultUserServer || server == types.LegacyUserServer
+}
+
+func isLIDServer(server string) bool {
+	return server == types.HiddenUserServer || server == types.HostedLIDServer
 }
 
 func isOutgoingMessage(info types.MessageInfo) bool {

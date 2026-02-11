@@ -29,6 +29,30 @@ func TestResolveOtherPartyJID(t *testing.T) {
 			want: "22222222222@s.whatsapp.net",
 		},
 		{
+			name: "outgoing lid destination prefers phone-addressed chat",
+			info: types.MessageInfo{
+				MessageSource: types.MessageSource{
+					IsFromMe:     true,
+					Chat:         types.NewJID("11111111111", types.DefaultUserServer),
+					RecipientAlt: types.NewJID("99999999999", types.HiddenUserServer),
+				},
+				DeviceSentMeta: &types.DeviceSentMeta{DestinationJID: "88888888888@lid"},
+			},
+			want: "11111111111@s.whatsapp.net",
+		},
+		{
+			name: "outgoing lid destination prefers phone recipient alt",
+			info: types.MessageInfo{
+				MessageSource: types.MessageSource{
+					IsFromMe:     true,
+					Chat:         types.NewJID("11111111111", types.HiddenUserServer),
+					RecipientAlt: types.NewJID("33333333333", types.DefaultUserServer),
+				},
+				DeviceSentMeta: &types.DeviceSentMeta{DestinationJID: "88888888888@lid"},
+			},
+			want: "33333333333@s.whatsapp.net",
+		},
+		{
 			name: "outgoing invalid destination falls back to phone-addressed chat",
 			info: types.MessageInfo{
 				MessageSource: types.MessageSource{
@@ -96,6 +120,18 @@ func TestPreferPhoneNumberJID(t *testing.T) {
 		{
 			name:      "prefer hidden fallback to phone",
 			primary:   types.NewJID("11111111111", types.HiddenUserServer),
+			alternate: types.NewJID("22222222222", types.DefaultUserServer),
+			want:      "22222222222@s.whatsapp.net",
+		},
+		{
+			name:      "prefer hidden fallback to legacy phone",
+			primary:   types.NewJID("11111111111", types.HiddenUserServer),
+			alternate: types.NewJID("22222222222", types.LegacyUserServer),
+			want:      "22222222222@c.us",
+		},
+		{
+			name:      "prefer hosted lid fallback to phone",
+			primary:   types.NewJID("11111111111", types.HostedLIDServer),
 			alternate: types.NewJID("22222222222", types.DefaultUserServer),
 			want:      "22222222222@s.whatsapp.net",
 		},
