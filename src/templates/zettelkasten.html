@@ -87,6 +87,16 @@
           <div class="log-header">
             <span class="log-type log-type-note">comment</span>
             <span class="log-date">{{ .CreatedAt.Format "Jan 2, 2006 3:04 PM" }}</span>
+            <details class="inline-edit-details">
+              <summary class="btn-edit" title="Edit">✎</summary>
+              <form method="POST" action="/zk/{{ $.NoteID }}/comment/{{ .ID }}/edit" class="inline-edit-form">
+                <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
+                <div class="add-item-field">
+                  <textarea name="content" class="form-item" rows="4" required>{{ .Content }}</textarea>
+                </div>
+                <button type="submit" class="btn">Save</button>
+              </form>
+            </details>
             <form method="POST" action="/zk/{{ $.NoteID }}/comment/{{ .ID }}/delete" class="log-delete-form" onsubmit="return confirm('Delete this comment?');">
               <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
               <button type="submit" class="btn-delete" title="Delete">×</button>

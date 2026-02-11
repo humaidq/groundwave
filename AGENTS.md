@@ -41,7 +41,7 @@ Prefer Nix-based commands when available.
 Tests live in the Go module (`src/`).
 
 - Run all tests:
-  - `cd src && go test ./...`
+  - `cd src && DATABASE_URL="postgres:///pdb-test" go test ./...`
 - Run a single package:
   - `cd src && go test ./utils`
 - Run a single test:
@@ -50,6 +50,7 @@ Tests live in the Go module (`src/`).
 Notes:
 - `TestCreateGridMap*` writes files in the repo root and cleans them up.
 - Provide write permissions to the working directory when running tests.
+- Always set `DATABASE_URL="postgres:///pdb-test"` when running tests, especially db.
 
 ## Lint / Format
 

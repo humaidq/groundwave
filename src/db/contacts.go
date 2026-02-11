@@ -1048,6 +1048,42 @@ func DeleteLog(ctx context.Context, logID string) error {
 	return nil
 }
 
+// UpdateLogInput represents input for updating a contact log
+type UpdateLogInput struct {
+	ID        string
+	ContactID string
+	LogType   LogType
+	LoggedAt  *string
+	Subject   *string
+	Content   *string
+}
+
+// UpdateLog updates an existing contact log
+func UpdateLog(ctx context.Context, input UpdateLogInput) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	query := `
+		UPDATE contact_logs
+		SET log_type = $1,
+			logged_at = COALESCE($2::timestamptz, logged_at),
+			subject = $3,
+			content = $4
+		WHERE id = $5 AND contact_id = $6
+	`
+	result, err := pool.Exec(ctx, query, input.LogType, input.LoggedAt, input.Subject, input.Content, input.ID, input.ContactID)
+	if err != nil {
+		return fmt.Errorf("failed to update log: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("log not found")
+	}
+
+	return nil
+}
+
 // ListContactLogsTimeline returns all contact logs for the timeline feed.
 func ListContactLogsTimeline(ctx context.Context) ([]ContactLogTimelineEntry, error) {
 	if pool == nil {
@@ -1186,6 +1222,56 @@ func AddChat(ctx context.Context, input AddChatInput) error {
 	_, err = pool.Exec(ctx, query, input.ContactID, platform, sender, input.Message, input.SentAt)
 	if err != nil {
 		return fmt.Errorf("failed to add chat entry: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateChatInput represents input for updating a chat entry
+type UpdateChatInput struct {
+	ID        string
+	ContactID string
+	Platform  ChatPlatform
+	Sender    ChatSender
+	Message   string
+	SentAt    *string
+}
+
+// UpdateChat updates an existing chat entry
+func UpdateChat(ctx context.Context, input UpdateChatInput) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	if strings.TrimSpace(input.Message) == "" {
+		return fmt.Errorf("chat message is required")
+	}
+
+	platform := input.Platform
+	if platform == "" {
+		platform = ChatPlatformManual
+	}
+
+	sender := input.Sender
+	if sender == "" {
+		sender = ChatSenderThem
+	}
+
+	query := `
+		UPDATE contact_chats
+		SET platform = $1,
+			sender = $2,
+			message = $3,
+			sent_at = COALESCE($4::timestamptz, sent_at)
+		WHERE id = $5 AND contact_id = $6
+	`
+	result, err := pool.Exec(ctx, query, platform, sender, input.Message, input.SentAt, input.ID, input.ContactID)
+	if err != nil {
+		return fmt.Errorf("failed to update chat entry: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("chat entry not found")
 	}
 
 	return nil
@@ -1563,6 +1649,42 @@ func AddNote(ctx context.Context, input AddNoteInput) error {
 	_, err := pool.Exec(ctx, query, input.ContactID, input.Content, input.NotedAt)
 	if err != nil {
 		return fmt.Errorf("failed to add note: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateNoteInput represents input for updating a contact note
+type UpdateNoteInput struct {
+	ID        string
+	ContactID string
+	Content   string
+	NotedAt   *string
+}
+
+// UpdateNote updates an existing contact note
+func UpdateNote(ctx context.Context, input UpdateNoteInput) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	if strings.TrimSpace(input.Content) == "" {
+		return fmt.Errorf("note content cannot be empty")
+	}
+
+	query := `
+		UPDATE contact_notes
+		SET content = $1,
+			noted_at = COALESCE($2::timestamptz, noted_at)
+		WHERE id = $3 AND contact_id = $4
+	`
+	result, err := pool.Exec(ctx, query, input.Content, input.NotedAt, input.ID, input.ContactID)
+	if err != nil {
+		return fmt.Errorf("failed to update note: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("note not found")
 	}
 
 	return nil

@@ -200,11 +200,44 @@
         <div class="log-header">
           <span class="log-type log-type-{{ .LogType }}">{{ .LogType }}</span>
           <span class="log-date">{{ .LoggedAt.Format "Jan 2, 2006" }}</span>
+          <details class="inline-edit-details">
+            <summary class="btn-edit" title="Edit">✎</summary>
+            <form method="POST" action="/contact/{{ $contact.ID }}/log/{{ .ID }}/edit" class="inline-edit-form">
+              <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
+              <div class="add-item-field">
+                <select name="log_type" class="form-item">
+                  <option value="general" {{ if eq .LogType "general" }}selected{{ end }}>General</option>
+                  <option value="email_sent" {{ if eq .LogType "email_sent" }}selected{{ end }}>Email Sent</option>
+                  <option value="email_received" {{ if eq .LogType "email_received" }}selected{{ end }}>Email Received</option>
+                  <option value="call" {{ if eq .LogType "call" }}selected{{ end }}>Phone/Video Call</option>
+                  <option value="meeting" {{ if eq .LogType "meeting" }}selected{{ end }}>Meeting</option>
+                  <option value="message" {{ if eq .LogType "message" }}selected{{ end }}>Text/Chat Message</option>
+                  <option value="gift_sent" {{ if eq .LogType "gift_sent" }}selected{{ end }}>Gift Sent</option>
+                  <option value="gift_received" {{ if eq .LogType "gift_received" }}selected{{ end }}>Gift Received</option>
+                  <option value="intro" {{ if eq .LogType "intro" }}selected{{ end }}>Introduction Made</option>
+                  <option value="other" {{ if eq .LogType "other" }}selected{{ end }}>Other</option>
+                </select>
+              </div>
+              <div class="add-item-field">
+                <input type="date" name="logged_at" value="{{ .LoggedAt.Format "2006-01-02" }}" class="form-item">
+              </div>
+              <div class="add-item-field">
+                <input type="text" name="subject" value="{{ with .Subject }}{{ . }}{{ end }}" class="form-item" placeholder="Subject (optional)">
+              </div>
+              <div class="add-item-field">
+                <textarea name="content" class="form-item" rows="3" placeholder="Details (optional)">{{ with .Content }}{{ . }}{{ end }}</textarea>
+              </div>
+              <button type="submit" class="btn">Save</button>
+            </form>
+          </details>
           <form method="POST" action="/contact/{{ $contact.ID }}/log/{{ .ID }}/delete" class="log-delete-form" onsubmit="return confirm('Delete this log entry?');">
             <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
             <button type="submit" class="btn-delete" title="Delete">×</button>
           </form>
         </div>
+        {{ with .Subject }}
+        <div class="log-content">{{ . }}</div>
+        {{ end }}
         {{ with .Content }}
         <div class="log-content">{{ . }}</div>
         {{ end }}
@@ -215,6 +248,19 @@
         <div class="log-header">
           <span class="log-type log-type-note">note</span>
           <span class="log-date">{{ .NotedAt.Format "Jan 2, 2006" }}</span>
+          <details class="inline-edit-details">
+            <summary class="btn-edit" title="Edit">✎</summary>
+            <form method="POST" action="/contact/{{ $contact.ID }}/note/{{ .ID }}/edit" class="inline-edit-form">
+              <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
+              <div class="add-item-field">
+                <input type="datetime-local" name="noted_at" value="{{ .NotedAt.Format "2006-01-02T15:04" }}" class="form-item">
+              </div>
+              <div class="add-item-field">
+                <textarea name="content" class="form-item" rows="3" required>{{ .Content }}</textarea>
+              </div>
+              <button type="submit" class="btn">Save</button>
+            </form>
+          </details>
           <form method="POST" action="/contact/{{ $contact.ID }}/note/{{ .ID }}/delete" class="log-delete-form" onsubmit="return confirm('Delete this note?');">
             <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
             <button type="submit" class="btn-delete" title="Delete">×</button>
@@ -312,7 +358,7 @@
     {{ range .Contact.Phones }}
     <div class="detail-card">
       <div class="detail-card-content">
-        <a href="tel:{{ .Phone }}" class="detail-card-value">{{ .Phone }}</a>
+        <a href="tel:{{ phoneDialValue .Phone }}" class="detail-card-value">{{ .Phone }}</a>
         <div class="detail-card-meta">
           {{ .PhoneType }}{{ if .IsPrimary }} • Primary{{ end }}{{ if eq .Source "carddav" }} • CardDAV{{ end }}
         </div>

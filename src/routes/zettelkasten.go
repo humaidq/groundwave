@@ -570,6 +570,58 @@ func AddZettelComment(c flamego.Context, s session.Session, t template.Template,
 	c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
 }
 
+// UpdateZettelComment handles editing an existing comment
+func UpdateZettelComment(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+	zettelID := c.Param("id")
+	commentIDStr := c.Param("comment_id")
+
+	if zettelID == "" || commentIDStr == "" {
+		SetErrorFlash(s, "Invalid request")
+		c.Redirect("/zk", http.StatusSeeOther)
+		return
+	}
+
+	zettelID = strings.TrimPrefix(zettelID, "id:")
+	redirectPath := "/zk/" + zettelID
+
+	if err := c.Request().ParseForm(); err != nil {
+		logger.Error("Error parsing form", "error", err)
+		SetErrorFlash(s, "Failed to update comment")
+		c.Redirect(redirectPath, http.StatusSeeOther)
+		return
+	}
+
+	if c.Request().Form.Get("redirect_to") == "inbox" {
+		redirectPath = "/zettel-inbox"
+	}
+
+	commentID, err := uuid.Parse(commentIDStr)
+	if err != nil {
+		logger.Warn("Invalid comment ID", "error", err)
+		SetErrorFlash(s, "Invalid comment ID")
+		c.Redirect(redirectPath, http.StatusSeeOther)
+		return
+	}
+
+	content := strings.TrimSpace(c.Request().Form.Get("content"))
+	if content == "" {
+		SetErrorFlash(s, "Comment content is required")
+		c.Redirect(redirectPath, http.StatusSeeOther)
+		return
+	}
+
+	ctx := c.Request().Context()
+	if err := db.UpdateZettelComment(ctx, commentID, content); err != nil {
+		logger.Error("Error updating zettel comment", "error", err)
+		SetErrorFlash(s, "Failed to update comment")
+		c.Redirect(redirectPath, http.StatusSeeOther)
+		return
+	}
+
+	SetSuccessFlash(s, "Comment updated successfully")
+	c.Redirect(redirectPath, http.StatusSeeOther)
+}
+
 // DeleteZettelComment handles deleting a comment
 func DeleteZettelComment(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	zettelID := c.Param("id")

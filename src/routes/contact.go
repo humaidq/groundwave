@@ -1134,10 +1134,7 @@ func AddLog(c flamego.Context) {
 
 	form := c.Request().Form
 
-	logType := db.LogType(form.Get("log_type"))
-	if logType == "" {
-		logType = db.LogGeneral
-	}
+	logType := parseLogType(form.Get("log_type"))
 
 	input := db.AddLogInput{
 		ContactID: contactID,
@@ -1173,6 +1170,41 @@ func DeleteLog(c flamego.Context) {
 	err := db.DeleteLog(c.Request().Context(), logID)
 	if err != nil {
 		logger.Error("Error deleting log", "error", err)
+	}
+
+	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+}
+
+// UpdateLog handles editing an existing contact log
+func UpdateLog(c flamego.Context, s session.Session) {
+	contactID := c.Param("id")
+	logID := c.Param("log_id")
+
+	if contactID == "" || logID == "" {
+		c.Redirect("/", http.StatusSeeOther)
+		return
+	}
+
+	if err := c.Request().ParseForm(); err != nil {
+		logger.Error("Error parsing form", "error", err)
+		SetErrorFlash(s, "Failed to parse form")
+		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+		return
+	}
+
+	form := c.Request().Form
+	input := db.UpdateLogInput{
+		ID:        logID,
+		ContactID: contactID,
+		LogType:   parseLogType(form.Get("log_type")),
+		LoggedAt:  getOptionalString(form.Get("logged_at")),
+		Subject:   getOptionalString(form.Get("subject")),
+		Content:   getOptionalString(form.Get("content")),
+	}
+
+	if err := db.UpdateLog(c.Request().Context(), input); err != nil {
+		logger.Error("Error updating log", "error", err)
+		SetErrorFlash(s, "Failed to update log")
 	}
 
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
@@ -1381,6 +1413,46 @@ func AddNote(c flamego.Context) {
 	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
 }
 
+// UpdateNote handles editing an existing contact note
+func UpdateNote(c flamego.Context, s session.Session) {
+	contactID := c.Param("id")
+	noteID := c.Param("note_id")
+
+	if contactID == "" || noteID == "" {
+		c.Redirect("/", http.StatusSeeOther)
+		return
+	}
+
+	if err := c.Request().ParseForm(); err != nil {
+		logger.Error("Error parsing form", "error", err)
+		SetErrorFlash(s, "Failed to parse form")
+		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+		return
+	}
+
+	form := c.Request().Form
+	content := strings.TrimSpace(form.Get("content"))
+	if content == "" {
+		SetErrorFlash(s, "Note content is required")
+		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+		return
+	}
+
+	input := db.UpdateNoteInput{
+		ID:        noteID,
+		ContactID: contactID,
+		Content:   content,
+		NotedAt:   getOptionalString(form.Get("noted_at")),
+	}
+
+	if err := db.UpdateNote(c.Request().Context(), input); err != nil {
+		logger.Error("Error updating note", "error", err)
+		SetErrorFlash(s, "Failed to update note")
+	}
+
+	c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+}
+
 // DeleteNote handles deleting a contact note
 func DeleteNote(c flamego.Context) {
 	contactID := c.Param("id")
@@ -1535,10 +1607,7 @@ func BulkAddLog(c flamego.Context, s session.Session) {
 	}
 
 	// Get form fields
-	logType := db.LogType(form.Get("log_type"))
-	if logType == "" {
-		logType = db.LogGeneral
-	}
+	logType := parseLogType(form.Get("log_type"))
 
 	loggedAt := getOptionalString(form.Get("logged_at"))
 	content := getOptionalString(form.Get("content"))
@@ -1576,4 +1645,88 @@ func BulkAddLog(c flamego.Context, s session.Session) {
 	}
 
 	c.Redirect("/contacts", http.StatusSeeOther)
+}
+
+// UpdateContactChat handles editing a manual chat entry
+func UpdateContactChat(c flamego.Context, s session.Session) {
+	contactID := c.Param("id")
+	chatID := c.Param("chat_id")
+
+	if contactID == "" || chatID == "" {
+		c.Redirect("/contacts", http.StatusSeeOther)
+		return
+	}
+
+	isService, err := db.IsServiceContact(c.Request().Context(), contactID)
+	if err != nil {
+		logger.Error("Error checking service contact", "contact_id", contactID, "error", err)
+		c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
+		return
+	}
+	if isService {
+		SetErrorFlash(s, "Chats are not available for service contacts")
+		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+		return
+	}
+
+	if !HasSensitiveAccess(s, time.Now()) {
+		redirectToBreakGlass(c, s)
+		return
+	}
+
+	if err := c.Request().ParseForm(); err != nil {
+		logger.Error("Error parsing form", "error", err)
+		SetErrorFlash(s, "Failed to parse form")
+		c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
+		return
+	}
+
+	form := c.Request().Form
+	message := strings.TrimSpace(form.Get("message"))
+	if message == "" {
+		SetErrorFlash(s, "Message content is required")
+		c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
+		return
+	}
+
+	input := db.UpdateChatInput{
+		ID:        chatID,
+		ContactID: contactID,
+		Platform:  parseChatPlatform(form.Get("platform")),
+		Sender:    parseChatSender(form.Get("sender")),
+		Message:   message,
+		SentAt:    getOptionalString(form.Get("sent_at")),
+	}
+
+	if err := db.UpdateChat(c.Request().Context(), input); err != nil {
+		logger.Error("Error updating chat entry", "error", err)
+		SetErrorFlash(s, "Failed to update chat entry")
+	}
+
+	c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
+}
+
+func parseLogType(value string) db.LogType {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case string(db.LogEmailSent):
+		return db.LogEmailSent
+	case string(db.LogEmailReceived):
+		return db.LogEmailReceived
+	case string(db.LogCall):
+		return db.LogCall
+	case string(db.LogMeeting):
+		return db.LogMeeting
+	case string(db.LogMessage):
+		return db.LogMessage
+	case string(db.LogGiftSent):
+		return db.LogGiftSent
+	case string(db.LogGiftReceived):
+		return db.LogGiftReceived
+	case string(db.LogIntro):
+		return db.LogIntro
+	case string(db.LogOther):
+		return db.LogOther
+	default:
+		return db.LogGeneral
+	}
 }

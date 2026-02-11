@@ -72,6 +72,38 @@
         <span class="log-type log-type-{{ .Platform }}">{{ .Platform }}</span>
         <span class="log-type chat-sender chat-sender-{{ .Sender }}">{{ .Sender }}</span>
         <span class="log-date">{{ .SentAt.Format "Jan 2, 2006 3:04 PM" }}</span>
+        <details class="inline-edit-details">
+          <summary class="btn-edit" title="Edit">✎</summary>
+          <form method="POST" action="/contact/{{ $.Contact.ID }}/chats/{{ .ID }}/edit" class="inline-edit-form">
+            <input type="hidden" name="_csrf" value="{{ $.csrf_token }}" />
+            <div class="add-item-field">
+              <select name="platform" class="form-item">
+                <option value="manual" {{ if eq .Platform "manual" }}selected{{ end }}>Manual</option>
+                <option value="email" {{ if eq .Platform "email" }}selected{{ end }}>Email</option>
+                <option value="whatsapp" {{ if eq .Platform "whatsapp" }}selected{{ end }}>WhatsApp</option>
+                <option value="signal" {{ if eq .Platform "signal" }}selected{{ end }}>Signal</option>
+                <option value="wechat" {{ if eq .Platform "wechat" }}selected{{ end }}>WeChat</option>
+                <option value="teams" {{ if eq .Platform "teams" }}selected{{ end }}>Teams</option>
+                <option value="slack" {{ if eq .Platform "slack" }}selected{{ end }}>Slack</option>
+                <option value="other" {{ if eq .Platform "other" }}selected{{ end }}>Other</option>
+              </select>
+            </div>
+            <div class="add-item-field">
+              <select name="sender" class="form-item">
+                <option value="them" {{ if eq .Sender "them" }}selected{{ end }}>Them</option>
+                <option value="me" {{ if eq .Sender "me" }}selected{{ end }}>Me</option>
+                <option value="mix" {{ if eq .Sender "mix" }}selected{{ end }}>Mix</option>
+              </select>
+            </div>
+            <div class="add-item-field">
+              <input type="datetime-local" name="sent_at" value="{{ .SentAt.Format "2006-01-02T15:04" }}" class="form-item">
+            </div>
+            <div class="add-item-field">
+              <textarea name="message" class="form-item" rows="4" required>{{ .Message }}</textarea>
+            </div>
+            <button type="submit" class="btn">Save</button>
+          </form>
+        </details>
       </div>
       <div class="log-content">{{ .Message }}</div>
     </div>

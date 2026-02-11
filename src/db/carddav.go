@@ -415,13 +415,21 @@ func normalizeCardDAVPhone(value string) string {
 	if strings.HasPrefix(lower, "tel:") {
 		value = value[len("tel:"):]
 	}
-	value = strings.TrimSpace(value)
+	return strings.TrimSpace(value)
+}
+
+func normalizePhoneDigits(value string) string {
+	if value == "" {
+		return ""
+	}
+
 	var b strings.Builder
 	for _, r := range value {
 		if r >= '0' && r <= '9' {
 			b.WriteRune(r)
 		}
 	}
+
 	return b.String()
 }
 
@@ -446,6 +454,22 @@ func selectPrimaryPhone(preferredPhone string, insertedPhones []string) string {
 		for _, phone := range insertedPhones {
 			if phone == preferredPhone {
 				return preferredPhone
+			}
+		}
+	}
+
+	if len(insertedPhones) > 0 {
+		return insertedPhones[0]
+	}
+
+	return ""
+}
+
+func selectPrimaryPhoneByDigits(preferredPhoneDigits string, insertedPhones []string) string {
+	if preferredPhoneDigits != "" {
+		for _, phone := range insertedPhones {
+			if normalizePhoneDigits(phone) == preferredPhoneDigits {
+				return phone
 			}
 		}
 	}
@@ -630,6 +654,7 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 	}
 
 	preferredPhone := normalizeCardDAVPhone(preferredPhoneValue(cardDAVContact.Phones))
+	preferredPhoneDigits := normalizePhoneDigits(preferredPhone)
 	var insertedPhones []string
 	seenPhones := make(map[string]bool)
 	for _, phone := range cardDAVContact.Phones {
@@ -637,11 +662,15 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 		if normalizedPhone == "" {
 			continue
 		}
-		// Skip duplicate phone numbers (vCards can have the same number with different TYPE params)
-		if seenPhones[normalizedPhone] {
+		phoneDigits := normalizePhoneDigits(normalizedPhone)
+		if phoneDigits == "" {
 			continue
 		}
-		seenPhones[normalizedPhone] = true
+		// Skip duplicate phone numbers (vCards can have the same number with different TYPE params)
+		if seenPhones[phoneDigits] {
+			continue
+		}
+		seenPhones[phoneDigits] = true
 		// Map CardDAV phone type to database enum
 		phoneType := "other"
 		switch phone.Type {
@@ -667,7 +696,7 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 		insertedPhones = append(insertedPhones, normalizedPhone)
 	}
 
-	primaryPhone := selectPrimaryPhone(preferredPhone, insertedPhones)
+	primaryPhone := selectPrimaryPhoneByDigits(preferredPhoneDigits, insertedPhones)
 	if primaryPhone != "" {
 		_, err = pool.Exec(ctx, `
 			UPDATE contact_phones

@@ -6,6 +6,7 @@ package routes
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -184,6 +185,9 @@ type InviteInfo struct {
 	ID          string
 	DisplayName string
 	CreatedAt   time.Time
+	ExpiresAt   time.Time
+	ExpiresIn   string
+	IsExpired   bool
 	SetupURL    string
 	QRCode      string
 }
@@ -349,18 +353,21 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 	data["PasskeyCount"] = len(passkeyInfos)
 
 	if isAdmin {
+		baseSetupURL := buildExternalURL(c.Request(), "/setup")
+		now := time.Now()
+
 		invites, err := db.ListPendingUserInvites(ctx)
 		if err != nil {
 			logger.Error("Failed to load invites", "error", err)
 			data["InviteError"] = "Failed to load user invites"
 		} else {
 			inviteInfos := make([]InviteInfo, 0, len(invites))
-			baseSetupURL := buildExternalURL(c.Request(), "/setup")
 			for _, invite := range invites {
 				displayName := "New user"
 				if invite.DisplayName != nil && strings.TrimSpace(*invite.DisplayName) != "" {
 					displayName = strings.TrimSpace(*invite.DisplayName)
 				}
+				expiresAt := invite.CreatedAt.Add(24 * time.Hour)
 				setupURL := baseSetupURL + "?token=" + url.QueryEscape(invite.Token)
 				qrCode := ""
 				if png, err := qrcode.Encode(setupURL, qrcode.Medium, 256); err == nil {
@@ -372,11 +379,38 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 					ID:          invite.ID.String(),
 					DisplayName: displayName,
 					CreatedAt:   invite.CreatedAt,
+					ExpiresAt:   expiresAt,
+					ExpiresIn:   formatDuration(expiresAt.Sub(now)),
+					IsExpired:   !expiresAt.After(now),
 					SetupURL:    setupURL,
 					QRCode:      qrCode,
 				})
 			}
 			data["UserInvites"] = inviteInfos
+		}
+
+		expiredInvites, expiredErr := db.ListExpiredUserInvites(ctx)
+		if expiredErr != nil {
+			logger.Error("Failed to load expired invites", "error", expiredErr)
+			data["InviteError"] = "Failed to load user invites"
+		} else {
+			expiredInviteInfos := make([]InviteInfo, 0, len(expiredInvites))
+			for _, invite := range expiredInvites {
+				displayName := "New user"
+				if invite.DisplayName != nil && strings.TrimSpace(*invite.DisplayName) != "" {
+					displayName = strings.TrimSpace(*invite.DisplayName)
+				}
+				expiresAt := invite.CreatedAt.Add(24 * time.Hour)
+				expiredInviteInfos = append(expiredInviteInfos, InviteInfo{
+					ID:          invite.ID.String(),
+					DisplayName: displayName,
+					CreatedAt:   invite.CreatedAt,
+					ExpiresAt:   expiresAt,
+					ExpiresIn:   formatDuration(expiresAt.Sub(now)),
+					IsExpired:   true,
+				})
+			}
+			data["ExpiredUserInvites"] = expiredInviteInfos
 		}
 
 		if err == nil {
@@ -615,6 +649,38 @@ func CreateUserInvite(c flamego.Context, s session.Session) {
 	}
 
 	SetSuccessFlash(s, "Invite created")
+	c.Redirect("/security", http.StatusSeeOther)
+}
+
+// RegenerateUserInvite refreshes an expired invite link (admin only).
+func RegenerateUserInvite(c flamego.Context, s session.Session) {
+	ctx := c.Request().Context()
+	isAdmin, err := resolveSessionIsAdmin(ctx, s)
+	if err != nil || !isAdmin {
+		SetErrorFlash(s, "Access restricted")
+		c.Redirect("/security", http.StatusSeeOther)
+		return
+	}
+
+	inviteID := strings.TrimSpace(c.Param("id"))
+	if inviteID == "" {
+		SetErrorFlash(s, "Missing invite ID")
+		c.Redirect("/security", http.StatusSeeOther)
+		return
+	}
+
+	if _, err := db.RegenerateExpiredUserInvite(ctx, inviteID); err != nil {
+		switch {
+		case errors.Is(err, db.ErrInviteNotExpired):
+			SetWarningFlash(s, "Invite has not expired yet")
+		default:
+			SetErrorFlash(s, "Failed to regenerate invite")
+		}
+		c.Redirect("/security", http.StatusSeeOther)
+		return
+	}
+
+	SetSuccessFlash(s, "Invite link regenerated")
 	c.Redirect("/security", http.StatusSeeOther)
 }
 

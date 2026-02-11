@@ -7,6 +7,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/humaidq/groundwave/utils"
@@ -99,6 +100,31 @@ func DeleteZettelComment(ctx context.Context, commentID uuid.UUID) error {
 	result, err := pool.Exec(ctx, query, commentID)
 	if err != nil {
 		return fmt.Errorf("failed to delete zettel comment: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("comment not found: %s", commentID)
+	}
+
+	return nil
+}
+
+// UpdateZettelComment updates a comment by ID
+func UpdateZettelComment(ctx context.Context, commentID uuid.UUID, content string) error {
+	if pool == nil {
+		return fmt.Errorf("database connection not initialized")
+	}
+
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return fmt.Errorf("comment content cannot be empty")
+	}
+
+	query := `UPDATE zettel_comments SET content = $1 WHERE id = $2`
+
+	result, err := pool.Exec(ctx, query, content, commentID)
+	if err != nil {
+		return fmt.Errorf("failed to update zettel comment: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {

@@ -72,6 +72,14 @@ func NewWebAuthnFromEnv() (*webauthn.WebAuthn, error) {
 		AuthenticatorSelection: protocol.AuthenticatorSelection{
 			UserVerification: protocol.VerificationRequired,
 		},
+		Timeouts: webauthn.TimeoutsConfig{
+			Login: webauthn.TimeoutConfig{
+				Enforce: true,
+			},
+			Registration: webauthn.TimeoutConfig{
+				Enforce: true,
+			},
+		},
 	}
 
 	return webauthn.New(config)
@@ -579,17 +587,36 @@ func getSessionUserID(s session.Session) (string, bool) {
 }
 
 func getSessionData(s session.Session, key string) (*webauthn.SessionData, bool) {
+	return getSessionDataAt(s, key, time.Now())
+}
+
+func getSessionDataAt(s session.Session, key string, now time.Time) (*webauthn.SessionData, bool) {
 	val := s.Get(key)
 	if val == nil {
 		return nil, false
 	}
-	if data, ok := val.(webauthn.SessionData); ok {
-		return &data, true
+
+	var data webauthn.SessionData
+	switch v := val.(type) {
+	case webauthn.SessionData:
+		data = v
+	case *webauthn.SessionData:
+		if v == nil {
+			s.Delete(key)
+			return nil, false
+		}
+		data = *v
+	default:
+		s.Delete(key)
+		return nil, false
 	}
-	if data, ok := val.(*webauthn.SessionData); ok && data != nil {
-		return data, true
+
+	if data.Expires.IsZero() || !data.Expires.After(now) {
+		s.Delete(key)
+		return nil, false
 	}
-	return nil, false
+
+	return &data, true
 }
 
 func getSetupSessionData(s session.Session) (uuid.UUID, string, string, error) {

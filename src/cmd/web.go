@@ -212,6 +212,28 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 			}
 			return ""
 		},
+		"phoneDialValue": func(phone string) string {
+			trimmed := strings.TrimSpace(phone)
+			if trimmed == "" {
+				return ""
+			}
+			if strings.HasPrefix(strings.ToLower(trimmed), "tel:") {
+				trimmed = strings.TrimSpace(trimmed[len("tel:"):])
+			}
+
+			var b strings.Builder
+			for i, r := range trimmed {
+				if r >= '0' && r <= '9' {
+					b.WriteRune(r)
+					continue
+				}
+				if r == '+' && i == 0 {
+					b.WriteRune(r)
+				}
+			}
+
+			return b.String()
+		},
 		"urlIconClass": func(urlType db.URLType) string {
 			switch urlType {
 			case db.URLWebsite:
@@ -498,8 +520,10 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 				f.Post("/contact/new", routes.CreateContact)
 				f.Post("/contact/{id}/edit", routes.UpdateContact)
 				f.Post("/contact/{id}/log", routes.AddLog)
+				f.Post("/contact/{id}/log/{log_id}/edit", routes.UpdateLog)
 				f.Post("/contact/{id}/log/{log_id}/delete", routes.DeleteLog)
 				f.Post("/contact/{id}/note", routes.AddNote)
+				f.Post("/contact/{id}/note/{note_id}/edit", routes.UpdateNote)
 				f.Post("/contact/{id}/note/{note_id}/delete", routes.DeleteNote)
 				f.Post("/contact/{id}/carddav/link", routes.LinkCardDAV)
 				f.Post("/contact/{id}/carddav/unlink", routes.UnlinkCardDAV)
@@ -556,6 +580,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 			f.Post("/qsl/import/qrz", routes.ImportQRZLogs)
 			f.Post("/qsl/requests/{id}/dismiss", routes.DismissQSLCardRequest)
 			f.Post("/contact/{id}/chats", routes.AddContactChat)
+			f.Post("/contact/{id}/chats/{chat_id}/edit", routes.UpdateContactChat)
 			f.Post("/contact/{id}/chat-summary", routes.GenerateContactChatSummary)
 			f.Post("/contact/{id}/email", routes.AddEmail)
 			f.Post("/contact/{id}/phone", routes.AddPhone)
@@ -571,6 +596,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 			f.Post("/zk/chat/backlinks", routes.ZettelkastenChatBacklinks)
 			f.Post("/zk/chat/stream", routes.ZettelkastenChatStream)
 			f.Post("/zk/{id}/comment", routes.AddZettelComment)
+			f.Post("/zk/{id}/comment/{comment_id}/edit", routes.UpdateZettelComment)
 			f.Post("/zk/{id}/comment/{comment_id}/delete", routes.DeleteZettelComment)
 			f.Post("/zk/{id}/comments/delete", routes.DeleteAllZettelComments)
 			f.Post("/rebuild-cache", routes.RebuildCache)
@@ -591,6 +617,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 			f.Post("/whatsapp/connect", routes.WhatsAppConnect)
 			f.Post("/whatsapp/disconnect", routes.WhatsAppDisconnect)
 			f.Post("/security/invites", routes.CreateUserInvite)
+			f.Post("/security/invites/{id}/regenerate", routes.RegenerateUserInvite)
 			f.Post("/security/invites/{id}/delete", routes.DeleteUserInvite)
 			f.Post("/security/users/{id}/delete", routes.DeleteUserAccount)
 			f.Post("/security/users/{id}/health-shares", routes.UpdateHealthProfileShares)

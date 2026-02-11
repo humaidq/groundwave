@@ -4,6 +4,7 @@
 package db
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -138,5 +139,100 @@ func TestUserInviteExpiryAfter24Hours(t *testing.T) {
 
 	if err := MarkUserInviteUsed(ctx, invite.ID.String()); err == nil {
 		t.Fatalf("expected expired invite to fail when marked used")
+	}
+}
+
+func TestListExpiredUserInvitesAndRegenerate(t *testing.T) {
+	resetDatabase(t)
+	ctx := testContext()
+
+	owner := mustCreateUser(t, "Invite Owner")
+	invite, err := CreateUserInvite(ctx, owner.ID.String(), "Invitee")
+	if err != nil {
+		t.Fatalf("CreateUserInvite failed: %v", err)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE user_invites
+		SET created_at = NOW() - INTERVAL '25 hours'
+		WHERE id = $1
+	`, invite.ID); err != nil {
+		t.Fatalf("failed to age invite: %v", err)
+	}
+
+	expired, err := ListExpiredUserInvites(ctx)
+	if err != nil {
+		t.Fatalf("ListExpiredUserInvites failed: %v", err)
+	}
+	if len(expired) != 1 {
+		t.Fatalf("expected 1 expired invite, got %d", len(expired))
+	}
+	if expired[0].ID != invite.ID {
+		t.Fatalf("expected expired invite to match original invite")
+	}
+
+	regenerated, err := RegenerateExpiredUserInvite(ctx, invite.ID.String())
+	if err != nil {
+		t.Fatalf("RegenerateExpiredUserInvite failed: %v", err)
+	}
+	if regenerated.Token == "" {
+		t.Fatalf("expected regenerated invite token")
+	}
+	if regenerated.Token == invite.Token {
+		t.Fatalf("expected regenerated token to change")
+	}
+
+	oldTokenInvite, err := GetUserInviteByToken(ctx, invite.Token)
+	if err != nil {
+		t.Fatalf("GetUserInviteByToken failed: %v", err)
+	}
+	if oldTokenInvite != nil {
+		t.Fatalf("expected old token to be invalid after regeneration")
+	}
+
+	newTokenInvite, err := GetUserInviteByToken(ctx, regenerated.Token)
+	if err != nil {
+		t.Fatalf("GetUserInviteByToken failed: %v", err)
+	}
+	if newTokenInvite == nil {
+		t.Fatalf("expected regenerated token to be active")
+	}
+
+	pending, err := ListPendingUserInvites(ctx)
+	if err != nil {
+		t.Fatalf("ListPendingUserInvites failed: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("expected 1 pending invite after regeneration, got %d", len(pending))
+	}
+	if pending[0].ID != invite.ID {
+		t.Fatalf("expected regenerated invite to keep same id")
+	}
+
+	expired, err = ListExpiredUserInvites(ctx)
+	if err != nil {
+		t.Fatalf("ListExpiredUserInvites failed: %v", err)
+	}
+	if len(expired) != 0 {
+		t.Fatalf("expected 0 expired invites after regeneration, got %d", len(expired))
+	}
+}
+
+func TestRegenerateExpiredUserInviteRequiresExpiry(t *testing.T) {
+	resetDatabase(t)
+	ctx := testContext()
+
+	owner := mustCreateUser(t, "Invite Owner")
+	invite, err := CreateUserInvite(ctx, owner.ID.String(), "Invitee")
+	if err != nil {
+		t.Fatalf("CreateUserInvite failed: %v", err)
+	}
+
+	if _, err := RegenerateExpiredUserInvite(ctx, invite.ID.String()); !errors.Is(err, ErrInviteNotExpired) {
+		t.Fatalf("expected ErrInviteNotExpired, got %v", err)
+	}
+
+	if _, err := RegenerateExpiredUserInvite(ctx, uuid.New().String()); err == nil {
+		t.Fatalf("expected error for missing invite")
 	}
 }

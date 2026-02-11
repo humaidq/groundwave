@@ -240,8 +240,11 @@ func TestCardDAVListAndHelpers(t *testing.T) {
 	if normalizeCardDAVEmail(" Alice@Example.com ") != "alice@example.com" {
 		t.Fatalf("expected normalized email")
 	}
-	if normalizeCardDAVPhone("+1 (555) 0000") != "15550000" {
+	if normalizeCardDAVPhone("+1 (555) 0000") != "+1 (555) 0000" {
 		t.Fatalf("expected normalized phone")
+	}
+	if normalizePhoneDigits(normalizeCardDAVPhone("+1 (555) 0000")) != "15550000" {
+		t.Fatalf("expected normalized phone digits")
 	}
 	if selectPrimaryEmail("a@example.com", []string{"b@example.com", "a@example.com"}) != "a@example.com" {
 		t.Fatalf("expected selected primary email")

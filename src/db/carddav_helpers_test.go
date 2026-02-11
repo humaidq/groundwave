@@ -59,6 +59,22 @@ func TestSelectPrimaryPhoneFallbacks(t *testing.T) {
 	}
 }
 
+func TestSelectPrimaryPhoneByDigits(t *testing.T) {
+	inserted := []string{"+1 (555) 111-2222", "+971 50 123 4567"}
+	if got := selectPrimaryPhoneByDigits("15551112222", inserted); got != "+1 (555) 111-2222" {
+		t.Fatalf("expected formatted primary phone match, got %q", got)
+	}
+	if got := selectPrimaryPhoneByDigits("", inserted); got != "+1 (555) 111-2222" {
+		t.Fatalf("expected fallback to first inserted phone, got %q", got)
+	}
+}
+
+func TestNormalizePhoneDigits(t *testing.T) {
+	if got := normalizePhoneDigits("+1 (555) 111-2222"); got != "15551112222" {
+		t.Fatalf("expected digits-only phone, got %q", got)
+	}
+}
+
 func TestMediaTypeFromPhotoParams(t *testing.T) {
 	if mediaTypeFromPhotoParams(vcard.Params{vcard.ParamType: []string{"image/png"}}) != "image/png" {
 		t.Fatalf("expected image/png media type")

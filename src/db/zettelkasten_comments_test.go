@@ -30,6 +30,18 @@ func TestZettelkastenComments(t *testing.T) {
 		t.Fatalf("expected 1 comment, got %d", len(comments))
 	}
 
+	if err := UpdateZettelComment(ctx, comments[0].ID, "Updated"); err != nil {
+		t.Fatalf("UpdateZettelComment failed: %v", err)
+	}
+
+	comments, err = GetCommentsForZettel(ctx, zettelID)
+	if err != nil {
+		t.Fatalf("GetCommentsForZettel failed: %v", err)
+	}
+	if comments[0].Content != "Updated" {
+		t.Fatalf("expected updated content, got %q", comments[0].Content)
+	}
+
 	count, err := GetZettelCommentCount(ctx)
 	if err != nil {
 		t.Fatalf("GetZettelCommentCount failed: %v", err)
