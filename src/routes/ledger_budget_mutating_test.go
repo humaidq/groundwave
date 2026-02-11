@@ -4,6 +4,7 @@
 package routes
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,8 @@ import (
 
 	"github.com/humaidq/groundwave/db"
 )
+
+var errLedgerMutationUnknown = errors.New("boom")
 
 func performLedgerBudgetFormPOST(
 	t *testing.T,
@@ -101,7 +104,6 @@ func TestCreateLedgerBudgetRejectsNonPositiveAmount(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -138,7 +140,6 @@ func TestUpdateLedgerBudgetRejectsNonPositiveAmount(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -185,14 +186,13 @@ func TestLedgerMutationErrorMessage(t *testing.T) {
 		},
 		{
 			name:    "unknown error",
-			err:     fmt.Errorf("boom"),
+			err:     errLedgerMutationUnknown,
 			want:    "",
 			wantHit: false,
 		},
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

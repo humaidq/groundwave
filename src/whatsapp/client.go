@@ -304,8 +304,10 @@ func (c *Client) handleMessage(evt *events.Message) {
 	logger.Info(
 		"WhatsApp message info",
 		"from_me", evt.Info.IsFromMe,
+		"addressing_mode", evt.Info.AddressingMode,
 		"chat", evt.Info.Chat,
 		"sender", evt.Info.Sender,
+		"sender_alt", evt.Info.SenderAlt,
 		"recipient_alt", evt.Info.RecipientAlt,
 		"device_sent_meta", evt.Info.DeviceSentMeta,
 		"message_id", evt.Info.ID,
@@ -313,7 +315,7 @@ func (c *Client) handleMessage(evt *events.Message) {
 	)
 
 	// Determine if this is an outgoing message
-	isOutgoing := evt.Info.IsFromMe
+	isOutgoing := isOutgoingMessage(evt.Info)
 
 	// Call the message handler
 	if c.onMessage != nil {
@@ -322,25 +324,66 @@ func (c *Client) handleMessage(evt *events.Message) {
 }
 
 func resolveOtherPartyJID(info types.MessageInfo) types.JID {
-	if info.IsFromMe {
+	if isOutgoingMessage(info) {
 		// For outgoing messages, use the recipient
-		if !info.RecipientAlt.IsEmpty() {
-			return info.RecipientAlt.ToNonAD()
+		if info.DeviceSentMeta != nil {
+			destinationJID := strings.TrimSpace(info.DeviceSentMeta.DestinationJID)
+			if destinationJID != "" {
+				parsedDestinationJID, err := types.ParseJID(destinationJID)
+				if err == nil && !parsedDestinationJID.IsEmpty() {
+					return parsedDestinationJID.ToNonAD()
+				}
+			}
+		}
+
+		if recipient := preferPhoneNumberJID(info.Chat, info.RecipientAlt); !recipient.IsEmpty() {
+			return recipient
 		}
 
 		return info.Chat.ToNonAD()
 	}
 
-	// For incoming messages, use the sender directly
-	if !info.Sender.IsEmpty() {
-		return info.Sender.ToNonAD()
+	// Incoming messages may use LID addressing where Sender is @lid and SenderAlt is @s.whatsapp.net.
+	if sender := preferPhoneNumberJID(info.Sender, info.SenderAlt); !sender.IsEmpty() {
+		return sender
 	}
 
-	if !info.SenderAlt.IsEmpty() {
-		return info.SenderAlt.ToNonAD()
+	if chat := preferPhoneNumberJID(info.Chat, info.RecipientAlt); !chat.IsEmpty() {
+		return chat
 	}
 
 	return info.Chat.ToNonAD()
+}
+
+func preferPhoneNumberJID(primary, alternate types.JID) types.JID {
+	primary = primary.ToNonAD()
+	alternate = alternate.ToNonAD()
+
+	if primary.IsEmpty() {
+		return alternate
+	}
+
+	if alternate.IsEmpty() {
+		return primary
+	}
+
+	if primary.Server == types.HiddenUserServer && alternate.Server == types.DefaultUserServer {
+		return alternate
+	}
+
+	return primary
+}
+
+func isOutgoingMessage(info types.MessageInfo) bool {
+	if info.IsFromMe {
+		return true
+	}
+
+	if info.DeviceSentMeta == nil {
+		return false
+	}
+
+	return strings.TrimSpace(info.DeviceSentMeta.DestinationJID) != ""
 }
 
 func extractMessageText(evt *events.Message) string {

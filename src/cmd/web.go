@@ -72,12 +72,12 @@ func safeImageURL(raw *string) template.URL {
 	if err == nil {
 		scheme := strings.ToLower(parsed.Scheme)
 		if (scheme == "http" || scheme == "https") && parsed.Host != "" {
-			return template.URL(value)
+			return template.URL(value) //nolint:gosec // Value is constrained to validated absolute http(s) URLs.
 		}
 	}
 
 	if safeImageDataURLPattern.MatchString(value) {
-		return template.URL(value)
+		return template.URL(value) //nolint:gosec // Value is constrained to a strict image data URL allowlist.
 	}
 
 	return ""

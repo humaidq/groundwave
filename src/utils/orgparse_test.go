@@ -52,6 +52,14 @@ func TestParseOrgToHTMLWithBasePathResolvesIDLinks(t *testing.T) {
 		t.Fatalf("expected external link to render, got %s", rendered)
 	}
 
+	if !strings.Contains(rendered, "target=\"_blank\"") {
+		t.Fatalf("expected external links to open in new tab, got %s", rendered)
+	}
+
+	if !strings.Contains(rendered, "rel=\"noopener noreferrer\"") {
+		t.Fatalf("expected external links to include noopener noreferrer, got %s", rendered)
+	}
+
 	if !strings.Contains(rendered, "🗗") {
 		t.Fatalf("expected external link prefix to be added")
 	}
@@ -109,12 +117,28 @@ func TestAddExternalLinkPrefix(t *testing.T) {
 		t.Fatalf("expected prefix inserted for external link, got %s", output)
 	}
 
+	if !strings.Contains(output, `href="https://example.com" target="_blank" rel="noopener noreferrer"`) {
+		t.Fatalf("expected external links to include target and rel attributes, got %s", output)
+	}
+
 	if !strings.Contains(output, ">Internal</a>") {
 		t.Fatalf("expected internal link to remain unprefixed, got %s", output)
 	}
 
+	if strings.Contains(output, `href="/zk/123" target="_blank"`) {
+		t.Fatalf("expected internal links to keep original target behavior, got %s", output)
+	}
+
 	if !strings.Contains(output, ">Anchor</a>") {
 		t.Fatalf("expected anchor link to remain unprefixed, got %s", output)
+	}
+
+	if strings.Contains(output, `href="#section" target="_blank"`) {
+		t.Fatalf("expected anchor links to keep original target behavior, got %s", output)
+	}
+
+	if !strings.Contains(output, `href="https://example.com/already" target="_blank" rel="noopener noreferrer"`) {
+		t.Fatalf("expected already-prefixed external links to include target and rel attributes, got %s", output)
 	}
 
 	if strings.Count(output, "🗗") != 2 {
@@ -137,8 +161,35 @@ func TestAddExternalLinkPrefixSkipsBaseURL(t *testing.T) {
 		t.Fatalf("expected base URL link to remain unprefixed, got %s", output)
 	}
 
+	if strings.Contains(output, `href="https://groundwave.example.com/zk/123" target="_blank"`) {
+		t.Fatalf("expected base URL link to keep original target behavior, got %s", output)
+	}
+
+	if !strings.Contains(output, `href="https://example.com" target="_blank" rel="noopener noreferrer"`) {
+		t.Fatalf("expected external links to include target and rel attributes, got %s", output)
+	}
+
 	if strings.Count(output, "🗗") != 1 {
 		t.Fatalf("expected one external link prefix, got %d", strings.Count(output, "🗗"))
+	}
+}
+
+func TestAddExternalLinkPrefixMergesRelTokens(t *testing.T) {
+	t.Setenv("GROUNDWAVE_BASE_URL", "https://groundwave.example.com")
+
+	input := `<p><a href="https://example.com" rel="nofollow noreferrer">Example</a></p>`
+
+	output, err := addExternalLinkPrefix(input)
+	if err != nil {
+		t.Fatalf("addExternalLinkPrefix failed: %v", err)
+	}
+
+	if !strings.Contains(output, `target="_blank"`) {
+		t.Fatalf("expected target attribute to be present, got %s", output)
+	}
+
+	if !strings.Contains(output, `rel="nofollow noreferrer noopener"`) {
+		t.Fatalf("expected rel tokens to be merged without duplicates, got %s", output)
 	}
 }
 
@@ -206,6 +257,28 @@ func TestIsExternalLink(t *testing.T) {
 		if got := isExternalLink(tc.href); got != tc.expected {
 			t.Fatalf("isExternalLink(%q) expected %v, got %v", tc.href, tc.expected, got)
 		}
+	}
+}
+
+func TestMergeLinkRelValues(t *testing.T) {
+	tests := []struct {
+		name     string
+		existing string
+		expected string
+	}{
+		{name: "empty", existing: "", expected: "noopener noreferrer"},
+		{name: "adds required", existing: "nofollow", expected: "nofollow noopener noreferrer"},
+		{name: "keeps existing order", existing: "noreferrer nofollow", expected: "noreferrer nofollow noopener"},
+		{name: "dedupes case insensitive", existing: "NOOPENER noreferrer", expected: "NOOPENER noreferrer"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mergeLinkRelValues(tt.existing, externalLinkRelTokens...)
+			if got != tt.expected {
+				t.Fatalf("mergeLinkRelValues(%q) = %q, expected %q", tt.existing, got, tt.expected)
+			}
+		})
 	}
 }
 

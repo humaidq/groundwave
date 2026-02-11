@@ -102,6 +102,8 @@ func ParseOrgToHTMLWithBasePath(content string, basePath string) (string, error)
 
 var internalLinkPrefixes = []string{"/zk", "/note", "/groundwave"}
 
+var externalLinkRelTokens = []string{"noopener", "noreferrer"}
+
 func addExternalLinkPrefix(htmlBody string) (string, error) {
 	if strings.TrimSpace(htmlBody) == "" {
 		return htmlBody, nil
@@ -133,27 +135,84 @@ func addExternalLinkPrefix(htmlBody string) (string, error) {
 func annotateExternalLinks(node *nethtml.Node) {
 	for child := node.FirstChild; child != nil; child = child.NextSibling {
 		if child.Type == nethtml.ElementNode && child.Data == "a" {
-			href := ""
+			href := getLinkAttribute(child, "href")
 
-			for _, attr := range child.Attr {
-				if attr.Key == "href" {
-					href = attr.Val
-					break
-				}
-			}
+			if isExternalLink(href) {
+				setExternalLinkAttributes(child)
 
-			if isExternalLink(href) && !linkHasPrefix(child) {
-				prefixNode := &nethtml.Node{Type: nethtml.TextNode, Data: "🗗 "}
-				if child.FirstChild != nil {
-					child.InsertBefore(prefixNode, child.FirstChild)
-				} else {
-					child.AppendChild(prefixNode)
+				if !linkHasPrefix(child) {
+					prefixNode := &nethtml.Node{Type: nethtml.TextNode, Data: "🗗 "}
+					if child.FirstChild != nil {
+						child.InsertBefore(prefixNode, child.FirstChild)
+					} else {
+						child.AppendChild(prefixNode)
+					}
 				}
 			}
 		}
 
 		annotateExternalLinks(child)
 	}
+}
+
+func setExternalLinkAttributes(link *nethtml.Node) {
+	setLinkAttribute(link, "target", "_blank")
+
+	rel := mergeLinkRelValues(getLinkAttribute(link, "rel"), externalLinkRelTokens...)
+	setLinkAttribute(link, "rel", rel)
+}
+
+func getLinkAttribute(link *nethtml.Node, key string) string {
+	for _, attr := range link.Attr {
+		if strings.EqualFold(attr.Key, key) {
+			return attr.Val
+		}
+	}
+
+	return ""
+}
+
+func setLinkAttribute(link *nethtml.Node, key, value string) {
+	for i := range link.Attr {
+		if strings.EqualFold(link.Attr[i].Key, key) {
+			link.Attr[i].Key = key
+			link.Attr[i].Val = value
+
+			return
+		}
+	}
+
+	link.Attr = append(link.Attr, nethtml.Attribute{Key: key, Val: value})
+}
+
+func mergeLinkRelValues(existing string, required ...string) string {
+	tokens := strings.Fields(existing)
+	merged := make([]string, 0, len(tokens)+len(required))
+	seen := make(map[string]struct{}, len(tokens)+len(required))
+
+	for _, token := range tokens {
+		normalized := strings.ToLower(token)
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+
+		seen[normalized] = struct{}{}
+
+		merged = append(merged, token)
+	}
+
+	for _, token := range required {
+		normalized := strings.ToLower(token)
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+
+		seen[normalized] = struct{}{}
+
+		merged = append(merged, token)
+	}
+
+	return strings.Join(merged, " ")
 }
 
 func linkHasPrefix(link *nethtml.Node) bool {
