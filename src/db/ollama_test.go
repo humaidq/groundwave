@@ -19,6 +19,7 @@ func TestOllamaStreaming(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
+
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"Hello \"}}]}\n"))
@@ -40,23 +41,27 @@ func TestOllamaStreaming(t *testing.T) {
 	}
 
 	var streamed string
+
 	if err := streamChatCompletion(context.Background(), "system", "user", func(chunk string) error {
 		streamed += chunk
 		return nil
 	}); err != nil {
 		t.Fatalf("streamChatCompletion failed: %v", err)
 	}
+
 	if streamed != "Hello world" {
 		t.Fatalf("expected streamed output, got %q", streamed)
 	}
 
 	streamed = ""
+
 	if err := StreamLabSummary(context.Background(), profile, followup, results, func(chunk string) error {
 		streamed += chunk
 		return nil
 	}); err != nil {
 		t.Fatalf("StreamLabSummary failed: %v", err)
 	}
+
 	if streamed != "Hello world" {
 		t.Fatalf("expected streamed output, got %q", streamed)
 	}
@@ -64,24 +69,28 @@ func TestOllamaStreaming(t *testing.T) {
 	contact := &Contact{NameDisplay: "Chat Person"}
 	chats := []ContactChat{{Sender: ChatSenderThem, Message: "Hi", SentAt: time.Now()}}
 	streamed = ""
+
 	if err := StreamContactChatSummary(context.Background(), contact, chats, func(chunk string) error {
 		streamed += chunk
 		return nil
 	}); err != nil {
 		t.Fatalf("StreamContactChatSummary failed: %v", err)
 	}
+
 	if streamed != "Hello world" {
 		t.Fatalf("expected streamed output, got %q", streamed)
 	}
 
 	zkNotes := []ZKChatNote{{ID: "note-1", Title: "Note", Content: "Content"}}
 	streamed = ""
+
 	if err := StreamZKChat(context.Background(), zkNotes, "Question", func(chunk string) error {
 		streamed += chunk
 		return nil
 	}); err != nil {
 		t.Fatalf("StreamZKChat failed: %v", err)
 	}
+
 	if streamed != "Hello world" {
 		t.Fatalf("expected streamed output, got %q", streamed)
 	}

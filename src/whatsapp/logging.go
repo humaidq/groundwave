@@ -27,6 +27,7 @@ func (w *waLogger) withModule() *log.Logger {
 	if w.module == "" {
 		return w.base
 	}
+
 	return w.base.With("module", w.module)
 }
 
@@ -47,5 +48,6 @@ func (w *waLogger) Sub(module string) waLog.Logger {
 	if w.module == "" {
 		return &waLogger{base: w.base, module: module}
 	}
+
 	return &waLogger{base: w.base, module: w.module + "/" + module}
 }

@@ -14,9 +14,11 @@ import (
 	"github.com/pressly/goose/v3"
 	"github.com/urfave/cli/v3"
 
+	// Register pgx with database/sql for goose migrations.
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+// CmdMigrate defines database migration subcommands.
 var CmdMigrate = &cli.Command{
 	Name:  "migrate",
 	Usage: "Database migration commands",
@@ -63,10 +65,10 @@ var CmdMigrate = &cli.Command{
 	},
 }
 
-func getDB(cmd *cli.Command) (*sql.DB, error) {
+func getDB(ctx context.Context, cmd *cli.Command) (*sql.DB, error) {
 	databaseURL := cmd.String("database-url")
 	if databaseURL == "" {
-		return nil, fmt.Errorf("database-url is required (set via --database-url or DATABASE_URL env var)")
+		return nil, errDatabaseURLRequired
 	}
 
 	// Set DATABASE_URL for db package
@@ -81,10 +83,11 @@ func getDB(cmd *cli.Command) (*sql.DB, error) {
 	}
 
 	// Test the connection
-	if err := sqlDB.Ping(); err != nil {
+	if err := sqlDB.PingContext(ctx); err != nil {
 		if closeErr := sqlDB.Close(); closeErr != nil {
-			return nil, fmt.Errorf("failed to ping database: %w (close error: %v)", err, closeErr)
+			return nil, fmt.Errorf("failed to ping database: %w (close error: %w)", err, closeErr)
 		}
+
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
@@ -94,8 +97,9 @@ func getDB(cmd *cli.Command) (*sql.DB, error) {
 	// Set dialect
 	if err := goose.SetDialect("postgres"); err != nil {
 		if closeErr := sqlDB.Close(); closeErr != nil {
-			return nil, fmt.Errorf("failed to set dialect: %w (close error: %v)", err, closeErr)
+			return nil, fmt.Errorf("failed to set dialect: %w (close error: %w)", err, closeErr)
 		}
+
 		return nil, fmt.Errorf("failed to set dialect: %w", err)
 	}
 
@@ -103,10 +107,11 @@ func getDB(cmd *cli.Command) (*sql.DB, error) {
 }
 
 func migrateUp(ctx context.Context, cmd *cli.Command) error {
-	db, err := getDB(cmd)
+	db, err := getDB(ctx, cmd)
 	if err != nil {
 		return err
 	}
+
 	defer func() {
 		if err := db.Close(); err != nil {
 			appLogger.Warn("Failed to close migration database", "error", err)
@@ -118,14 +123,16 @@ func migrateUp(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	fmt.Println("Migrations completed successfully")
+
 	return nil
 }
 
 func migrateDown(ctx context.Context, cmd *cli.Command) error {
-	db, err := getDB(cmd)
+	db, err := getDB(ctx, cmd)
 	if err != nil {
 		return err
 	}
+
 	defer func() {
 		if err := db.Close(); err != nil {
 			appLogger.Warn("Failed to close migration database", "error", err)
@@ -137,14 +144,16 @@ func migrateDown(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	fmt.Println("Migration rolled back successfully")
+
 	return nil
 }
 
 func migrateStatus(ctx context.Context, cmd *cli.Command) error {
-	db, err := getDB(cmd)
+	db, err := getDB(ctx, cmd)
 	if err != nil {
 		return err
 	}
+
 	defer func() {
 		if err := db.Close(); err != nil {
 			appLogger.Warn("Failed to close migration database", "error", err)
@@ -159,10 +168,11 @@ func migrateStatus(ctx context.Context, cmd *cli.Command) error {
 }
 
 func migrateVersion(ctx context.Context, cmd *cli.Command) error {
-	db, err := getDB(cmd)
+	db, err := getDB(ctx, cmd)
 	if err != nil {
 		return err
 	}
+
 	defer func() {
 		if err := db.Close(); err != nil {
 			appLogger.Warn("Failed to close migration database", "error", err)
@@ -175,20 +185,22 @@ func migrateVersion(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	fmt.Printf("Database version: %d\n", version)
+
 	return nil
 }
 
-func migrateCreate(ctx context.Context, cmd *cli.Command) error {
+func migrateCreate(_ context.Context, cmd *cli.Command) error {
 	args := cmd.Args()
 	if args.Len() < 1 {
-		return fmt.Errorf("migration name is required")
+		return errMigrationNameRequired
 	}
+
 	name := args.First()
 
 	// Note: This command is for development only and requires source code access
 	// Create migration in the migrations directory (filesystem path, not embedded)
 	migrationsDir := "db/migrations"
-	if err := os.MkdirAll(migrationsDir, 0755); err != nil {
+	if err := os.MkdirAll(migrationsDir, 0o750); err != nil {
 		return fmt.Errorf("failed to create migrations directory: %w", err)
 	}
 
@@ -198,5 +210,6 @@ func migrateCreate(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	fmt.Printf("Created new migration in %s/\n", migrationsDir)
+
 	return nil
 }

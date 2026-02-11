@@ -13,6 +13,7 @@ import (
 // Tier represents the contact tier (A-F)
 type Tier string
 
+// Tier values represent supported contact tiers.
 const (
 	TierA Tier = "A"
 	TierB Tier = "B"
@@ -25,6 +26,7 @@ const (
 // Gender represents biological sex for medical reference ranges
 type Gender string
 
+// Gender values represent supported biological-sex categories.
 const (
 	GenderMale   Gender = "Male"
 	GenderFemale Gender = "Female"
@@ -34,6 +36,7 @@ const (
 // AgeRange represents age-based categorization for reference ranges
 type AgeRange string
 
+// AgeRange values represent supported age groups for lab ranges.
 const (
 	AgePediatric AgeRange = "Pediatric" // 0-17
 	AgeAdult     AgeRange = "Adult"     // 18-49
@@ -92,6 +95,7 @@ type Contact struct {
 // EmailType represents the type of email
 type EmailType string
 
+// EmailType values represent supported email categories.
 const (
 	EmailPersonal EmailType = "personal"
 	EmailWork     EmailType = "work"
@@ -112,6 +116,7 @@ type ContactEmail struct {
 // PhoneType represents the type of phone number
 type PhoneType string
 
+// PhoneType values represent supported phone categories.
 const (
 	PhoneCell  PhoneType = "cell"
 	PhoneHome  PhoneType = "home"
@@ -135,6 +140,7 @@ type ContactPhone struct {
 // AddressType represents the type of address
 type AddressType string
 
+// AddressType values represent supported address categories.
 const (
 	AddressHome  AddressType = "home"
 	AddressWork  AddressType = "work"
@@ -160,6 +166,7 @@ type ContactAddress struct {
 // URLType represents the type of URL/social media
 type URLType string
 
+// URLType values represent supported external profile/link categories.
 const (
 	URLWebsite       URLType = "website"
 	URLBlog          URLType = "blog"
@@ -214,6 +221,7 @@ type ContactTag struct {
 // LogType represents the type of interaction log
 type LogType string
 
+// LogType values represent supported interaction log categories.
 const (
 	LogGeneral       LogType = "general"
 	LogEmailSent     LogType = "email_sent"
@@ -228,9 +236,9 @@ const (
 )
 
 // ChatPlatform represents the chat platform/source
-
 type ChatPlatform string
 
+// ChatPlatform values represent supported chat sources.
 const (
 	ChatPlatformManual   ChatPlatform = "manual"
 	ChatPlatformEmail    ChatPlatform = "email"
@@ -243,9 +251,9 @@ const (
 )
 
 // ChatSender represents the sender for a chat entry
-
 type ChatSender string
 
+// ChatSender values represent who authored a chat entry.
 const (
 	ChatSenderMe   ChatSender = "me"
 	ChatSenderThem ChatSender = "them"
@@ -253,7 +261,6 @@ const (
 )
 
 // ContactChat represents a chat message with a contact
-
 type ContactChat struct {
 	ID        uuid.UUID    `db:"id"`
 	ContactID uuid.UUID    `db:"contact_id"`
@@ -297,9 +304,10 @@ type ContactNote struct {
 	UpdatedAt time.Time `db:"updated_at"`
 }
 
-// QSL Status types
+// QSLStatus represents received QSL confirmation status.
 type QSLStatus string
 
+// QSLStatus values represent ADIF QSL_RCVD statuses.
 const (
 	QSLYes       QSLStatus = "Y"
 	QSLNo        QSLStatus = "N"
@@ -308,8 +316,10 @@ const (
 	QSLVerified  QSLStatus = "V"
 )
 
+// QSLSentStatus represents sent QSL confirmation status.
 type QSLSentStatus string
 
+// QSLSentStatus values represent ADIF QSL_SENT statuses.
 const (
 	QSLSentYes       QSLSentStatus = "Y"
 	QSLSentNo        QSLSentStatus = "N"
@@ -318,8 +328,10 @@ const (
 	QSLSentIgnore    QSLSentStatus = "I"
 )
 
+// QSLVia represents the QSL route used for confirmation.
 type QSLVia string
 
+// QSLVia values represent ADIF QSL_VIA codes.
 const (
 	QSLViaBureau     QSLVia = "B"
 	QSLViaDirect     QSLVia = "D"
@@ -327,16 +339,20 @@ const (
 	QSLViaManager    QSLVia = "M"
 )
 
+// QSOUploadStatus represents upload state to external QSO services.
 type QSOUploadStatus string
 
+// QSOUploadStatus values represent ADIF upload flags.
 const (
 	QSOUploaded    QSOUploadStatus = "Y"
 	QSONotUploaded QSOUploadStatus = "N"
 	QSOModified    QSOUploadStatus = "M"
 )
 
+// QSOComplete represents completion state for a QSO record.
 type QSOComplete string
 
+// QSOComplete values represent ADIF completion statuses.
 const (
 	QSOCompleteYes     QSOComplete = "Y"
 	QSOCompleteNo      QSOComplete = "N"
@@ -344,8 +360,10 @@ const (
 	QSOCompleteUnknown QSOComplete = "?"
 )
 
+// AntPath represents signal path classification for a QSO.
 type AntPath string
 
+// AntPath values represent ADIF antenna path values.
 const (
 	AntPathGrayline  AntPath = "G"
 	AntPathOther     AntPath = "O"
@@ -586,6 +604,7 @@ func (q *QSO) GetContactID() string {
 	if q.ContactID == nil {
 		return ""
 	}
+
 	return q.ContactID.String()
 }
 
@@ -638,6 +657,7 @@ type ZettelCommentWithNote struct {
 // InventoryStatus represents the status of an inventory item
 type InventoryStatus string
 
+// InventoryStatus values represent supported inventory lifecycle states.
 const (
 	InventoryStatusActive              InventoryStatus = "active"
 	InventoryStatusStored              InventoryStatus = "stored"
@@ -648,6 +668,7 @@ const (
 	InventoryStatusLost                InventoryStatus = "lost"
 )
 
+// InventoryStatusLabel returns a human-readable label for an inventory status.
 func InventoryStatusLabel(status InventoryStatus) string {
 	switch status {
 	case InventoryStatusActive:
@@ -695,6 +716,7 @@ type InventoryComment struct {
 // LedgerAccountType represents the type of financial account.
 type LedgerAccountType string
 
+// LedgerAccountType values represent supported ledger account kinds.
 const (
 	LedgerAccountRegular  LedgerAccountType = "regular"
 	LedgerAccountDebt     LedgerAccountType = "debt"
@@ -704,6 +726,7 @@ const (
 // LedgerTransactionStatus represents the status of a ledger transaction.
 type LedgerTransactionStatus string
 
+// LedgerTransactionStatus values represent supported transaction states.
 const (
 	LedgerTransactionPending  LedgerTransactionStatus = "pending"
 	LedgerTransactionCleared  LedgerTransactionStatus = "cleared"
@@ -763,6 +786,7 @@ type LedgerReconciliation struct {
 // LabTestCategory represents the category of a lab test
 type LabTestCategory string
 
+// LabTestCategory values represent supported lab test buckets.
 const (
 	CategoryBloodCounts      LabTestCategory = "Blood Counts"
 	CategoryLipidPanel       LabTestCategory = "Lipid Panel"
@@ -796,12 +820,14 @@ func (h *HealthProfile) GetAge(atDate time.Time) *int {
 	if h.DateOfBirth == nil {
 		return nil
 	}
+
 	years := atDate.Year() - h.DateOfBirth.Year()
 	// Adjust if birthday hasn't occurred yet this year
 	if atDate.Month() < h.DateOfBirth.Month() ||
 		(atDate.Month() == h.DateOfBirth.Month() && atDate.Day() < h.DateOfBirth.Day()) {
 		years--
 	}
+
 	return &years
 }
 
@@ -812,6 +838,7 @@ func (h *HealthProfile) GetAgeRange(atDate time.Time) AgeRange {
 		// Default to adult if no DOB
 		return AgeAdult
 	}
+
 	switch {
 	case *age <= 17:
 		return AgePediatric

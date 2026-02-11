@@ -15,6 +15,12 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
+var (
+	errTestBoom        = errors.New("boom")
+	errTestWriteFailed = errors.New("write failed")
+	errTestParseFailed = errors.New("parse failed")
+)
+
 func TestParseOrgToHTML(t *testing.T) {
 	content := "* Heading\nSome text"
 
@@ -22,6 +28,7 @@ func TestParseOrgToHTML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseOrgToHTML failed: %v", err)
 	}
+
 	if !strings.Contains(rendered, "Heading") {
 		t.Fatalf("expected heading in output, got %s", rendered)
 	}
@@ -29,6 +36,7 @@ func TestParseOrgToHTML(t *testing.T) {
 
 func TestParseOrgToHTMLWithBasePathResolvesIDLinks(t *testing.T) {
 	t.Setenv("GROUNDWAVE_BASE_URL", "https://groundwave.example.com")
+
 	content := "[[id:075915aa-f7b9-499c-9858-8167d6b1e11b][My Note]] [[https://example.com][Ext]]"
 
 	rendered, err := ParseOrgToHTMLWithBasePath(content, "/notes/")
@@ -39,9 +47,11 @@ func TestParseOrgToHTMLWithBasePathResolvesIDLinks(t *testing.T) {
 	if !strings.Contains(rendered, "href=\"/notes/075915aa-f7b9-499c-9858-8167d6b1e11b\"") {
 		t.Fatalf("expected id link to use base path, got %s", rendered)
 	}
+
 	if !strings.Contains(rendered, "href=\"https://example.com\"") {
 		t.Fatalf("expected external link to render, got %s", rendered)
 	}
+
 	if !strings.Contains(rendered, "🗗") {
 		t.Fatalf("expected external link prefix to be added")
 	}
@@ -72,9 +82,11 @@ func TestParseOrgToHTMLHighlightCodeBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseOrgToHTMLWithBasePath failed: %v", err)
 	}
+
 	if !strings.Contains(rendered, "inline-code") {
 		t.Fatalf("expected inline-code in output, got %s", rendered)
 	}
+
 	if !strings.Contains(rendered, "code-block") {
 		t.Fatalf("expected code-block in output, got %s", rendered)
 	}
@@ -82,6 +94,7 @@ func TestParseOrgToHTMLHighlightCodeBlocks(t *testing.T) {
 
 func TestAddExternalLinkPrefix(t *testing.T) {
 	t.Setenv("GROUNDWAVE_BASE_URL", "https://groundwave.example.com")
+
 	input := `<p><a href="https://example.com">Example</a> ` +
 		`<a href="/zk/123">Internal</a> ` +
 		`<a href="#section">Anchor</a> ` +
@@ -95,12 +108,15 @@ func TestAddExternalLinkPrefix(t *testing.T) {
 	if !strings.Contains(output, ">🗗 Example</a>") {
 		t.Fatalf("expected prefix inserted for external link, got %s", output)
 	}
+
 	if !strings.Contains(output, ">Internal</a>") {
 		t.Fatalf("expected internal link to remain unprefixed, got %s", output)
 	}
+
 	if !strings.Contains(output, ">Anchor</a>") {
 		t.Fatalf("expected anchor link to remain unprefixed, got %s", output)
 	}
+
 	if strings.Count(output, "🗗") != 2 {
 		t.Fatalf("expected two external link prefixes, got %d", strings.Count(output, "🗗"))
 	}
@@ -108,6 +124,7 @@ func TestAddExternalLinkPrefix(t *testing.T) {
 
 func TestAddExternalLinkPrefixSkipsBaseURL(t *testing.T) {
 	t.Setenv("GROUNDWAVE_BASE_URL", "https://groundwave.example.com")
+
 	input := `<p><a href="https://groundwave.example.com/zk/123">Internal</a> ` +
 		`<a href="https://example.com">External</a></p>`
 
@@ -119,6 +136,7 @@ func TestAddExternalLinkPrefixSkipsBaseURL(t *testing.T) {
 	if strings.Contains(output, ">🗗 Internal</a>") {
 		t.Fatalf("expected base URL link to remain unprefixed, got %s", output)
 	}
+
 	if strings.Count(output, "🗗") != 1 {
 		t.Fatalf("expected one external link prefix, got %d", strings.Count(output, "🗗"))
 	}
@@ -129,6 +147,7 @@ func TestAddExternalLinkPrefixEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("addExternalLinkPrefix failed: %v", err)
 	}
+
 	if output != "   " {
 		t.Fatalf("expected whitespace to be preserved, got %q", output)
 	}
@@ -136,11 +155,14 @@ func TestAddExternalLinkPrefixEmpty(t *testing.T) {
 
 func TestAddExternalLinkPrefixEmptyAnchor(t *testing.T) {
 	t.Setenv("GROUNDWAVE_BASE_URL", "https://groundwave.example.com")
+
 	input := `<p><a href="https://example.com/empty"></a></p>`
+
 	output, err := addExternalLinkPrefix(input)
 	if err != nil {
 		t.Fatalf("addExternalLinkPrefix failed: %v", err)
 	}
+
 	if !strings.Contains(output, "🗗") {
 		t.Fatalf("expected prefix for empty anchor, got %s", output)
 	}
@@ -149,13 +171,16 @@ func TestAddExternalLinkPrefixEmptyAnchor(t *testing.T) {
 func TestLinkHasPrefixNonTextChild(t *testing.T) {
 	container := &nethtml.Node{Type: nethtml.ElementNode, Data: "div", DataAtom: atom.Div}
 	fragment := `<a href="https://example.com"><span>Text</span></a>`
+
 	nodes, err := nethtml.ParseFragment(strings.NewReader(fragment), container)
 	if err != nil {
 		t.Fatalf("ParseFragment failed: %v", err)
 	}
+
 	if len(nodes) == 0 {
 		t.Fatalf("expected nodes to be parsed")
 	}
+
 	if linkHasPrefix(nodes[0]) {
 		t.Fatalf("expected linkHasPrefix to be false for non-text child")
 	}
@@ -163,6 +188,7 @@ func TestLinkHasPrefixNonTextChild(t *testing.T) {
 
 func TestIsExternalLink(t *testing.T) {
 	t.Setenv("GROUNDWAVE_BASE_URL", "https://groundwave.example.com")
+
 	cases := []struct {
 		href     string
 		expected bool
@@ -207,6 +233,7 @@ func TestExtractIDProperty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractIDProperty failed: %v", err)
 	}
+
 	if id != "075915aa-f7b9-499c-9858-8167d6b1e11b" {
 		t.Fatalf("expected id, got %q", id)
 	}
@@ -242,6 +269,7 @@ func TestValidateUUID(t *testing.T) {
 	if err := ValidateUUID("TOO-SHORT"); err == nil {
 		t.Fatalf("expected error for short uuid")
 	}
+
 	if err := ValidateUUID("INVALID_UUID!"); err == nil {
 		t.Fatalf("expected error for invalid characters")
 	}
@@ -254,10 +282,12 @@ func TestValidateUUID(t *testing.T) {
 
 func TestExtractDateDirective(t *testing.T) {
 	content := "#+DATE: <2024-01-02>\n#+TITLE: Note"
+
 	date, ok := ExtractDateDirective(content)
 	if !ok {
 		t.Fatalf("expected date to be extracted")
 	}
+
 	expected := time.Date(2024, time.January, 2, 0, 0, 0, 0, time.UTC)
 	if !date.Equal(expected) {
 		t.Fatalf("expected %v, got %v", expected, date)
@@ -272,10 +302,12 @@ func TestExtractDateDirective(t *testing.T) {
 	}
 
 	content = "#+DATE: 2024-01-02"
+
 	date, ok = ExtractDateDirective(content)
 	if !ok {
 		t.Fatalf("expected date without angle brackets to be extracted")
 	}
+
 	if !date.Equal(expected) {
 		t.Fatalf("expected %v, got %v", expected, date)
 	}
@@ -284,8 +316,9 @@ func TestExtractDateDirective(t *testing.T) {
 func TestParseOrgToHTMLWithBasePathParseError(t *testing.T) {
 	origParseOrg := parseOrg
 	parseOrg = func(_ *org.Configuration, _ io.Reader) *org.Document {
-		return &org.Document{Error: errors.New("boom")}
+		return &org.Document{Error: errTestBoom}
 	}
+
 	defer func() {
 		parseOrg = origParseOrg
 	}()
@@ -298,8 +331,9 @@ func TestParseOrgToHTMLWithBasePathParseError(t *testing.T) {
 func TestParseOrgToHTMLWithBasePathWriteError(t *testing.T) {
 	origWriteOrg := writeOrg
 	writeOrg = func(_ *org.Document, _ *org.HTMLWriter) (string, error) {
-		return "", errors.New("write failed")
+		return "", errTestWriteFailed
 	}
+
 	defer func() {
 		writeOrg = origWriteOrg
 	}()
@@ -312,8 +346,9 @@ func TestParseOrgToHTMLWithBasePathWriteError(t *testing.T) {
 func TestParseOrgToHTMLWithBasePathAnnotateError(t *testing.T) {
 	origParseFragment := parseHTMLFragment
 	parseHTMLFragment = func(_ io.Reader, _ *nethtml.Node) ([]*nethtml.Node, error) {
-		return nil, errors.New("parse failed")
+		return nil, errTestParseFailed
 	}
+
 	defer func() {
 		parseHTMLFragment = origParseFragment
 	}()
@@ -326,8 +361,9 @@ func TestParseOrgToHTMLWithBasePathAnnotateError(t *testing.T) {
 func TestAddExternalLinkPrefixRenderError(t *testing.T) {
 	origRender := renderHTML
 	renderHTML = func(_ io.Writer, _ *nethtml.Node) error {
-		return errors.New("render failed")
+		return errTestRenderFailed
 	}
+
 	defer func() {
 		renderHTML = origRender
 	}()

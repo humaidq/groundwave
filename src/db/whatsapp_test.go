@@ -12,14 +12,17 @@ import (
 
 func TestWhatsAppPhoneMatching(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	if normalizePhone("+1 (415) 555-1234") != "14155551234" {
 		t.Fatalf("expected normalized phone")
 	}
+
 	if !phonesMatch("14155551234", "4155551234") {
 		t.Fatalf("expected suffix phone match")
 	}
+
 	if phonesMatch("", "123") {
 		t.Fatalf("expected empty phone to not match")
 	}
@@ -31,6 +34,7 @@ func TestWhatsAppPhoneMatching(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindContactByPhone failed: %v", err)
 	}
+
 	if found == nil || *found != contactID {
 		t.Fatalf("expected to find contact by phone")
 	}
@@ -42,6 +46,7 @@ func TestWhatsAppPhoneMatching(t *testing.T) {
 
 func TestFindContactByPhoneCardDAV(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	server := newCardDAVTestServer(t)
@@ -64,6 +69,7 @@ func TestFindContactByPhoneCardDAV(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindContactByPhone failed: %v", err)
 	}
+
 	if found == nil || *found != contactID {
 		t.Fatalf("expected to find contact by CardDAV phone")
 	}

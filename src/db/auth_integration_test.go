@@ -23,6 +23,7 @@ func setupTestCredential(id string) webauthn.Credential {
 
 func TestUserLifecycle(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	if _, err := CreateUser(ctx, CreateUserInput{}); err == nil {
@@ -33,6 +34,7 @@ func TestUserLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CountUsers failed: %v", err)
 	}
+
 	if count != 0 {
 		t.Fatalf("expected zero users, got %d", count)
 	}
@@ -46,6 +48,7 @@ func TestUserLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetUserByID failed: %v", err)
 	}
+
 	if byID.DisplayName != "Alice" {
 		t.Fatalf("expected display name Alice, got %q", byID.DisplayName)
 	}
@@ -54,6 +57,7 @@ func TestUserLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetFirstUser failed: %v", err)
 	}
+
 	if first == nil || first.ID != user.ID {
 		t.Fatalf("expected first user to match")
 	}
@@ -62,6 +66,7 @@ func TestUserLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListUsers failed: %v", err)
 	}
+
 	if len(users) != 1 {
 		t.Fatalf("expected 1 user, got %d", len(users))
 	}
@@ -70,6 +75,7 @@ func TestUserLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetUserByWebAuthnID failed: %v", err)
 	}
+
 	if byHandle == nil || byHandle.ID != user.ID {
 		t.Fatalf("expected user by handle to match")
 	}
@@ -82,6 +88,7 @@ func TestUserLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CountUsers failed: %v", err)
 	}
+
 	if count != 0 {
 		t.Fatalf("expected zero users, got %d", count)
 	}
@@ -89,6 +96,7 @@ func TestUserLifecycle(t *testing.T) {
 
 func TestUserPasskeyLifecycle(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	user := mustCreateUser(t, "Passkey User")
@@ -99,10 +107,12 @@ func TestUserPasskeyLifecycle(t *testing.T) {
 		AttestationType: "none",
 	}
 	label := "laptop"
+
 	passkey, err := AddUserPasskey(ctx, user.ID.String(), credential, &label)
 	if err != nil {
 		t.Fatalf("AddUserPasskey failed: %v", err)
 	}
+
 	if passkey.Label == nil || *passkey.Label != label {
 		t.Fatalf("expected label %q", label)
 	}
@@ -111,6 +121,7 @@ func TestUserPasskeyLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CountUserPasskeys failed: %v", err)
 	}
+
 	if count != 1 {
 		t.Fatalf("expected 1 passkey, got %d", count)
 	}
@@ -119,6 +130,7 @@ func TestUserPasskeyLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListUserPasskeys failed: %v", err)
 	}
+
 	if len(passkeys) != 1 {
 		t.Fatalf("expected 1 passkey, got %d", len(passkeys))
 	}
@@ -132,6 +144,7 @@ func TestUserPasskeyLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadUserCredentials failed: %v", err)
 	}
+
 	if len(creds) != 1 || string(creds[0].ID) != string(credential.ID) {
 		t.Fatalf("expected stored credential to match")
 	}
@@ -144,6 +157,7 @@ func TestUserPasskeyLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CountUserPasskeys failed: %v", err)
 	}
+
 	if count != 0 {
 		t.Fatalf("expected zero passkeys, got %d", count)
 	}
@@ -151,12 +165,14 @@ func TestUserPasskeyLifecycle(t *testing.T) {
 
 func TestUserQueriesNoResults(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	first, err := GetFirstUser(ctx)
 	if err != nil {
 		t.Fatalf("GetFirstUser failed: %v", err)
 	}
+
 	if first != nil {
 		t.Fatalf("expected no first user")
 	}
@@ -172,6 +188,7 @@ func TestUserQueriesNoResults(t *testing.T) {
 
 func TestFinalizeSetupRegistrationBootstrapIsAtomic(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	inputs := []FinalizeSetupRegistrationInput{
@@ -196,13 +213,17 @@ func TestFinalizeSetupRegistrationBootstrapIsAtomic(t *testing.T) {
 
 	results := make(chan setupResult, len(inputs))
 	start := make(chan struct{})
+
 	var waitGroup sync.WaitGroup
 
 	for _, input := range inputs {
 		waitGroup.Add(1)
+
 		go func(input FinalizeSetupRegistrationInput) {
 			defer waitGroup.Done()
+
 			<-start
+
 			user, err := FinalizeSetupRegistration(ctx, input)
 			results <- setupResult{user: user, err: err}
 		}(input)
@@ -214,15 +235,18 @@ func TestFinalizeSetupRegistrationBootstrapIsAtomic(t *testing.T) {
 
 	successes := 0
 	setupCompletedFailures := 0
+
 	for result := range results {
 		if result.err == nil {
 			successes++
 			continue
 		}
+
 		if errors.Is(result.err, ErrSetupAlreadyCompleted) {
 			setupCompletedFailures++
 			continue
 		}
+
 		t.Fatalf("unexpected setup finalize error: %v", result.err)
 	}
 
@@ -234,9 +258,11 @@ func TestFinalizeSetupRegistrationBootstrapIsAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListUsers failed: %v", err)
 	}
+
 	if len(users) != 1 {
 		t.Fatalf("expected 1 user after concurrent bootstrap finalize, got %d", len(users))
 	}
+
 	if !users[0].IsAdmin {
 		t.Fatalf("expected bootstrap user to be admin")
 	}
@@ -245,6 +271,7 @@ func TestFinalizeSetupRegistrationBootstrapIsAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CountUserPasskeys failed: %v", err)
 	}
+
 	if passkeyCount != 1 {
 		t.Fatalf("expected 1 passkey after concurrent bootstrap finalize, got %d", passkeyCount)
 	}
@@ -252,9 +279,11 @@ func TestFinalizeSetupRegistrationBootstrapIsAtomic(t *testing.T) {
 
 func TestFinalizeSetupRegistrationInviteIsAtomic(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	owner := mustCreateUser(t, "Invite Owner")
+
 	invite, err := CreateUserInvite(ctx, owner.ID.String(), "Invitee")
 	if err != nil {
 		t.Fatalf("CreateUserInvite failed: %v", err)
@@ -285,13 +314,17 @@ func TestFinalizeSetupRegistrationInviteIsAtomic(t *testing.T) {
 
 	results := make(chan setupResult, len(inputs))
 	start := make(chan struct{})
+
 	var waitGroup sync.WaitGroup
 
 	for _, input := range inputs {
 		waitGroup.Add(1)
+
 		go func(input FinalizeSetupRegistrationInput) {
 			defer waitGroup.Done()
+
 			<-start
+
 			user, err := FinalizeSetupRegistration(ctx, input)
 			results <- setupResult{user: user, err: err}
 		}(input)
@@ -303,15 +336,18 @@ func TestFinalizeSetupRegistrationInviteIsAtomic(t *testing.T) {
 
 	successes := 0
 	inviteFailures := 0
+
 	for result := range results {
 		if result.err == nil {
 			successes++
 			continue
 		}
+
 		if errors.Is(result.err, ErrInviteInvalidOrUsed) {
 			inviteFailures++
 			continue
 		}
+
 		t.Fatalf("unexpected invite finalize error: %v", result.err)
 	}
 
@@ -323,6 +359,7 @@ func TestFinalizeSetupRegistrationInviteIsAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListUsers failed: %v", err)
 	}
+
 	if len(users) != 2 {
 		t.Fatalf("expected owner plus one invited user, got %d users", len(users))
 	}
@@ -331,6 +368,7 @@ func TestFinalizeSetupRegistrationInviteIsAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListPendingUserInvites failed: %v", err)
 	}
+
 	if len(pendingInvites) != 0 {
 		t.Fatalf("expected invite to be consumed exactly once")
 	}
@@ -338,9 +376,11 @@ func TestFinalizeSetupRegistrationInviteIsAtomic(t *testing.T) {
 
 func TestFinalizeSetupRegistrationRollsBackOnPasskeyFailure(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	existingUser := mustCreateUser(t, "Existing User")
+
 	duplicateCredential := setupTestCredential("duplicate-credential")
 	if _, err := AddUserPasskey(ctx, existingUser.ID.String(), duplicateCredential, nil); err != nil {
 		t.Fatalf("AddUserPasskey failed: %v", err)
@@ -353,6 +393,7 @@ func TestFinalizeSetupRegistrationRollsBackOnPasskeyFailure(t *testing.T) {
 
 	inviteID := invite.ID.String()
 	newUserID := uuid.New()
+
 	_, err = FinalizeSetupRegistration(ctx, FinalizeSetupRegistrationInput{
 		UserID:      newUserID,
 		DisplayName: "New Invitee",
@@ -368,6 +409,7 @@ func TestFinalizeSetupRegistrationRollsBackOnPasskeyFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CountUsers failed: %v", err)
 	}
+
 	if count != 1 {
 		t.Fatalf("expected user creation to be rolled back, got %d users", count)
 	}
@@ -376,6 +418,7 @@ func TestFinalizeSetupRegistrationRollsBackOnPasskeyFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListPendingUserInvites failed: %v", err)
 	}
+
 	if len(pendingInvites) != 1 {
 		t.Fatalf("expected invite consume to be rolled back, got %d pending invites", len(pendingInvites))
 	}
@@ -387,9 +430,11 @@ func TestFinalizeSetupRegistrationRollsBackOnPasskeyFailure(t *testing.T) {
 
 func TestFinalizeSetupRegistrationRejectsExpiredInvite(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	owner := mustCreateUser(t, "Invite Owner")
+
 	invite, err := CreateUserInvite(ctx, owner.ID.String(), "Invitee")
 	if err != nil {
 		t.Fatalf("CreateUserInvite failed: %v", err)
@@ -404,6 +449,7 @@ func TestFinalizeSetupRegistrationRejectsExpiredInvite(t *testing.T) {
 	}
 
 	inviteID := invite.ID.String()
+
 	_, err = FinalizeSetupRegistration(ctx, FinalizeSetupRegistrationInput{
 		UserID:      uuid.New(),
 		DisplayName: "Late Invitee",
@@ -419,6 +465,7 @@ func TestFinalizeSetupRegistrationRejectsExpiredInvite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListUsers failed: %v", err)
 	}
+
 	if len(users) != 1 {
 		t.Fatalf("expected only owner user after expired invite finalize, got %d users", len(users))
 	}

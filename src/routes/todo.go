@@ -20,6 +20,7 @@ func Todo(c flamego.Context, t template.Template, data template.Data) {
 	note, err := db.GetTodoNote(ctx)
 	if err != nil {
 		logger.Error("Error fetching todo note", "error", err)
+
 		data["Error"] = "Failed to load todo list. Please check your WEBDAV_TODO_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables."
 	} else {
 		data["Note"] = note

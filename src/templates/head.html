@@ -80,6 +80,7 @@
       {{ if .SensitiveAccess }}
       <form id="restricted-bar" class="restricted-bar" method="POST" action="/sensitive-access/lock" data-expires-at="{{ .SensitiveAccessExpiresAt }}">
         <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+        <input type="hidden" name="requires_sensitive_access" value="{{ if .PageRequiresSensitiveAccess }}1{{ else }}0{{ end }}" />
         <button type="submit" class="restricted-bar-btn">
           Restricted view is unlocked, you can view sensitive information. Click here to re-lock.
           <span class="restricted-bar-countdown" aria-live="off"></span>

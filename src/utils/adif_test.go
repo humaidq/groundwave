@@ -4,13 +4,17 @@
 package utils
 
 import (
-	"fmt"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 )
 
+var errTestReadFailed = errors.New("read failed")
+
 func TestADIFParserParseFileSkipsMalformedRecords(t *testing.T) {
+	t.Parallel()
+
 	parser := NewADIFParser()
 	content := strings.Join([]string{
 		"Some header line",
@@ -32,9 +36,11 @@ func TestADIFParserParseFileSkipsMalformedRecords(t *testing.T) {
 	if qso.Call != "AB1CD" {
 		t.Fatalf("expected CALL to be uppercased, got %q", qso.Call)
 	}
+
 	if qso.Band != "20m" {
 		t.Fatalf("expected band 20m, got %q", qso.Band)
 	}
+
 	if qso.Country != "Japan" {
 		t.Fatalf("expected country Japan, got %q", qso.Country)
 	}
@@ -46,6 +52,8 @@ func TestADIFParserParseFileSkipsMalformedRecords(t *testing.T) {
 }
 
 func TestADIFParserParseRecordMissingRequiredFields(t *testing.T) {
+	t.Parallel()
+
 	parser := NewADIFParser()
 
 	if _, err := parser.parseRecord("<call:3>ABC"); err == nil {
@@ -58,6 +66,8 @@ func TestADIFParserParseRecordMissingRequiredFields(t *testing.T) {
 }
 
 func TestADIFParserParseRecordInvalidFieldLength(t *testing.T) {
+	t.Parallel()
+
 	parser := NewADIFParser()
 
 	_, err := parser.parseRecord("<call:6>ABC<qso_date:8>20240102")
@@ -67,6 +77,8 @@ func TestADIFParserParseRecordInvalidFieldLength(t *testing.T) {
 }
 
 func TestADIFParserParseRecordAllFields(t *testing.T) {
+	t.Parallel()
+
 	parser := NewADIFParser()
 
 	record := strings.Join([]string{
@@ -107,33 +119,43 @@ func TestADIFParserParseRecordAllFields(t *testing.T) {
 	if qso.Call != "K1ABC" || qso.QSODate != "20240102" || qso.TimeOn != "010203" {
 		t.Fatalf("unexpected core fields: %+v", qso)
 	}
+
 	if qso.QSODateOff != "20240102" || qso.TimeOff != "010204" {
 		t.Fatalf("unexpected off fields: %+v", qso)
 	}
+
 	if qso.Band != "20m" || qso.Mode != "SSB" || qso.Freq != "14.2" {
 		t.Fatalf("unexpected band/mode/freq: %+v", qso)
 	}
+
 	if qso.RSTSent != "59" || qso.RSTRcvd != "58" {
 		t.Fatalf("unexpected rst fields: %+v", qso)
 	}
+
 	if qso.QTH != "Boston" || qso.Name != "John" || qso.Comment != "Test" {
 		t.Fatalf("unexpected text fields: %+v", qso)
 	}
+
 	if qso.GridSquare != "FN31" || qso.Country != "Japan" || qso.DXCC != "291" {
 		t.Fatalf("unexpected location fields: %+v", qso)
 	}
+
 	if qso.MyGridSquare != "FN42" || qso.StationCall != "AB1CD" {
 		t.Fatalf("unexpected station fields: %+v", qso)
 	}
+
 	if qso.MyRig != "IC730" || qso.MyAntenna != "Dip" || qso.TxPwr != "100" {
 		t.Fatalf("unexpected equipment fields: %+v", qso)
 	}
+
 	if qso.QslSent != QslYes || qso.QslRcvd != QslNo || qso.LotwSent != QslRequested || qso.LotwRcvd != QslYes || qso.EqslSent != QslNo || qso.EqslRcvd != QslYes {
 		t.Fatalf("unexpected qsl fields: %+v", qso)
 	}
 }
 
 func TestADIFParserParseRecordLengthOverflow(t *testing.T) {
+	t.Parallel()
+
 	parser := NewADIFParser()
 
 	record := "<call:999999999999999999999999999999>ABC<qso_date:8>20240102"
@@ -143,6 +165,8 @@ func TestADIFParserParseRecordLengthOverflow(t *testing.T) {
 }
 
 func TestADIFParserParseFileReadError(t *testing.T) {
+	t.Parallel()
+
 	parser := NewADIFParser()
 
 	reader := errorReader{}
@@ -152,13 +176,17 @@ func TestADIFParserParseFileReadError(t *testing.T) {
 }
 
 func TestADIFParserParseTimestamp(t *testing.T) {
+	t.Parallel()
+
 	parser := NewADIFParser()
 
 	expected := time.Date(2024, time.January, 2, 3, 4, 5, 0, time.UTC)
+
 	parsed, err := parser.parseTimestamp("20240102", "030405")
 	if err != nil {
 		t.Fatalf("parseTimestamp failed: %v", err)
 	}
+
 	if !parsed.Equal(expected) {
 		t.Fatalf("expected %v, got %v", expected, parsed)
 	}
@@ -166,33 +194,43 @@ func TestADIFParserParseTimestamp(t *testing.T) {
 	if _, err := parser.parseTimestamp("202401", "030405"); err == nil {
 		t.Fatalf("expected error for invalid date length")
 	}
+
 	if _, err := parser.parseTimestamp("20240102", "0304"); err == nil {
 		t.Fatalf("expected error for invalid time length")
 	}
+
 	if _, err := parser.parseTimestamp("20aa0102", "030405"); err == nil {
 		t.Fatalf("expected error for non-numeric year")
 	}
+
 	if _, err := parser.parseTimestamp("2024010a", "030405"); err == nil {
 		t.Fatalf("expected error for non-numeric date")
 	}
+
 	if _, err := parser.parseTimestamp("2024aa02", "030405"); err == nil {
 		t.Fatalf("expected error for non-numeric month")
 	}
+
 	if _, err := parser.parseTimestamp("202401aa", "030405"); err == nil {
 		t.Fatalf("expected error for non-numeric day")
 	}
+
 	if _, err := parser.parseTimestamp("20240102", "aa0405"); err == nil {
 		t.Fatalf("expected error for non-numeric hour")
 	}
+
 	if _, err := parser.parseTimestamp("20240102", "03aa05"); err == nil {
 		t.Fatalf("expected error for non-numeric minute")
 	}
+
 	if _, err := parser.parseTimestamp("20240102", "0304aa"); err == nil {
 		t.Fatalf("expected error for non-numeric second")
 	}
 }
 
 func TestADIFParserSearchQSO(t *testing.T) {
+	t.Parallel()
+
 	parser := NewADIFParser()
 	first := time.Date(2024, time.January, 2, 10, 0, 0, 0, time.UTC)
 	second := time.Date(2024, time.January, 2, 10, 10, 0, 0, time.UTC)
@@ -203,10 +241,12 @@ func TestADIFParserSearchQSO(t *testing.T) {
 	}
 
 	searchTime := time.Date(2024, time.January, 2, 10, 6, 0, 0, time.UTC)
+
 	results := parser.SearchQSO("k1abc", searchTime, 10)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 match, got %d", len(results))
 	}
+
 	if !results[0].Timestamp.Equal(second) {
 		t.Fatalf("expected closest match at %v, got %v", second, results[0].Timestamp)
 	}
@@ -218,6 +258,8 @@ func TestADIFParserSearchQSO(t *testing.T) {
 }
 
 func TestADIFParserGettersAndSorting(t *testing.T) {
+	t.Parallel()
+
 	parser := NewADIFParser()
 	first := time.Date(2024, time.January, 2, 10, 0, 0, 0, time.UTC)
 	second := time.Date(2024, time.January, 3, 10, 0, 0, 0, time.UTC)
@@ -232,9 +274,11 @@ func TestADIFParserGettersAndSorting(t *testing.T) {
 	if got := parser.GetTotalQSOCount(); got != 4 {
 		t.Fatalf("expected 4 QSOs, got %d", got)
 	}
+
 	if got := parser.GetUniqueCountriesCount(); got != 2 {
 		t.Fatalf("expected 2 unique countries, got %d", got)
 	}
+
 	if got := parser.GetQSOsByCallsign("k1abc"); len(got) != 2 {
 		t.Fatalf("expected 2 QSOs for call, got %d", len(got))
 	}
@@ -243,9 +287,11 @@ func TestADIFParserGettersAndSorting(t *testing.T) {
 	if len(latest) != 2 {
 		t.Fatalf("expected 2 latest QSOs, got %d", len(latest))
 	}
+
 	if latest[0].Call != "K2DEF" {
 		t.Fatalf("expected latest call K2DEF, got %q", latest[0].Call)
 	}
+
 	if latest[1].Call != "K1ABC" {
 		t.Fatalf("expected second latest call K1ABC, got %q", latest[1].Call)
 	}
@@ -272,6 +318,8 @@ func TestADIFParserGettersAndSorting(t *testing.T) {
 }
 
 func TestADIFParserGetPaperQSLHallOfFame(t *testing.T) {
+	t.Parallel()
+
 	parser := NewADIFParser()
 	parser.QSOs = []QSO{
 		{Call: "K1ABC", Name: "", QslRcvd: QslYes},
@@ -284,15 +332,19 @@ func TestADIFParserGetPaperQSLHallOfFame(t *testing.T) {
 	if len(results) != 2 {
 		t.Fatalf("expected 2 hall-of-fame QSOs, got %d", len(results))
 	}
+
 	if results[0].Call != "K1ABC" || results[0].Name != "Alice" {
 		t.Fatalf("expected K1ABC with preferred name, got %+v", results[0])
 	}
+
 	if results[1].Call != "Z9XYZ" {
 		t.Fatalf("expected sorted Z9XYZ second, got %q", results[1].Call)
 	}
 }
 
 func TestQSOFormattingHelpers(t *testing.T) {
+	t.Parallel()
+
 	qso := QSO{
 		QSODate:   "20240102",
 		TimeOn:    "030405",
@@ -303,12 +355,15 @@ func TestQSOFormattingHelpers(t *testing.T) {
 	if got := qso.FormatQSOTime(); got != "2024-01-02 03:04:05 UTC" {
 		t.Fatalf("expected formatted timestamp, got %q", got)
 	}
+
 	if got := qso.FormatDate(); got != "2024-01-02" {
 		t.Fatalf("expected formatted date, got %q", got)
 	}
+
 	if got := qso.FormatTime(); got != "03:04" {
 		t.Fatalf("expected formatted time, got %q", got)
 	}
+
 	if got := qso.GetFlagCode(); got != "jp" {
 		t.Fatalf("expected flag code jp, got %q", got)
 	}
@@ -317,9 +372,11 @@ func TestQSOFormattingHelpers(t *testing.T) {
 	if got := zero.FormatQSOTime(); got != "20240102 030405 UTC" {
 		t.Fatalf("expected fallback timestamp, got %q", got)
 	}
+
 	if got := zero.FormatDate(); got != "2024-01-02" {
 		t.Fatalf("expected formatted date, got %q", got)
 	}
+
 	if got := zero.FormatTime(); got != "03:04" {
 		t.Fatalf("expected formatted time, got %q", got)
 	}
@@ -328,15 +385,19 @@ func TestQSOFormattingHelpers(t *testing.T) {
 	if got := short.FormatDate(); got != "202401" {
 		t.Fatalf("expected unmodified date, got %q", got)
 	}
+
 	if got := short.FormatTime(); got != "03" {
 		t.Fatalf("expected unmodified time, got %q", got)
 	}
+
 	if got := short.GetFlagCode(); got != "" {
 		t.Fatalf("expected empty flag code, got %q", got)
 	}
 }
 
 func TestADIFParserGetLatestQSOsEmpty(t *testing.T) {
+	t.Parallel()
+
 	parser := NewADIFParser()
 
 	latest := parser.GetLatestQSOs(5)
@@ -346,6 +407,8 @@ func TestADIFParserGetLatestQSOsEmpty(t *testing.T) {
 }
 
 func TestADIFParserGetQSOs(t *testing.T) {
+	t.Parallel()
+
 	parser := NewADIFParser()
 	parser.QSOs = []QSO{
 		{Call: "A1"},
@@ -361,5 +424,5 @@ func TestADIFParserGetQSOs(t *testing.T) {
 type errorReader struct{}
 
 func (errorReader) Read(_ []byte) (int, error) {
-	return 0, fmt.Errorf("read failed")
+	return 0, errTestReadFailed
 }

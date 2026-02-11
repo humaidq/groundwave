@@ -15,7 +15,7 @@ import (
 // ListJournalDayLocations fetches all locations for a journal day.
 func ListJournalDayLocations(ctx context.Context, day time.Time) ([]JournalDayLocation, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -32,8 +32,10 @@ func ListJournalDayLocations(ctx context.Context, day time.Time) ([]JournalDayLo
 	defer rows.Close()
 
 	var locations []JournalDayLocation
+
 	for rows.Next() {
 		var location JournalDayLocation
+
 		err := rows.Scan(
 			&location.ID,
 			&location.Day,
@@ -45,6 +47,7 @@ func ListJournalDayLocations(ctx context.Context, day time.Time) ([]JournalDayLo
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan journal day location: %w", err)
 		}
+
 		locations = append(locations, location)
 	}
 
@@ -58,7 +61,7 @@ func ListJournalDayLocations(ctx context.Context, day time.Time) ([]JournalDayLo
 // CreateJournalDayLocation creates a location entry for a journal day.
 func CreateJournalDayLocation(ctx context.Context, day time.Time, lat float64, lon float64) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -77,7 +80,7 @@ func CreateJournalDayLocation(ctx context.Context, day time.Time, lat float64, l
 // DeleteJournalDayLocation deletes a location entry by ID.
 func DeleteJournalDayLocation(ctx context.Context, locationID uuid.UUID) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `DELETE FROM journal_day_metadata WHERE id = $1`
@@ -88,7 +91,7 @@ func DeleteJournalDayLocation(ctx context.Context, locationID uuid.UUID) error {
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("location not found: %s", locationID)
+		return fmt.Errorf("%w: %s", ErrLocationNotFound, locationID)
 	}
 
 	return nil

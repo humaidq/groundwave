@@ -29,6 +29,7 @@ type ZKHistoryItem struct {
 	IsCurrent bool
 }
 
+// Backlink represents a note that links to another note.
 type Backlink struct {
 	ID    string
 	Title string
@@ -38,6 +39,8 @@ type Backlink struct {
 const zkHistoryKey = "zk_history"
 const zkPublicHistoryKey = "zk_public_history"
 const zkHistoryMaxItems = 4
+
+var updateZettelCommentDBFn = db.UpdateZettelComment
 
 func init() {
 	// Register ZKHistoryItem slice for session serialization
@@ -49,10 +52,12 @@ func getZKHistoryWithKey(s session.Session, key string) []ZKHistoryItem {
 	if val == nil {
 		return []ZKHistoryItem{}
 	}
+
 	history, ok := val.([]ZKHistoryItem)
 	if !ok {
 		return []ZKHistoryItem{}
 	}
+
 	return history
 }
 
@@ -70,6 +75,7 @@ func updateZKHistoryWithKey(s session.Session, key string, noteID, noteTitle str
 			filtered = append(filtered, item)
 		}
 	}
+
 	history = filtered
 
 	history = append(history, ZKHistoryItem{
@@ -96,30 +102,37 @@ func prepareZKHistoryForTemplate(history []ZKHistoryItem, currentID string) []ZK
 			IsCurrent: item.ID == currentID,
 		}
 	}
+
 	return result
 }
 
 func buildBacklinks(ctx context.Context, backlinkIDs []string, basePath string, publicOnly bool) []Backlink {
 	backlinks := make([]Backlink, 0, len(backlinkIDs))
+
 	trimmedBase := strings.TrimRight(basePath, "/")
 	if trimmedBase == "" {
 		trimmedBase = "/zk"
 	}
+
 	for _, backlinkID := range backlinkIDs {
 		if strings.HasPrefix(backlinkID, db.DailyBacklinkPrefix) {
 			if publicOnly {
 				continue
 			}
+
 			dateString := strings.TrimPrefix(backlinkID, db.DailyBacklinkPrefix)
+
 			title := dateString
 			if entry, ok := db.GetJournalEntryByDate(dateString); ok && entry.Title != "" {
 				title = entry.Title
 			}
+
 			backlinks = append(backlinks, Backlink{
 				ID:    backlinkID,
 				Title: title,
 				URL:   "/journal/" + dateString,
 			})
+
 			continue
 		}
 
@@ -128,15 +141,18 @@ func buildBacklinks(ctx context.Context, backlinkIDs []string, basePath string, 
 			logger.Error("Error fetching backlink note", "note_id", backlinkID, "error", err)
 			continue
 		}
+
 		if publicOnly && !backlinkNote.IsPublic {
 			continue
 		}
+
 		backlinks = append(backlinks, Backlink{
 			ID:    backlinkID,
 			Title: backlinkNote.Title,
 			URL:   trimmedBase + "/" + backlinkID,
 		})
 	}
+
 	return backlinks
 }
 
@@ -150,6 +166,7 @@ func ZettelkastenIndex(c flamego.Context, s session.Session, t template.Template
 		logger.Error("Error fetching zettelkasten index", "error", err)
 		SetErrorFlash(s, "Failed to load zettelkasten. Please check your WEBDAV_ZK_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables.")
 		c.Redirect("/", http.StatusSeeOther)
+
 		return
 	}
 
@@ -189,6 +206,7 @@ func ZettelkastenIndex(c flamego.Context, s session.Session, t template.Template
 	data["Backlinks"] = backlinks
 	data["LastCacheUpdate"] = lastCacheUpdate
 	data["IsZettelkasten"] = true
+
 	data["ZKHistory"] = history
 	if note.ID != "" {
 		data["PublishPath"] = "/note/" + note.ID
@@ -203,6 +221,7 @@ func ViewZKNote(c flamego.Context, s session.Session, t template.Template, data 
 	if noteID == "" {
 		SetErrorFlash(s, "Note ID is required")
 		c.Redirect("/zk", http.StatusSeeOther)
+
 		return
 	}
 
@@ -217,6 +236,7 @@ func ViewZKNote(c flamego.Context, s session.Session, t template.Template, data 
 		logger.Error("Error fetching note", "note_id", noteID, "error", err)
 		SetErrorFlash(s, "Note not found: "+noteID)
 		c.Redirect("/zk", http.StatusSeeOther)
+
 		return
 	}
 
@@ -256,6 +276,7 @@ func ViewZKNote(c flamego.Context, s session.Session, t template.Template, data 
 func renderPrivateNote(t template.Template, data template.Data) {
 	data["IsZettelkasten"] = true
 	data["HideNav"] = true
+
 	t.HTML(http.StatusNotFound, "note_private")
 }
 
@@ -281,7 +302,9 @@ func ViewPublicNote(c flamego.Context, s session.Session, t template.Template, d
 		if err != nil {
 			logger.Error("Error fetching public note", "note_id", noteID, "error", err)
 		}
+
 		renderPrivateNote(t, data)
+
 		return
 	}
 
@@ -308,6 +331,7 @@ func ZettelkastenList(c flamego.Context, t template.Template, data template.Data
 	notes, err := db.ListZKNotes(ctx)
 	if err != nil {
 		logger.Error("Error listing zettelkasten notes", "error", err)
+
 		data["Error"] = "Failed to load zettelkasten notes"
 	} else {
 		data["Notes"] = notes
@@ -332,21 +356,25 @@ func ZettelkastenRandom(c flamego.Context, s session.Session) {
 		logger.Error("Error listing zettelkasten notes", "error", err)
 		SetErrorFlash(s, "Failed to load zettelkasten notes")
 		c.Redirect("/zk", http.StatusSeeOther)
+
 		return
 	}
 
 	if len(notes) == 0 {
 		SetInfoFlash(s, "No zettelkasten pages available")
 		c.Redirect("/zk", http.StatusSeeOther)
+
 		return
 	}
 
 	indexMax := big.NewInt(int64(len(notes)))
+
 	index, err := rand.Int(rand.Reader, indexMax)
 	if err != nil {
 		logger.Error("Error picking random zettelkasten note", "error", err)
 		SetErrorFlash(s, "Failed to pick a random page")
 		c.Redirect("/zk", http.StatusSeeOther)
+
 		return
 	}
 
@@ -376,6 +404,7 @@ func ZettelkastenChat(c flamego.Context, s session.Session, t template.Template,
 		logger.Error("Error listing zettelkasten notes", "error", err)
 		SetErrorFlash(s, "Failed to load zettelkasten notes")
 		c.Redirect("/zk", http.StatusSeeOther)
+
 		return
 	}
 
@@ -413,6 +442,7 @@ func ZettelkastenChatLinks(c flamego.Context) {
 	links := db.GetZKNoteLinks(noteID)
 
 	w.Header().Set("Content-Type", "application/json")
+
 	if err := json.NewEncoder(w).Encode(map[string][]string{"links": links}); err != nil {
 		logger.Error("Error encoding chat links response", "error", err)
 	}
@@ -442,6 +472,7 @@ func ZettelkastenChatBacklinks(c flamego.Context) {
 	backlinks := db.GetBacklinksFromCache(noteID)
 
 	w.Header().Set("Content-Type", "application/json")
+
 	if err := json.NewEncoder(w).Encode(map[string][]string{"backlinks": backlinks}); err != nil {
 		logger.Error("Error encoding chat backlinks response", "error", err)
 	}
@@ -464,11 +495,13 @@ func ZettelkastenChatStream(c flamego.Context) {
 				return
 			}
 		}
+
 		escapedData := strings.ReplaceAll(data, "\n", "\ndata: ")
 		if _, err := w.Write([]byte("data: " + escapedData + "\n\n")); err != nil {
 			logger.Error("Error writing SSE data", "error", err)
 			return
 		}
+
 		if flusher, ok := w.(http.Flusher); ok {
 			flusher.Flush()
 		}
@@ -506,6 +539,7 @@ func ZettelkastenChatStream(c flamego.Context) {
 		if err != nil {
 			logger.Error("Error fetching zettelkasten note", "note_id", noteID, "error", err)
 			sendError("Note not found: " + noteID)
+
 			return
 		}
 
@@ -524,6 +558,7 @@ func ZettelkastenChatStream(c flamego.Context) {
 	if err != nil {
 		logger.Error("Error generating zettelkasten chat response", "error", err)
 		sendError("Failed to generate response: " + err.Error())
+
 		return
 	}
 
@@ -531,11 +566,12 @@ func ZettelkastenChatStream(c flamego.Context) {
 }
 
 // AddZettelComment handles posting a comment to a zettel
-func AddZettelComment(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+func AddZettelComment(c flamego.Context, s session.Session, _ template.Template, _ template.Data) {
 	zettelID := c.Param("id")
 	if zettelID == "" {
 		SetErrorFlash(s, "Zettel ID is required")
 		c.Redirect("/zk", http.StatusSeeOther)
+
 		return
 	}
 
@@ -546,6 +582,7 @@ func AddZettelComment(c flamego.Context, s session.Session, t template.Template,
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -562,6 +599,7 @@ func AddZettelComment(c flamego.Context, s session.Session, t template.Template,
 		logger.Error("Error creating zettel comment", "error", err)
 		SetErrorFlash(s, "Failed to add comment")
 		c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -571,13 +609,14 @@ func AddZettelComment(c flamego.Context, s session.Session, t template.Template,
 }
 
 // UpdateZettelComment handles editing an existing comment
-func UpdateZettelComment(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+func UpdateZettelComment(c flamego.Context, s session.Session, _ template.Template, _ template.Data) {
 	zettelID := c.Param("id")
 	commentIDStr := c.Param("comment_id")
 
 	if zettelID == "" || commentIDStr == "" {
 		SetErrorFlash(s, "Invalid request")
 		c.Redirect("/zk", http.StatusSeeOther)
+
 		return
 	}
 
@@ -588,6 +627,7 @@ func UpdateZettelComment(c flamego.Context, s session.Session, t template.Templa
 		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to update comment")
 		c.Redirect(redirectPath, http.StatusSeeOther)
+
 		return
 	}
 
@@ -600,6 +640,7 @@ func UpdateZettelComment(c flamego.Context, s session.Session, t template.Templa
 		logger.Warn("Invalid comment ID", "error", err)
 		SetErrorFlash(s, "Invalid comment ID")
 		c.Redirect(redirectPath, http.StatusSeeOther)
+
 		return
 	}
 
@@ -607,14 +648,16 @@ func UpdateZettelComment(c flamego.Context, s session.Session, t template.Templa
 	if content == "" {
 		SetErrorFlash(s, "Comment content is required")
 		c.Redirect(redirectPath, http.StatusSeeOther)
+
 		return
 	}
 
 	ctx := c.Request().Context()
-	if err := db.UpdateZettelComment(ctx, commentID, content); err != nil {
+	if err := updateZettelCommentDBFn(ctx, zettelID, commentID, content); err != nil {
 		logger.Error("Error updating zettel comment", "error", err)
 		SetErrorFlash(s, "Failed to update comment")
 		c.Redirect(redirectPath, http.StatusSeeOther)
+
 		return
 	}
 
@@ -623,13 +666,14 @@ func UpdateZettelComment(c flamego.Context, s session.Session, t template.Templa
 }
 
 // DeleteZettelComment handles deleting a comment
-func DeleteZettelComment(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+func DeleteZettelComment(c flamego.Context, s session.Session, _ template.Template, _ template.Data) {
 	zettelID := c.Param("id")
 	commentIDStr := c.Param("comment_id")
 
 	if zettelID == "" || commentIDStr == "" {
 		SetErrorFlash(s, "Invalid request")
 		c.Redirect("/zk", http.StatusSeeOther)
+
 		return
 	}
 
@@ -639,6 +683,7 @@ func DeleteZettelComment(c flamego.Context, s session.Session, t template.Templa
 		logger.Warn("Invalid comment ID", "error", err)
 		SetErrorFlash(s, "Invalid comment ID")
 		c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -649,6 +694,7 @@ func DeleteZettelComment(c flamego.Context, s session.Session, t template.Templa
 		logger.Error("Error deleting zettel comment", "error", err)
 		SetErrorFlash(s, "Failed to delete comment")
 		c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -658,11 +704,12 @@ func DeleteZettelComment(c flamego.Context, s session.Session, t template.Templa
 }
 
 // DeleteAllZettelComments handles deleting all comments for a zettel
-func DeleteAllZettelComments(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+func DeleteAllZettelComments(c flamego.Context, s session.Session, _ template.Template, _ template.Data) {
 	zettelID := c.Param("id")
 	if zettelID == "" {
 		SetErrorFlash(s, "Zettel ID is required")
 		c.Redirect("/zk", http.StatusSeeOther)
+
 		return
 	}
 
@@ -675,6 +722,7 @@ func DeleteAllZettelComments(c flamego.Context, s session.Session, t template.Te
 		logger.Error("Error deleting zettel comments", "zettel_id", zettelID, "error", err)
 		SetErrorFlash(s, "Failed to delete comments")
 		c.Redirect("/zk/"+zettelID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -709,6 +757,7 @@ func ZettelCommentsInbox(c flamego.Context, s session.Session, t template.Templa
 		logger.Error("Error fetching zettel comments", "error", err)
 		SetErrorFlash(s, "Failed to load comments inbox")
 		c.Redirect("/zk", http.StatusSeeOther)
+
 		return
 	}
 
@@ -722,6 +771,7 @@ func ZettelCommentsInbox(c flamego.Context, s session.Session, t template.Templa
 	}
 
 	groupMap := make(map[string]*ZettelGroup)
+
 	var groups []ZettelGroup
 
 	for _, enriched := range comments {
@@ -736,6 +786,7 @@ func ZettelCommentsInbox(c flamego.Context, s session.Session, t template.Templa
 			groupMap[enriched.ZettelID] = &group
 			groups = append(groups, group)
 		}
+
 		groupMap[enriched.ZettelID].Comments = append(
 			groupMap[enriched.ZettelID].Comments,
 			enriched.ZettelComment,

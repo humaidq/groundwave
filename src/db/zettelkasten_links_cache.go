@@ -19,9 +19,10 @@ import (
 	"github.com/humaidq/groundwave/utils"
 )
 
-// Global cache for backlinks
+// DailyBacklinkPrefix prefixes synthetic IDs for daily-note backlinks.
 const DailyBacklinkPrefix = "daily:"
 
+// Global cache for backlinks.
 var (
 	backlinkCache    = make(map[string][]string) // target ID -> slice of source IDs
 	forwardLinkCache = make(map[string][]string) // source ID -> slice of target IDs
@@ -95,6 +96,7 @@ var (
 
 func buildContactLinkMatchers(baseURL string) []*regexp.Regexp {
 	matchers := []*regexp.Regexp{contactProtocolPattern, contactRelativePattern, contactOrgLinkPattern}
+
 	trimmed := strings.TrimSpace(strings.TrimRight(baseURL, "/"))
 	if trimmed == "" {
 		return matchers
@@ -106,6 +108,7 @@ func buildContactLinkMatchers(baseURL string) []*regexp.Regexp {
 	if err != nil || parsed.Host == "" {
 		parsed, err = url.Parse("https://" + trimmed)
 	}
+
 	if err != nil || parsed.Host == "" {
 		return matchers
 	}
@@ -114,10 +117,12 @@ func buildContactLinkMatchers(baseURL string) []*regexp.Regexp {
 	if basePath != "" && basePath != "/" {
 		matchers = append(matchers, regexp.MustCompile("(?i)https?://"+regexp.QuoteMeta(parsed.Host)+regexp.QuoteMeta(basePath)+"/contact/("+contactUUIDPattern+")(?:/)?"))
 		matchers = append(matchers, regexp.MustCompile("(?i)(?:^|[\\s\\[\\(])"+regexp.QuoteMeta(basePath)+"/contact/("+contactUUIDPattern+")(?:/)?"))
+
 		return matchers
 	}
 
 	matchers = append(matchers, regexp.MustCompile("(?i)https?://"+regexp.QuoteMeta(parsed.Host)+"/contact/("+contactUUIDPattern+")(?:/)?"))
+
 	return matchers
 }
 
@@ -127,6 +132,7 @@ func extractContactLinksFromContent(content string, matchers []*regexp.Regexp) [
 	}
 
 	contactIDs := make([]string, 0)
+
 	for _, matcher := range matchers {
 		matches := matcher.FindAllStringSubmatch(content, -1)
 		for _, match := range matches {
@@ -158,6 +164,7 @@ func BuildBacklinkCache(ctx context.Context) error {
 
 func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []string) error {
 	logger.Info("Building backlink cache")
+
 	startTime := time.Now()
 
 	type orgFile struct {
@@ -169,6 +176,7 @@ func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []str
 	for _, file := range orgFiles {
 		files = append(files, orgFile{Name: file})
 	}
+
 	for _, file := range dailyFiles {
 		files = append(files, orgFile{Name: file, IsDaily: true})
 	}
@@ -185,36 +193,46 @@ func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []str
 	// Scan each file
 	for _, file := range files {
 		// Fetch file content
-		var content string
-		var err error
+		var (
+			content string
+			err     error
+		)
+
 		if file.IsDaily {
 			content, err = FetchDailyOrgFile(ctx, file.Name)
 		} else {
 			content, err = FetchOrgFile(ctx, file.Name)
 		}
+
 		if err != nil {
 			logger.Warn("Skipping unreadable file", "file", file.Name, "error", err)
+
 			filesSkipped++
+
 			continue
 		}
 
 		// Extract source ID (the note's own ID)
-		sourceID := ""
+		var sourceID string
+
 		if file.IsDaily {
 			dateString := strings.TrimSuffix(file.Name, ".org")
 			if _, parseErr := time.Parse("2006-01-02", dateString); parseErr != nil {
 				filesSkipped++
 				continue
 			}
+
 			sourceID = DailyBacklinkPrefix + dateString
 		} else {
 			var err error
+
 			sourceID, err = utils.ExtractIDProperty(content)
 			if err != nil {
 				// File doesn't have an ID property, skip it
 				filesSkipped++
 				continue
 			}
+
 			tempPublicCache[sourceID] = utils.IsPublicAccess(content)
 		}
 
@@ -227,9 +245,11 @@ func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []str
 			if targetID == "" {
 				continue
 			}
+
 			if _, exists := seenTargets[targetID]; exists {
 				continue
 			}
+
 			seenTargets[targetID] = struct{}{}
 			tempBacklinkCache[targetID] = append(tempBacklinkCache[targetID], sourceID)
 		}
@@ -238,6 +258,7 @@ func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []str
 		for targetID := range seenTargets {
 			forwardLinks = append(forwardLinks, targetID)
 		}
+
 		sort.Strings(forwardLinks)
 		tempForwardCache[sourceID] = forwardLinks
 
@@ -246,9 +267,11 @@ func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []str
 			if contactID == "" {
 				continue
 			}
+
 			if _, exists := seenContacts[contactID]; exists {
 				continue
 			}
+
 			seenContacts[contactID] = struct{}{}
 			tempContactLinkCache[contactID] = append(tempContactLinkCache[contactID], sourceID)
 		}
@@ -258,11 +281,13 @@ func buildBacklinkCacheFromFiles(ctx context.Context, orgFiles, dailyFiles []str
 
 	// Update global cache with write lock
 	backlinkMutex.Lock()
+
 	backlinkCache = tempBacklinkCache
 	forwardLinkCache = tempForwardCache
 	publicNoteCache = tempPublicCache
 	contactLinkCache = tempContactLinkCache
 	lastCacheBuild = time.Now()
+
 	backlinkMutex.Unlock()
 
 	duration := time.Since(startTime)
@@ -284,6 +309,7 @@ func BuildJournalCache(ctx context.Context) error {
 
 func buildJournalCacheFromFiles(ctx context.Context, files []string) error {
 	logger.Info("Building journal cache")
+
 	startTime := time.Now()
 
 	tempCache := make(map[string]JournalEntry)
@@ -296,6 +322,7 @@ func buildJournalCacheFromFiles(ctx context.Context, files []string) error {
 		}
 
 		dateString := strings.TrimSuffix(file, ".org")
+
 		parsedDate, err := time.Parse("2006-01-02", dateString)
 		if err != nil {
 			filesSkipped++
@@ -305,23 +332,29 @@ func buildJournalCacheFromFiles(ctx context.Context, files []string) error {
 		content, err := FetchDailyOrgFile(ctx, file)
 		if err != nil {
 			logger.Warn("Skipping unreadable journal file", "file", file, "error", err)
+
 			filesSkipped++
+
 			continue
 		}
 
 		htmlBody, err := utils.ParseOrgToHTML(content)
 		if err != nil {
 			logger.Warn("Skipping journal file due to parse error", "file", file, "error", err)
+
 			filesSkipped++
+
 			continue
 		}
 
 		previewContent, hasMore := buildJournalPreview(content, 2, 480)
+
 		previewHTML := ""
 		if previewContent != "" {
 			previewHTML, err = utils.ParseOrgToHTML(previewContent)
 			if err != nil {
 				logger.Warn("Failed to parse journal preview", "file", file, "error", err)
+
 				previewHTML = ""
 			}
 		}
@@ -335,8 +368,8 @@ func buildJournalCacheFromFiles(ctx context.Context, files []string) error {
 			Date:       parsedDate,
 			Filename:   file,
 			Title:      title,
-			HTMLBody:   template.HTML(htmlBody),
-			Preview:    template.HTML(previewHTML),
+			HTMLBody:   template.HTML(htmlBody),    //nolint:gosec // HTML is generated by trusted org parser.
+			Preview:    template.HTML(previewHTML), //nolint:gosec // HTML is generated by trusted org parser.
 			HasMore:    hasMore,
 			UpdatedAt:  time.Now(),
 			DateString: dateString,
@@ -345,8 +378,10 @@ func buildJournalCacheFromFiles(ctx context.Context, files []string) error {
 	}
 
 	journalMutex.Lock()
+
 	journalCache = tempCache
 	lastJournalBuild = time.Now()
+
 	journalMutex.Unlock()
 
 	duration := time.Since(startTime)
@@ -368,6 +403,7 @@ func BuildZKTimelineNotesCache(ctx context.Context) error {
 
 func buildZKTimelineNotesCacheFromFiles(ctx context.Context, files []string) error {
 	logger.Info("Building zettelkasten timeline note cache")
+
 	startTime := time.Now()
 
 	config, err := GetZKConfig()
@@ -383,6 +419,7 @@ func buildZKTimelineNotesCacheFromFiles(ctx context.Context, files []string) err
 		if file == config.IndexFile {
 			continue
 		}
+
 		if !zkNoteFileFormat.MatchString(file) {
 			continue
 		}
@@ -402,7 +439,9 @@ func buildZKTimelineNotesCacheFromFiles(ctx context.Context, files []string) err
 		content, err := FetchOrgFile(ctx, file)
 		if err != nil {
 			logger.Warn("Skipping unreadable note file", "file", file, "error", err)
+
 			filesSkipped++
+
 			continue
 		}
 
@@ -418,6 +457,7 @@ func buildZKTimelineNotesCacheFromFiles(ctx context.Context, files []string) err
 		}
 
 		dateString := parsedTimestamp.Format("2006-01-02")
+
 		overrideDate, hasOverride := utils.ExtractDateDirective(content)
 		if hasOverride {
 			overrideDateString := overrideDate.Format("2006-01-02")
@@ -450,8 +490,10 @@ func buildZKTimelineNotesCacheFromFiles(ctx context.Context, files []string) err
 	}
 
 	zkNoteMutex.Lock()
+
 	zkNoteCache = tempCache
 	lastZKNoteBuild = time.Now()
+
 	zkNoteMutex.Unlock()
 
 	duration := time.Since(startTime)
@@ -473,15 +515,19 @@ func buildJournalPreview(content string, maxParagraphs, maxChars int) (string, b
 			inProperties = true
 			continue
 		}
+
 		if inProperties {
 			if strings.EqualFold(trimmed, ":END:") {
 				inProperties = false
 			}
+
 			continue
 		}
+
 		if strings.HasPrefix(strings.ToUpper(trimmed), "#+TITLE:") {
 			continue
 		}
+
 		if strings.HasPrefix(trimmed, "*") {
 			stripped := strings.TrimLeft(trimmed, "*")
 			if strings.HasPrefix(stripped, " ") {
@@ -494,6 +540,7 @@ func buildJournalPreview(content string, maxParagraphs, maxChars int) (string, b
 				paragraphs = append(paragraphs, strings.Join(current, "\n"))
 				current = current[:0]
 			}
+
 			continue
 		}
 
@@ -505,6 +552,7 @@ func buildJournalPreview(content string, maxParagraphs, maxChars int) (string, b
 	}
 
 	hasMore := false
+
 	if len(paragraphs) > maxParagraphs {
 		paragraphs = paragraphs[:maxParagraphs]
 		hasMore = true
@@ -526,10 +574,12 @@ func buildJournalPreview(content string, maxParagraphs, maxChars int) (string, b
 // GetJournalEntriesFromCache retrieves all cached journal entries sorted by date.
 func GetJournalEntriesFromCache() []JournalEntry {
 	journalMutex.RLock()
+
 	entries := make([]JournalEntry, 0, len(journalCache))
 	for _, entry := range journalCache {
 		entries = append(entries, entry)
 	}
+
 	journalMutex.RUnlock()
 
 	sort.Slice(entries, func(i, j int) bool {
@@ -544,12 +594,15 @@ func GetJournalEntryByDate(date string) (JournalEntry, bool) {
 	if date == "" {
 		return JournalEntry{}, false
 	}
+
 	if _, err := time.Parse("2006-01-02", date); err != nil {
 		return JournalEntry{}, false
 	}
 
 	journalMutex.RLock()
+
 	entry, exists := journalCache[date]
+
 	journalMutex.RUnlock()
 
 	return entry, exists
@@ -559,6 +612,7 @@ func GetJournalEntryByDate(date string) (JournalEntry, bool) {
 func GetLastJournalCacheBuildTime() time.Time {
 	journalMutex.RLock()
 	defer journalMutex.RUnlock()
+
 	return lastJournalBuild
 }
 
@@ -581,6 +635,7 @@ func GetZKTimelineNotesByDate() map[string][]ZKTimelineNote {
 func GetLastZKNoteCacheBuildTime() time.Time {
 	zkNoteMutex.RLock()
 	defer zkNoteMutex.RUnlock()
+
 	return lastZKNoteBuild
 }
 
@@ -599,9 +654,11 @@ func GetBacklinksFromCache(targetID string) []string {
 	// Return a copy to prevent external modification
 	result := make([]string, len(backlinks))
 	copy(result, backlinks)
+
 	return result
 }
 
+// GetContactLinksFromCache returns cached note IDs that reference a contact ID.
 func GetContactLinksFromCache(contactID string) []string {
 	contactID = strings.ToLower(strings.TrimSpace(contactID))
 	if contactID == "" {
@@ -609,7 +666,9 @@ func GetContactLinksFromCache(contactID string) []string {
 	}
 
 	backlinkMutex.RLock()
+
 	links, exists := contactLinkCache[contactID]
+
 	backlinkMutex.RUnlock()
 
 	if !exists {
@@ -618,6 +677,7 @@ func GetContactLinksFromCache(contactID string) []string {
 
 	result := make([]string, len(links))
 	copy(result, links)
+
 	return result
 }
 
@@ -633,6 +693,7 @@ func GetForwardLinksFromCache(sourceID string) []string {
 
 	result := make([]string, len(links))
 	copy(result, links)
+
 	return result
 }
 
@@ -653,12 +714,14 @@ func IsPublicNoteFromCache(noteID string) bool {
 func GetLastCacheBuildTime() time.Time {
 	backlinkMutex.RLock()
 	defer backlinkMutex.RUnlock()
+
 	return lastCacheBuild
 }
 
 // RebuildZettelkastenCaches performs a single sweep to rebuild all cache layers.
 func RebuildZettelkastenCaches(ctx context.Context) error {
 	logger.Info("Rebuilding zettelkasten caches")
+
 	startTime := time.Now()
 
 	orgFiles, err := ListOrgFiles(ctx)
@@ -676,14 +739,17 @@ func RebuildZettelkastenCaches(ctx context.Context) error {
 	if err := buildBacklinkCacheFromFiles(ctx, orgFiles, dailyFiles); err != nil {
 		return err
 	}
+
 	if err := buildJournalCacheFromFiles(ctx, dailyFiles); err != nil {
 		return err
 	}
+
 	if err := buildZKTimelineNotesCacheFromFiles(ctx, orgFiles); err != nil {
 		return err
 	}
 
 	logger.Infof("Cache rebuild completed in %v", time.Since(startTime))
+
 	return nil
 }
 

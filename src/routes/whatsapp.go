@@ -17,7 +17,7 @@ import (
 )
 
 // WhatsAppPairing renders the WhatsApp pairing/status page
-func WhatsAppPairing(c flamego.Context, t template.Template, data template.Data) {
+func WhatsAppPairing(_ flamego.Context, t template.Template, data template.Data) {
 	client := whatsapp.GetClient()
 
 	if client != nil {
@@ -44,6 +44,7 @@ func WhatsAppConnect(c flamego.Context, s session.Session) {
 	if client == nil {
 		SetErrorFlash(s, "WhatsApp is not available")
 		c.Redirect("/whatsapp", http.StatusSeeOther)
+
 		return
 	}
 
@@ -64,6 +65,7 @@ func WhatsAppDisconnect(c flamego.Context, s session.Session) {
 	if client == nil {
 		SetErrorFlash(s, "WhatsApp is not available")
 		c.Redirect("/whatsapp", http.StatusSeeOther)
+
 		return
 	}
 
@@ -94,6 +96,7 @@ func WhatsAppStatusAPI(c flamego.Context) {
 	}
 
 	c.ResponseWriter().Header().Set("Content-Type", "application/json")
+
 	if err := json.NewEncoder(c.ResponseWriter()).Encode(response); err != nil {
 		logger.Error("Error encoding WhatsApp status", "error", err)
 	}

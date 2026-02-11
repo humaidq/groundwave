@@ -25,6 +25,7 @@ func newCardDAVTestServer(t *testing.T) *carddavTestServer {
 
 	cd := &carddavTestServer{cards: make(map[string]vcard.Card)}
 	cd.server = httptest.NewServer(http.HandlerFunc(cd.handle))
+
 	return cd
 }
 
@@ -56,35 +57,45 @@ func (c *carddavTestServer) handle(w http.ResponseWriter, r *http.Request) {
 func (c *carddavTestServer) handleGet(w http.ResponseWriter, path string) {
 	if path == "/addressbook" || path == "/addressbook/" {
 		c.mu.Lock()
+
 		cards := make([]vcard.Card, 0, len(c.cards))
 		for _, card := range c.cards {
 			cards = append(cards, card)
 		}
+
 		c.mu.Unlock()
 
 		var buf bytes.Buffer
+
 		enc := vcard.NewEncoder(&buf)
+
 		for _, card := range cards {
 			vcard.ToV4(card)
 			_ = enc.Encode(card)
 		}
+
 		w.Header().Set("Content-Type", "text/vcard")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(buf.Bytes())
+
 		return
 	}
 
 	key := strings.TrimPrefix(path, "/addressbook/")
+
 	c.mu.Lock()
 	card, ok := c.cards[key]
 	c.mu.Unlock()
+
 	if !ok {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
 	var buf bytes.Buffer
+
 	_ = vcard.NewEncoder(&buf).Encode(card)
+
 	w.Header().Set("Content-Type", "text/vcard")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(buf.Bytes())
@@ -92,12 +103,15 @@ func (c *carddavTestServer) handleGet(w http.ResponseWriter, path string) {
 
 func (c *carddavTestServer) handlePut(w http.ResponseWriter, r *http.Request, path string) {
 	decoder := vcard.NewDecoder(r.Body)
+
 	card, err := decoder.Decode()
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
 	key := strings.TrimPrefix(path, "/addressbook/")
+
 	c.mu.Lock()
 	c.cards[key] = card
 	c.mu.Unlock()
@@ -106,13 +120,16 @@ func (c *carddavTestServer) handlePut(w http.ResponseWriter, r *http.Request, pa
 
 func (c *carddavTestServer) handleReport(w http.ResponseWriter, _ string) {
 	c.mu.Lock()
+
 	entries := make(map[string]vcard.Card, len(c.cards))
 	for path, card := range c.cards {
 		entries[path] = card
 	}
+
 	c.mu.Unlock()
 
 	body := buildCardDAVMultiStatus(entries)
+
 	w.Header().Set("Content-Type", "application/xml")
 	w.WriteHeader(http.StatusMultiStatus)
 	_, _ = w.Write(body)
@@ -145,6 +162,7 @@ func buildCardDAVMultiStatus(cards map[string]vcard.Card) []byte {
 	responses := make([]cardDAVResponse, 0, len(cards))
 	for path, card := range cards {
 		var buf bytes.Buffer
+
 		vcard.ToV4(card)
 		_ = vcard.NewEncoder(&buf).Encode(card)
 		responses = append(responses, cardDAVResponse{
@@ -158,11 +176,13 @@ func buildCardDAVMultiStatus(cards map[string]vcard.Card) []byte {
 
 	ms := cardDAVMultiStatus{Response: responses}
 	output, _ := xml.Marshal(ms)
+
 	return append([]byte(xml.Header), output...)
 }
 
 func TestCardDAVListAndHelpers(t *testing.T) {
 	resetDatabase(t)
+
 	server := newCardDAVTestServer(t)
 	defer server.close()
 
@@ -204,6 +224,7 @@ func TestCardDAVListAndHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListCardDAVContacts failed: %v", err)
 	}
+
 	if len(contacts) != 2 {
 		t.Fatalf("expected 2 contacts, got %d", len(contacts))
 	}
@@ -212,6 +233,7 @@ func TestCardDAVListAndHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCardDAVContact failed: %v", err)
 	}
+
 	if contact.DisplayName != "Alice Example" {
 		t.Fatalf("expected display name, got %q", contact.DisplayName)
 	}
@@ -233,25 +255,32 @@ func TestCardDAVListAndHelpers(t *testing.T) {
 	if preferredEmailValue(emails) != "a@example.com" {
 		t.Fatalf("expected preferred email")
 	}
+
 	phones := []CardDAVPhone{{Phone: "123", Preferred: true}, {Phone: "456"}}
 	if preferredPhoneValue(phones) != "123" {
 		t.Fatalf("expected preferred phone")
 	}
+
 	if normalizeCardDAVEmail(" Alice@Example.com ") != "alice@example.com" {
 		t.Fatalf("expected normalized email")
 	}
+
 	if normalizeCardDAVPhone("+1 (555) 0000") != "+1 (555) 0000" {
 		t.Fatalf("expected normalized phone")
 	}
+
 	if normalizePhoneDigits(normalizeCardDAVPhone("+1 (555) 0000")) != "15550000" {
 		t.Fatalf("expected normalized phone digits")
 	}
+
 	if selectPrimaryEmail("a@example.com", []string{"b@example.com", "a@example.com"}) != "a@example.com" {
 		t.Fatalf("expected selected primary email")
 	}
+
 	if selectPrimaryPhone("123", []string{"123", "456"}) != "123" {
 		t.Fatalf("expected selected primary phone")
 	}
+
 	if _, err := parseDateString("2024-01-02"); err != nil {
 		t.Fatalf("parseDateString failed: %v", err)
 	}
@@ -259,6 +288,7 @@ func TestCardDAVListAndHelpers(t *testing.T) {
 
 func TestCardDAVSyncAndUpdate(t *testing.T) {
 	resetDatabase(t)
+
 	server := newCardDAVTestServer(t)
 	defer server.close()
 
@@ -285,6 +315,7 @@ func TestCardDAVSyncAndUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetContact failed: %v", err)
 	}
+
 	if detail.NameDisplay == "" || len(detail.Emails) == 0 || len(detail.Phones) == 0 {
 		t.Fatalf("expected synced contact details")
 	}
@@ -293,6 +324,7 @@ func TestCardDAVSyncAndUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("isCardDAVEmailAvailable failed: %v", err)
 	}
+
 	if !available {
 		t.Fatalf("expected email to be available for same contact")
 	}
@@ -305,6 +337,7 @@ func TestCardDAVSyncAndUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateCardDAVContact failed: %v", err)
 	}
+
 	if newUUID == "" {
 		t.Fatalf("expected new uuid")
 	}
@@ -313,6 +346,7 @@ func TestCardDAVSyncAndUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetContact failed: %v", err)
 	}
+
 	contact.CardDAVUUID = &carddavID
 	if err := UpdateCardDAVContact(testContext(), contact); err != nil {
 		t.Fatalf("UpdateCardDAVContact failed: %v", err)
@@ -320,17 +354,21 @@ func TestCardDAVSyncAndUpdate(t *testing.T) {
 
 	localEmail := "local@example.com"
 	localPhone := "+1 555 9999"
+
 	localContactID := mustCreateContact(t, CreateContactInput{NameGiven: "Local", Email: &localEmail, Phone: &localPhone, Tier: TierB})
 	if err := MigrateContactToCardDAV(testContext(), localContactID); err != nil {
 		t.Fatalf("MigrateContactToCardDAV failed: %v", err)
 	}
+
 	updated, err := GetContact(testContext(), localContactID)
 	if err != nil {
 		t.Fatalf("GetContact failed: %v", err)
 	}
+
 	if updated.CardDAVUUID == nil || *updated.CardDAVUUID == "" {
 		t.Fatalf("expected contact to be linked to CardDAV")
 	}
+
 	if len(updated.Emails) == 0 || len(updated.Phones) == 0 {
 		t.Fatalf("expected emails and phones after migration")
 	}

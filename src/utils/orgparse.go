@@ -56,12 +56,14 @@ func ParseOrgToHTMLWithBasePath(content string, basePath string) (string, error)
 	config.ResolveLink = func(protocol string, description []org.Node, link string) org.Node {
 		if protocol == "id" {
 			cleanLink := strings.TrimPrefix(link, "id:")
+
 			return org.RegularLink{
 				Protocol:    "",
 				Description: description,
 				URL:         fmt.Sprintf("%s/%s", trimmedBase, cleanLink),
 			}
 		}
+
 		return org.RegularLink{
 			Protocol:    protocol,
 			Description: description,
@@ -77,10 +79,11 @@ func ParseOrgToHTMLWithBasePath(content string, basePath string) (string, error)
 
 	// Render to HTML
 	writer := newHTMLWriter()
-	writer.HighlightCodeBlock = func(source, lang string, inline bool, params map[string]string) string {
+	writer.HighlightCodeBlock = func(source, _ string, inline bool, _ map[string]string) string {
 		if inline {
 			return `<code class="inline-code">` + html.EscapeString(source) + `</code>`
 		}
+
 		return `<pre><code class="code-block">` + html.EscapeString(source) + `</code></pre>`
 	}
 
@@ -105,6 +108,7 @@ func addExternalLinkPrefix(htmlBody string) (string, error) {
 	}
 
 	container := &nethtml.Node{Type: nethtml.ElementNode, Data: "div", DataAtom: atom.Div}
+
 	nodes, err := parseHTMLFragment(strings.NewReader(htmlBody), container)
 	if err != nil {
 		return "", err
@@ -130,6 +134,7 @@ func annotateExternalLinks(node *nethtml.Node) {
 	for child := node.FirstChild; child != nil; child = child.NextSibling {
 		if child.Type == nethtml.ElementNode && child.Data == "a" {
 			href := ""
+
 			for _, attr := range child.Attr {
 				if attr.Key == "href" {
 					href = attr.Val
@@ -220,6 +225,7 @@ func parseAbsoluteURL(raw string) (*url.URL, bool) {
 	if err != nil || parsed.Host == "" {
 		parsed, err = url.Parse("https://" + raw)
 	}
+
 	if err != nil || parsed.Host == "" {
 		return nil, false
 	}
@@ -245,7 +251,7 @@ func ExtractIDProperty(content string) (string, error) {
 	matches := re.FindStringSubmatch(content)
 
 	if len(matches) < 2 {
-		return "", fmt.Errorf("no ID property found in content")
+		return "", errNoIDPropertyFound
 	}
 
 	return strings.TrimSpace(matches[1]), nil
@@ -282,11 +288,11 @@ func ValidateUUID(id string) error {
 	re := regexp.MustCompile(`^[a-f0-9\-]+$`)
 
 	if !re.MatchString(id) {
-		return fmt.Errorf("invalid UUID format: %s", id)
+		return fmt.Errorf("%w: %s", errInvalidUUIDFormat, id)
 	}
 
 	if len(id) < 10 || len(id) > 100 {
-		return fmt.Errorf("UUID length out of bounds: %s", id)
+		return fmt.Errorf("%w: %s", errUUIDLengthOutOfBounds, id)
 	}
 
 	return nil
@@ -295,6 +301,7 @@ func ValidateUUID(id string) error {
 // ExtractDateDirective extracts a date from a #+DATE: directive.
 func ExtractDateDirective(content string) (time.Time, bool) {
 	re := regexp.MustCompile(`(?im)^\s*#\+DATE:\s*<?(\d{4}-\d{2}-\d{2})`)
+
 	matches := re.FindStringSubmatch(content)
 	if len(matches) < 2 {
 		return time.Time{}, false

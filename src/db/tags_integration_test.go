@@ -7,6 +7,7 @@ import "testing"
 
 func TestTagsLifecycle(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	contactID := mustCreateContact(t, CreateContactInput{
@@ -17,6 +18,7 @@ func TestTagsLifecycle(t *testing.T) {
 	if err := AddTagToContact(ctx, contactID, "Friends"); err != nil {
 		t.Fatalf("AddTagToContact failed: %v", err)
 	}
+
 	if err := AddTagToContact(ctx, contactID, "Colleagues"); err != nil {
 		t.Fatalf("AddTagToContact failed: %v", err)
 	}
@@ -25,6 +27,7 @@ func TestTagsLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListAllTags failed: %v", err)
 	}
+
 	if len(allTags) != 2 {
 		t.Fatalf("expected 2 tags, got %d", len(allTags))
 	}
@@ -33,6 +36,7 @@ func TestTagsLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SearchTags failed: %v", err)
 	}
+
 	if len(searchTags) != 1 {
 		t.Fatalf("expected 1 search result, got %d", len(searchTags))
 	}
@@ -41,6 +45,7 @@ func TestTagsLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTag failed: %v", err)
 	}
+
 	if selectedTag.Name != "friends" {
 		t.Fatalf("expected normalized name friends, got %q", selectedTag.Name)
 	}
@@ -49,6 +54,7 @@ func TestTagsLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetContactTags failed: %v", err)
 	}
+
 	if len(tags) != 2 {
 		t.Fatalf("expected 2 contact tags, got %d", len(tags))
 	}
@@ -62,6 +68,7 @@ func TestTagsLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetContactsByTags failed: %v", err)
 	}
+
 	if len(contacts) != 1 {
 		t.Fatalf("expected 1 contact by tag, got %d", len(contacts))
 	}
@@ -77,6 +84,7 @@ func TestTagsLifecycle(t *testing.T) {
 
 func TestTagsErrors(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	if _, err := GetContactsByTags(ctx, []string{}); err == nil {

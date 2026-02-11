@@ -1,10 +1,424 @@
 version = 1
 
 [[annotations]]
-path = "src/vendor/**"
+path = "src/vendor/filippo.io/edwards25519/**"
 precedence = "override"
-SPDX-FileCopyrightText = "NOASSERTION"
-SPDX-License-Identifier = "NOASSERTION"
+SPDX-FileCopyrightText = "2009 The Go Authors"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "src/vendor/github.com/alecthomas/participle/v2/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2017-2022 Alec Thomas"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/aymanbagabas/go-osc52/v2/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2022 Ayman Bagabas"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/beeper/argo-go/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Automattic Inc."
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/charmbracelet/colorprofile/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2020-2024 Charmbracelet, Inc."
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/charmbracelet/lipgloss/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2021-2023 Charmbracelet, Inc."
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/charmbracelet/log/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2022-2023 Charmbracelet, Inc."
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/charmbracelet/x/ansi/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2023 Charmbracelet, Inc."
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/charmbracelet/x/cellbuf/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2023 Charmbracelet, Inc."
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/charmbracelet/x/term/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2023 Charmbracelet, Inc."
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/coder/websocket/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Coder"
+SPDX-License-Identifier = "ISC"
+
+[[annotations]]
+path = "src/vendor/github.com/elliotchance/orderedmap/v3/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2020 Elliot Chance"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/emersion/go-vcard/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2017 emersion"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/emersion/go-webdav/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2020 Simon Ser"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/flamego/csrf/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2021 Flamego"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/flamego/flamego/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2021 Flamego"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/flamego/session/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2021 Flamego"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/flamego/template/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2021 Flamego"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/flopp/go-coordsparser/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2016 Florian Pigorsch"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/flopp/go-staticmaps/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2016 Florian Pigorsch"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/fogleman/gg/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2016 Michael Fogleman"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/fxamacker/cbor/v2/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2019-present Faye Amacker"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/go-echarts/go-echarts/v2/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2019-now chenjiandongx"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/go-logfmt/logfmt/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2015 go-logfmt"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/go-viper/mapstructure/v2/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2013 Mitchell Hashimoto"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/go-webauthn/webauthn/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2025 github.com/go-webauthn/webauthn authors"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "src/vendor/github.com/go-webauthn/x/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2021-2023 github.com/go-webauthn authors"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "src/vendor/github.com/golang-jwt/jwt/v5/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2012 Dave Grijalva; 2021 golang-jwt maintainers"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/golang/freetype/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2010-2015 The Freetype-Go Authors"
+SPDX-License-Identifier = "FTL OR GPL-2.0-or-later"
+
+[[annotations]]
+path = "src/vendor/github.com/golang/geo/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2014-2023 Google Inc."
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "src/vendor/github.com/google/go-tpm/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2018-2019 Google LLC"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "src/vendor/github.com/google/uuid/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2009, 2014 Google Inc."
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "src/vendor/github.com/jackc/pgpassfile/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2019 Jack Christensen"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/jackc/pgservicefile/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2020 Jack Christensen"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/jackc/pgx/v5/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2013-2021 Jack Christensen"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/jackc/puddle/v2/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2018 Jack Christensen"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/lucasb-eyer/go-colorful/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2013 Lucas Beyer"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/mattn/go-colorable/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2016 Yasuhiro Matsumoto"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/mattn/go-isatty/**"
+precedence = "override"
+SPDX-FileCopyrightText = "Yasuhiro MATSUMOTO <mattn.jp@gmail.com>"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/mattn/go-runewidth/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2016 Yasuhiro Matsumoto"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/mazznoer/csscolorparser/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2020 Nor Khasyatillah"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/mfridman/interpolate/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2014-2017 Buildkite Pty Ltd; 2023 Michael Fridman"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/muesli/termenv/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2019 Christian Muehlhaeuser"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/niklasfasching/go-org/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2018 Niklas Fasching"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/pd0mz/go-maidenhead/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2016 pd0mz"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/petermattis/goid/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2014 The Go Authors; 2015-2021 Peter Mattis"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "src/vendor/github.com/pkg/errors/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2015 Dave Cheney <dave@cheney.net>"
+SPDX-License-Identifier = "BSD-2-Clause"
+
+[[annotations]]
+path = "src/vendor/github.com/pressly/goose/v3/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2012 Liam Staskawicz; 2016 Vojtech Vitek; 2021 Michael Fridman, Vojtech Vitek"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/rivo/uniseg/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2019 Oliver Kuederle"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/rs/zerolog/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2017 Olivier Poitrey"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/sethvargo/go-retry/**"
+precedence = "override"
+SPDX-FileCopyrightText = "NONE"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "src/vendor/github.com/skip2/go-qrcode/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2014 Tom Harwood"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/tkrajina/gpxgo/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2013-2014 Peter Vasil; Tomo Krajina"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "src/vendor/github.com/urfave/cli/v3/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2023 urfave/cli maintainers"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/vektah/gqlparser/v2/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2018 Adam Scarr"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/x448/float16/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2019 Montgomery Edwards and Faye Amacker"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/github.com/xo/terminfo/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2016 Anmol Sethi"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/go.mau.fi/libsignal/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2017 RadicalApp LLC"
+SPDX-License-Identifier = "GPL-3.0-only"
+
+[[annotations]]
+path = "src/vendor/go.mau.fi/util/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2023-2025 Tulir Asokan"
+SPDX-License-Identifier = "MPL-2.0"
+
+[[annotations]]
+path = "src/vendor/go.mau.fi/whatsmeow/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2021-2025 Tulir Asokan"
+SPDX-License-Identifier = "MPL-2.0"
+
+[[annotations]]
+path = "src/vendor/go.uber.org/multierr/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2017-2021 Uber Technologies, Inc."
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/vendor/golang.org/x/crypto/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2009 The Go Authors"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "src/vendor/golang.org/x/exp/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2009 The Go Authors"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "src/vendor/golang.org/x/image/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2009 The Go Authors"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "src/vendor/golang.org/x/net/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2009 The Go Authors"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "src/vendor/golang.org/x/sync/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2009 The Go Authors"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "src/vendor/golang.org/x/sys/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2009 The Go Authors"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "src/vendor/golang.org/x/text/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2009 The Go Authors"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "src/vendor/google.golang.org/protobuf/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2018 The Go Authors"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "src/vendor/modules.txt"
+precedence = "override"
+SPDX-FileCopyrightText = "The Go Authors"
+SPDX-License-Identifier = "BSD-3-Clause"
 
 [[annotations]]
 path = [
@@ -13,6 +427,7 @@ path = [
   "src/db/migrations/**",
   "src/go.mod",
   "src/go.sum",
+  "src/.golangci.yaml",
   "flake.lock",
   ".envrc",
   ".gitignore",
@@ -21,4 +436,3 @@ path = [
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2025 Humaid Alqasimi"
 SPDX-License-Identifier = "Apache-2.0"
-

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025 Humaid Alqasimi
+// SPDX-License-Identifier: Apache-2.0
+
 package routes
 
 import (
@@ -84,10 +87,12 @@ func (c testCSRF) Validate(flamego.Context) {}
 
 func mustParseTime(t *testing.T, value string) time.Time {
 	t.Helper()
+
 	tm, err := time.Parse(time.RFC3339, value)
 	if err != nil {
 		t.Fatalf("failed to parse time %q: %v", value, err)
 	}
+
 	return tm
 }
 
@@ -106,9 +111,9 @@ func TestSetFlashHelpers(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			s := newTestSession()
 			tt.set(s, "hello")
 
@@ -116,6 +121,7 @@ func TestSetFlashHelpers(t *testing.T) {
 			if !ok {
 				t.Fatalf("flash has unexpected type: %T", s.flash)
 			}
+
 			if msg.Type != tt.wantTyp || msg.Message != "hello" {
 				t.Fatalf("unexpected flash message: %#v", msg)
 			}
@@ -158,9 +164,11 @@ func TestNoCacheHeaders(t *testing.T) {
 	if got := getRec.Header().Get("Cache-Control"); got != "no-store, max-age=0" {
 		t.Fatalf("unexpected Cache-Control for GET: %q", got)
 	}
+
 	if got := getRec.Header().Get("Pragma"); got != "no-cache" {
 		t.Fatalf("unexpected Pragma for GET: %q", got)
 	}
+
 	if got := getRec.Header().Get("Expires"); got != "0" {
 		t.Fatalf("unexpected Expires for GET: %q", got)
 	}
@@ -200,6 +208,7 @@ func TestGetClientIP(t *testing.T) {
 
 	withXFF := &flamego.Request{Request: httptest.NewRequest(http.MethodGet, "http://example.test", nil)}
 	withXFF.Header.Set("X-Forwarded-For", " 203.0.113.4, 198.51.100.2 ")
+
 	withXFF.RemoteAddr = "10.0.0.1:1234"
 	if got := getClientIP(withXFF); got != "203.0.113.4" {
 		t.Fatalf("expected X-Forwarded-For IP, got %q", got)
@@ -207,18 +216,21 @@ func TestGetClientIP(t *testing.T) {
 
 	withRealIP := &flamego.Request{Request: httptest.NewRequest(http.MethodGet, "http://example.test", nil)}
 	withRealIP.Header.Set("X-Real-IP", "198.51.100.9")
+
 	withRealIP.RemoteAddr = "10.0.0.2:1234"
 	if got := getClientIP(withRealIP); got != "198.51.100.9" {
 		t.Fatalf("expected X-Real-IP, got %q", got)
 	}
 
 	withRemoteAddr := &flamego.Request{Request: httptest.NewRequest(http.MethodGet, "http://example.test", nil)}
+
 	withRemoteAddr.RemoteAddr = "192.0.2.10:8080"
 	if got := getClientIP(withRemoteAddr); got != "192.0.2.10" {
 		t.Fatalf("expected host from RemoteAddr, got %q", got)
 	}
 
 	withRawRemoteAddr := &flamego.Request{Request: httptest.NewRequest(http.MethodGet, "http://example.test", nil)}
+
 	withRawRemoteAddr.RemoteAddr = "not-a-host-port"
 	if got := getClientIP(withRawRemoteAddr); got != "not-a-host-port" {
 		t.Fatalf("expected raw RemoteAddr fallback, got %q", got)
@@ -254,17 +266,20 @@ func TestBuildExternalURL(t *testing.T) {
 	fromForwarded := &flamego.Request{Request: httptest.NewRequest(http.MethodGet, "http://internal.local", nil)}
 	fromForwarded.Header.Set("X-Forwarded-Proto", "https, http")
 	fromForwarded.Header.Set("X-Forwarded-Host", "gw.example.com")
+
 	if got := buildExternalURL(fromForwarded, "security"); got != "https://gw.example.com/security" {
 		t.Fatalf("unexpected forwarded URL: %q", got)
 	}
 
 	fromTLS := &flamego.Request{Request: httptest.NewRequest(http.MethodGet, "https://example.test", nil)}
+
 	fromTLS.TLS = &tls.ConnectionState{}
 	if got := buildExternalURL(fromTLS, "/setup"); got != "https://example.test/setup" {
 		t.Fatalf("unexpected TLS URL: %q", got)
 	}
 
 	withoutHost := &flamego.Request{Request: httptest.NewRequest(http.MethodGet, "http://example.test", nil)}
+
 	withoutHost.Host = ""
 	if got := buildExternalURL(withoutHost, "/setup"); got != "/setup" {
 		t.Fatalf("expected path fallback, got %q", got)
@@ -282,43 +297,51 @@ func TestSensitiveAccessHelpers(t *testing.T) {
 	}
 
 	s.Set(sensitiveAccessSessionKey, now.Add(-10*time.Minute).Unix())
+
 	if !HasSensitiveAccess(s, now) {
 		t.Fatal("expected sensitive access within window")
 	}
 
 	s.Set(sensitiveAccessSessionKey, now.Add(-sensitiveAccessWindow-time.Second).Unix())
+
 	if HasSensitiveAccess(s, now) {
 		t.Fatal("expected sensitive access to expire")
 	}
 
 	s.Set(sensitiveAccessSessionKey, int(now.Unix()))
+
 	if _, ok := getSensitiveAccessTime(s); !ok {
 		t.Fatal("expected int timestamp to be supported")
 	}
 
 	s.Set(sensitiveAccessSessionKey, float64(now.Unix()))
+
 	if _, ok := getSensitiveAccessTime(s); !ok {
 		t.Fatal("expected float64 timestamp to be supported")
 	}
 
 	timeCopy := now
 	s.Set(sensitiveAccessSessionKey, &timeCopy)
+
 	if got, ok := getSensitiveAccessTime(s); !ok || !got.Equal(now) {
 		t.Fatalf("expected *time.Time timestamp, got %v ok=%v", got, ok)
 	}
 
 	s.Set(sensitiveAccessSessionKey, &time.Time{})
+
 	if _, ok := getSensitiveAccessTime(s); !ok {
 		t.Fatal("expected non-nil *time.Time to be accepted")
 	}
 
 	var nilTime *time.Time
 	s.Set(sensitiveAccessSessionKey, nilTime)
+
 	if _, ok := getSensitiveAccessTime(s); ok {
 		t.Fatal("expected nil *time.Time to be rejected")
 	}
 
 	s.Set(sensitiveAccessSessionKey, struct{}{})
+
 	if _, ok := getSensitiveAccessTime(s); ok {
 		t.Fatal("expected unknown type to be rejected")
 	}
@@ -326,9 +349,83 @@ func TestSensitiveAccessHelpers(t *testing.T) {
 	if got := getSessionDisplayName(s); got != "Admin" {
 		t.Fatalf("expected default display name, got %q", got)
 	}
+
 	s.Set("user_display_name", "Humaid")
+
 	if got := getSessionDisplayName(s); got != "Humaid" {
 		t.Fatalf("expected display name from session, got %q", got)
+	}
+}
+
+func TestLockSensitiveAccessRedirectsHomeForSensitivePages(t *testing.T) {
+	t.Parallel()
+
+	s := newTestSession()
+	s.Set(sensitiveAccessSessionKey, time.Now().Unix())
+
+	f := flamego.New()
+	f.Use(func(c flamego.Context) {
+		c.MapTo(s, (*session.Session)(nil))
+		c.Next()
+	})
+	f.Post("/sensitive-access/lock", func(sess session.Session, c flamego.Context) {
+		LockSensitiveAccess(sess, c)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/sensitive-access/lock", strings.NewReader("requires_sensitive_access=1"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", "/timeline")
+
+	rec := httptest.NewRecorder()
+
+	f.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected status %d, got %d", http.StatusSeeOther, rec.Code)
+	}
+
+	if got := rec.Header().Get("Location"); got != "/" {
+		t.Fatalf("expected redirect to '/', got %q", got)
+	}
+
+	if s.Get(sensitiveAccessSessionKey) != nil {
+		t.Fatal("expected sensitive access session key to be cleared")
+	}
+}
+
+func TestLockSensitiveAccessRedirectsToReferrerWhenPageNotSensitive(t *testing.T) {
+	t.Parallel()
+
+	s := newTestSession()
+	s.Set(sensitiveAccessSessionKey, time.Now().Unix())
+
+	f := flamego.New()
+	f.Use(func(c flamego.Context) {
+		c.MapTo(s, (*session.Session)(nil))
+		c.Next()
+	})
+	f.Post("/sensitive-access/lock", func(sess session.Session, c flamego.Context) {
+		LockSensitiveAccess(sess, c)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/sensitive-access/lock", strings.NewReader("requires_sensitive_access=0"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", "https://example.test/contacts?filter=no_phone")
+
+	rec := httptest.NewRecorder()
+
+	f.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected status %d, got %d", http.StatusSeeOther, rec.Code)
+	}
+
+	if got := rec.Header().Get("Location"); got != "/contacts?filter=no_phone" {
+		t.Fatalf("expected redirect to sanitized referrer, got %q", got)
+	}
+
+	if s.Get(sensitiveAccessSessionKey) != nil {
+		t.Fatal("expected sensitive access session key to be cleared")
 	}
 }
 
@@ -362,6 +459,7 @@ func TestContactHelperFunctions(t *testing.T) {
 	if !isValidPhone("+1 (650) 555-0123") {
 		t.Fatal("expected valid phone")
 	}
+
 	if isValidPhone("12-34") {
 		t.Fatal("expected invalid short phone")
 	}
@@ -379,19 +477,23 @@ func TestContactHelperFunctions(t *testing.T) {
 	if got := activityLabel(1); got != "activity" {
 		t.Fatalf("unexpected activity label for 1: %q", got)
 	}
+
 	if got := activityLabel(2); got != "activities" {
 		t.Fatalf("unexpected activity label for 2: %q", got)
 	}
 
 	weekStart := isoWeekStart(2026)
 	weekKey := weekStart.Format("2006-01-02")
+
 	rows := buildActivityGrid(map[string]int{weekKey: 1}, 2026, 1)
 	if len(rows) != 1 || len(rows[0].Weeks) != 52 {
 		t.Fatalf("unexpected grid dimensions: years=%d weeks=%d", len(rows), len(rows[0].Weeks))
 	}
+
 	if rows[0].Weeks[0].Count != 1 || rows[0].Weeks[0].Level != 1 {
 		t.Fatalf("unexpected first week: %#v", rows[0].Weeks[0])
 	}
+
 	if !strings.Contains(rows[0].Weeks[0].Tooltip, "1 activity") {
 		t.Fatalf("unexpected tooltip: %q", rows[0].Weeks[0].Tooltip)
 	}
@@ -399,6 +501,7 @@ func TestContactHelperFunctions(t *testing.T) {
 	if got := parseChatPlatform("  slack "); got != db.ChatPlatformSlack {
 		t.Fatalf("unexpected chat platform: %q", got)
 	}
+
 	if got := parseChatPlatform("unknown"); got != db.ChatPlatformManual {
 		t.Fatalf("unexpected fallback platform: %q", got)
 	}
@@ -406,9 +509,11 @@ func TestContactHelperFunctions(t *testing.T) {
 	if got := parseChatSender(" me "); got != db.ChatSenderMe {
 		t.Fatalf("unexpected chat sender me: %q", got)
 	}
+
 	if got := parseChatSender("mix"); got != db.ChatSenderMix {
 		t.Fatalf("unexpected chat sender mix: %q", got)
 	}
+
 	if got := parseChatSender("other"); got != db.ChatSenderThem {
 		t.Fatalf("unexpected fallback sender: %q", got)
 	}
@@ -426,6 +531,7 @@ func TestInventoryHelperFunctions(t *testing.T) {
 	if got := getOptionalString("  "); got != nil {
 		t.Fatalf("expected nil optional string, got %v", *got)
 	}
+
 	if got := getOptionalString(" value "); got == nil || *got != "value" {
 		t.Fatalf("unexpected optional string: %#v", got)
 	}
@@ -433,6 +539,7 @@ func TestInventoryHelperFunctions(t *testing.T) {
 	if !isValidFilename("manual.pdf") {
 		t.Fatal("expected normal filename to be valid")
 	}
+
 	if isValidFilename("../passwd") || isValidFilename("a/b.txt") || isValidFilename(`a\\b.txt`) {
 		t.Fatal("expected traversal filename to be invalid")
 	}
@@ -450,15 +557,18 @@ func TestInventoryHelperFunctions(t *testing.T) {
 			t.Fatalf("expected status %q to be valid", status)
 		}
 	}
+
 	if isValidInventoryStatus(db.InventoryStatus("nope")) {
 		t.Fatal("expected unknown status to be invalid")
 	}
 
 	filename := "report\"2026\n.txt\r"
+
 	sanitized := sanitizeFilenameForHeader(filename)
 	if strings.Contains(sanitized, "\n") || strings.Contains(sanitized, "\r") {
 		t.Fatalf("expected newline characters to be removed: %q", sanitized)
 	}
+
 	if !strings.Contains(sanitized, `\"`) {
 		t.Fatalf("expected quote to be escaped: %q", sanitized)
 	}
@@ -470,12 +580,15 @@ func TestFilesHelperFunctions(t *testing.T) {
 	if got, ok := sanitizeFilesPath("  docs/reference "); !ok || got != "docs/reference" {
 		t.Fatalf("expected sanitized path, got %q ok=%v", got, ok)
 	}
+
 	if _, ok := sanitizeFilesPath("../etc"); ok {
 		t.Fatal("expected parent traversal to be rejected")
 	}
+
 	if _, ok := sanitizeFilesPath(".hidden/file"); ok {
 		t.Fatal("expected hidden path segment to be rejected")
 	}
+
 	if _, ok := sanitizeFilesPath(`docs\\notes`); ok {
 		t.Fatal("expected backslash path to be rejected")
 	}
@@ -483,6 +596,7 @@ func TestFilesHelperFunctions(t *testing.T) {
 	if got := formatFilesPathDisplay(""); got != "/" {
 		t.Fatalf("unexpected root display path: %q", got)
 	}
+
 	if got := formatFilesPathDisplay("docs"); got != "/docs" {
 		t.Fatalf("unexpected display path: %q", got)
 	}
@@ -490,6 +604,7 @@ func TestFilesHelperFunctions(t *testing.T) {
 	if got := parentFilesPath("docs/reference"); got != "docs" {
 		t.Fatalf("unexpected parent path: %q", got)
 	}
+
 	if got := parentFilesPath("docs"); got != "" {
 		t.Fatalf("unexpected top-level parent path: %q", got)
 	}
@@ -497,6 +612,7 @@ func TestFilesHelperFunctions(t *testing.T) {
 	if got := filesRedirectPath(""); got != "/files" {
 		t.Fatalf("unexpected files root redirect: %q", got)
 	}
+
 	if got := filesRedirectPath("docs/a b"); got != "/files?path=docs%2Fa+b" {
 		t.Fatalf("unexpected files redirect with query escape: %q", got)
 	}
@@ -505,6 +621,7 @@ func TestFilesHelperFunctions(t *testing.T) {
 	if len(breadcrumbs) != 3 {
 		t.Fatalf("unexpected breadcrumb count: %d", len(breadcrumbs))
 	}
+
 	if breadcrumbs[0].Name != "Files" || breadcrumbs[2].IsCurrent != true {
 		t.Fatalf("unexpected breadcrumbs: %#v", breadcrumbs)
 	}
@@ -540,8 +657,10 @@ func TestSessionAuthInfo(t *testing.T) {
 	}
 
 	s.Set("authenticated", true)
+
 	userID := uuid.NewString()
 	s.Set("user_id", userID)
+
 	if authenticated, gotUserID := sessionAuthInfo(s); !authenticated || gotUserID != userID {
 		t.Fatalf("expected authenticated session with user id, got authenticated=%v userID=%q", authenticated, gotUserID)
 	}

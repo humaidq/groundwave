@@ -12,7 +12,11 @@ import (
 )
 
 func TestCalculateAbsoluteCounts(t *testing.T) {
+	t.Parallel()
+
 	t.Run("calculates derived results", func(t *testing.T) {
+		t.Parallel()
+
 		followupID := uuid.New()
 		baseTime := time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC)
 		laterTime := baseTime.Add(2 * time.Hour)
@@ -33,10 +37,13 @@ func TestCalculateAbsoluteCounts(t *testing.T) {
 		if neutrophils == nil {
 			t.Fatalf("expected Neutrophils (Absolute) result")
 		}
+
 		assertFloatClose(t, neutrophils.TestValue, 2.0)
+
 		if neutrophils.TestUnit == nil {
 			t.Fatalf("expected unit for Neutrophils (Absolute)")
 		}
+
 		if !neutrophils.CreatedAt.Equal(baseTime) {
 			t.Fatalf("expected created_at %v, got %v", baseTime, neutrophils.CreatedAt)
 		}
@@ -45,19 +52,24 @@ func TestCalculateAbsoluteCounts(t *testing.T) {
 		if lymphocytes == nil {
 			t.Fatalf("expected Lymphocytes (Absolute) result")
 		}
+
 		assertFloatClose(t, lymphocytes.TestValue, 1.0)
 
 		ratio := findDisplayResult(calculated, "TG/HDL (Calc)")
 		if ratio == nil {
 			t.Fatalf("expected TG/HDL (Calc) result")
 		}
+
 		assertFloatClose(t, ratio.TestValue, 3.0)
+
 		if ratio.TestUnit == nil || *ratio.TestUnit != "ratio" {
 			t.Fatalf("expected ratio unit")
 		}
+
 		if ratio.FollowupID != followupID {
 			t.Fatalf("expected followup ID %v, got %v", followupID, ratio.FollowupID)
 		}
+
 		if !ratio.CreatedAt.Equal(laterTime) {
 			t.Fatalf("expected created_at %v, got %v", laterTime, ratio.CreatedAt)
 		}
@@ -66,19 +78,25 @@ func TestCalculateAbsoluteCounts(t *testing.T) {
 		if coefficient == nil {
 			t.Fatalf("expected Atherogenic Coefficient result")
 		}
+
 		assertFloatClose(t, coefficient.TestValue, 3.0)
+
 		if coefficient.TestUnit == nil || *coefficient.TestUnit != "ratio" {
 			t.Fatalf("expected ratio unit")
 		}
+
 		if coefficient.FollowupID != followupID {
 			t.Fatalf("expected followup ID %v, got %v", followupID, coefficient.FollowupID)
 		}
+
 		if !coefficient.CreatedAt.Equal(laterTime) {
 			t.Fatalf("expected created_at %v, got %v", laterTime, coefficient.CreatedAt)
 		}
 	})
 
 	t.Run("skips manual absolute", func(t *testing.T) {
+		t.Parallel()
+
 		followupID := uuid.New()
 		baseTime := time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC)
 
@@ -93,6 +111,7 @@ func TestCalculateAbsoluteCounts(t *testing.T) {
 		if findDisplayResult(calculated, "Neutrophils (Absolute)") != nil {
 			t.Fatalf("did not expect calculated Neutrophils (Absolute) result")
 		}
+
 		if findDisplayResult(calculated, "Lymphocytes (Absolute)") == nil {
 			t.Fatalf("expected Lymphocytes (Absolute) result")
 		}
@@ -105,11 +124,13 @@ func findDisplayResult(results []HealthLabResultDisplay, name string) *HealthLab
 			return &results[i]
 		}
 	}
+
 	return nil
 }
 
 func assertFloatClose(t *testing.T, got, want float64) {
 	t.Helper()
+
 	if math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected %v, got %v", want, got)
 	}

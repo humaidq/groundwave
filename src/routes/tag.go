@@ -19,8 +19,10 @@ import (
 func ListTags(c flamego.Context, t template.Template, data template.Data) {
 	searchQuery := strings.TrimSpace(c.Query("q"))
 
-	var tags []db.TagWithUsage
-	var err error
+	var (
+		tags []db.TagWithUsage
+		err  error
+	)
 
 	if searchQuery == "" {
 		tags, err = db.ListAllTags(c.Request().Context())
@@ -30,6 +32,7 @@ func ListTags(c flamego.Context, t template.Template, data template.Data) {
 
 	if err != nil {
 		logger.Error("Error fetching tags", "error", err)
+
 		data["Error"] = "Failed to load tags"
 	} else {
 		data["Tags"] = tags
@@ -40,6 +43,7 @@ func ListTags(c flamego.Context, t template.Template, data template.Data) {
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "Tags", URL: "/tags", IsCurrent: true},
 	}
+
 	t.HTML(http.StatusOK, "tags")
 }
 
@@ -49,6 +53,7 @@ func EditTagForm(c flamego.Context, s session.Session, t template.Template, data
 	if tagID == "" {
 		SetErrorFlash(s, "Tag ID is required")
 		c.Redirect("/tags", http.StatusSeeOther)
+
 		return
 	}
 
@@ -57,6 +62,7 @@ func EditTagForm(c flamego.Context, s session.Session, t template.Template, data
 		logger.Error("Error fetching tag", "tag_id", tagID, "error", err)
 		SetErrorFlash(s, "Tag not found")
 		c.Redirect("/tags", http.StatusSeeOther)
+
 		return
 	}
 
@@ -67,6 +73,7 @@ func EditTagForm(c flamego.Context, s session.Session, t template.Template, data
 		{Name: tag.Name, URL: "/tags/" + tagID + "/contacts", IsCurrent: false},
 		{Name: "Edit", URL: "", IsCurrent: true},
 	}
+
 	t.HTML(http.StatusOK, "tag_edit")
 }
 
@@ -81,10 +88,12 @@ func UpdateTag(c flamego.Context, s session.Session) {
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/tags/"+tagID+"/edit", http.StatusSeeOther)
+
 		return
 	}
 
 	form := c.Request().Form
+
 	name := strings.TrimSpace(form.Get("name"))
 	if name == "" {
 		c.Redirect("/tags/"+tagID+"/edit", http.StatusSeeOther)
@@ -108,6 +117,7 @@ func DeleteTag(c flamego.Context, s session.Session) {
 	if tagID == "" {
 		SetErrorFlash(s, "Tag ID is required")
 		c.Redirect("/tags", http.StatusSeeOther)
+
 		return
 	}
 
@@ -128,6 +138,7 @@ func ViewTagContacts(c flamego.Context, s session.Session, t template.Template, 
 	if tagID == "" {
 		SetErrorFlash(s, "Tag ID is required")
 		c.Redirect("/tags", http.StatusSeeOther)
+
 		return
 	}
 
@@ -136,12 +147,14 @@ func ViewTagContacts(c flamego.Context, s session.Session, t template.Template, 
 		logger.Error("Error fetching tag", "tag_id", tagID, "error", err)
 		SetErrorFlash(s, "Tag not found")
 		c.Redirect("/tags", http.StatusSeeOther)
+
 		return
 	}
 
 	contacts, err := db.GetContactsByTags(c.Request().Context(), []string{tagID})
 	if err != nil {
 		logger.Error("Error fetching contacts for tag", "tag_id", tagID, "error", err)
+
 		data["Error"] = "Failed to load contacts"
 	} else {
 		data["Contacts"] = contacts
@@ -153,5 +166,6 @@ func ViewTagContacts(c flamego.Context, s session.Session, t template.Template, 
 		{Name: "Tags", URL: "/tags", IsCurrent: false},
 		{Name: tag.Name, URL: "", IsCurrent: true},
 	}
+
 	t.HTML(http.StatusOK, "tag_contacts")
 }

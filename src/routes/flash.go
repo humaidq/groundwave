@@ -13,6 +13,7 @@ import (
 // FlashType represents the type of flash message
 type FlashType string
 
+// FlashType values represent supported flash message categories.
 const (
 	FlashError   FlashType = "error"
 	FlashSuccess FlashType = "success"

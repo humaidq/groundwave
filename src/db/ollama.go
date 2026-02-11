@@ -53,7 +53,7 @@ func GetOllamaConfig() (*OllamaConfig, error) {
 	model := os.Getenv("OLLAMA_MODEL")
 
 	if url == "" || model == "" {
-		return nil, fmt.Errorf("ollama configuration incomplete: OLLAMA_URL and OLLAMA_MODEL must be set")
+		return nil, ErrOllamaConfigIncomplete
 	}
 
 	return &OllamaConfig{
@@ -80,16 +80,20 @@ func buildLabSummaryPrompt(profile *HealthProfile, followup *HealthFollowup, res
 
 	// Add patient info if available
 	sb.WriteString(fmt.Sprintf("Patient: %s\n", profile.Name))
+
 	if profile.DateOfBirth != nil {
 		age := time.Now().Year() - profile.DateOfBirth.Year()
 		sb.WriteString(fmt.Sprintf("Age: %d years\n", age))
 	}
+
 	if profile.Gender != nil {
 		sb.WriteString(fmt.Sprintf("Gender: %s\n", *profile.Gender))
 	}
+
 	if profile.Description != nil && *profile.Description != "" {
 		sb.WriteString(fmt.Sprintf("Patient Notes: %s\n", *profile.Description))
 	}
+
 	sb.WriteString(fmt.Sprintf("Visit Date: %s\n", followup.FollowupDate.Format("January 2, 2006")))
 	sb.WriteString(fmt.Sprintf("Facility: %s\n", followup.HospitalName))
 	sb.WriteString("\n---\n\nLab Results:\n\n")
@@ -97,6 +101,7 @@ func buildLabSummaryPrompt(profile *HealthProfile, followup *HealthFollowup, res
 	// Add each result
 	for _, r := range results {
 		status := ""
+
 		switch r.RangeStatus {
 		case "out_of_reference":
 			status = " [ABNORMAL]"
@@ -157,10 +162,12 @@ func streamChatCompletion(ctx context.Context, systemPrompt string, userPrompt s
 	}
 
 	endpoint := strings.TrimSuffix(config.URL, "/") + "/v1/chat/completions"
-	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(jsonBody))
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(jsonBody))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
+
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{
@@ -171,6 +178,7 @@ func streamChatCompletion(ctx context.Context, systemPrompt string, userPrompt s
 	if err != nil {
 		return fmt.Errorf("failed to call Ollama: %w", err)
 	}
+
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			logger.Warn("Failed to close Ollama response body", "error", err)
@@ -179,7 +187,7 @@ func streamChatCompletion(ctx context.Context, systemPrompt string, userPrompt s
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("ollama returned status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("%w: %d: %s", ErrOllamaReturnedStatus, resp.StatusCode, string(body))
 	}
 
 	reader := bufio.NewReader(resp.Body)
@@ -189,6 +197,7 @@ func streamChatCompletion(ctx context.Context, systemPrompt string, userPrompt s
 			if err == io.EOF {
 				break
 			}
+
 			return fmt.Errorf("failed to read stream: %w", err)
 		}
 
@@ -212,7 +221,7 @@ func streamChatCompletion(ctx context.Context, systemPrompt string, userPrompt s
 		}
 
 		if chatResp.Error != nil {
-			return fmt.Errorf("ollama error: %s", chatResp.Error.Message)
+			return fmt.Errorf("%w: %s", ErrOllamaError, chatResp.Error.Message)
 		}
 
 		if len(chatResp.Choices) > 0 {

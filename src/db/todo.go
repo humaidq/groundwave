@@ -44,7 +44,7 @@ func newTodoHTTPClient(username, password string) *http.Client {
 func GetTodoNote(ctx context.Context) (*TodoNote, error) {
 	todoPath := os.Getenv("WEBDAV_TODO_PATH")
 	if todoPath == "" {
-		return nil, fmt.Errorf("WEBDAV_TODO_PATH not configured")
+		return nil, ErrWebDAVTodoPathNotConfigured
 	}
 
 	parsedURL, err := url.Parse(todoPath)
@@ -53,14 +53,14 @@ func GetTodoNote(ctx context.Context) (*TodoNote, error) {
 	}
 
 	if !strings.HasSuffix(parsedURL.Path, ".org") {
-		return nil, fmt.Errorf("WEBDAV_TODO_PATH must point to a .org file")
+		return nil, ErrWebDAVTodoPathMustBeOrgFile
 	}
 
 	username := os.Getenv("WEBDAV_USERNAME")
 	password := os.Getenv("WEBDAV_PASSWORD")
 	httpClient := newTodoHTTPClient(username, password)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", todoPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, todoPath, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -69,6 +69,7 @@ func GetTodoNote(ctx context.Context) (*TodoNote, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch todo file: %w", err)
 	}
+
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			logger.Warn("Failed to close todo response body", "error", err)
@@ -76,7 +77,7 @@ func GetTodoNote(ctx context.Context) (*TodoNote, error) {
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch todo file: HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("%w: HTTP %d", ErrFetchTodoFileFailed, resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -85,6 +86,7 @@ func GetTodoNote(ctx context.Context) (*TodoNote, error) {
 	}
 
 	content := string(body)
+
 	html, err := utils.ParseOrgToHTML(content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse org-mode content: %w", err)
@@ -92,6 +94,6 @@ func GetTodoNote(ctx context.Context) (*TodoNote, error) {
 
 	return &TodoNote{
 		Title:    utils.ExtractTitle(content),
-		HTMLBody: template.HTML(html),
+		HTMLBody: template.HTML(html), //nolint:gosec // HTML comes from trusted org parser output.
 	}, nil
 }

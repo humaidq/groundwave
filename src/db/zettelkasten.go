@@ -71,7 +71,7 @@ func GetZKConfig() (*ZettelkastenConfig, error) {
 	password := os.Getenv("WEBDAV_PASSWORD")
 
 	if zkPath == "" {
-		return nil, fmt.Errorf("WEBDAV_ZK_PATH not configured")
+		return nil, ErrWebDAVZKPathNotConfigured
 	}
 
 	// Parse WEBDAV_ZK_PATH to extract base URL and index filename
@@ -87,16 +87,17 @@ func GetZKConfig() (*ZettelkastenConfig, error) {
 	// Extract the directory path and filename
 	pathParts := strings.Split(strings.TrimPrefix(parsedURL.Path, "/"), "/")
 	if len(pathParts) == 0 {
-		return nil, fmt.Errorf("WEBDAV_ZK_PATH must include a filename")
+		return nil, ErrWebDAVZKPathMustIncludeFilename
 	}
 
 	indexFile := pathParts[len(pathParts)-1]
 	if !strings.HasSuffix(indexFile, ".org") {
-		return nil, fmt.Errorf("WEBDAV_ZK_PATH must point to a .org file")
+		return nil, ErrWebDAVZKPathMustBeOrgFile
 	}
 
 	// Reconstruct base URL (everything except the filename)
 	basePathParts := pathParts[:len(pathParts)-1]
+
 	basePath := "/" + strings.Join(basePathParts, "/")
 	if basePath != "/" {
 		basePath += "/"
@@ -147,7 +148,7 @@ func FetchOrgFile(ctx context.Context, filename string) (string, error) {
 	// Construct full URL
 	fileURL := config.BaseURL + filename
 
-	req, err := http.NewRequestWithContext(ctx, "GET", fileURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fileURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
@@ -156,6 +157,7 @@ func FetchOrgFile(ctx context.Context, filename string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch file %s: %w", filename, err)
 	}
+
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			logger.Warn("Failed to close zettelkasten response body", "error", err)
@@ -163,7 +165,7 @@ func FetchOrgFile(ctx context.Context, filename string) (string, error) {
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to fetch file %s: HTTP %d", filename, resp.StatusCode)
+		return "", fmt.Errorf("%w %s: HTTP %d", ErrFetchFileFailed, filename, resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -186,7 +188,7 @@ func FetchDailyOrgFile(ctx context.Context, filename string) (string, error) {
 
 	fileURL := dailyBaseURL + filename
 
-	req, err := http.NewRequestWithContext(ctx, "GET", fileURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fileURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
@@ -195,6 +197,7 @@ func FetchDailyOrgFile(ctx context.Context, filename string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch file %s: %w", filename, err)
 	}
+
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			logger.Warn("Failed to close zettelkasten daily response body", "error", err)
@@ -202,7 +205,7 @@ func FetchDailyOrgFile(ctx context.Context, filename string) (string, error) {
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to fetch file %s: HTTP %d", filename, resp.StatusCode)
+		return "", fmt.Errorf("%w %s: HTTP %d", ErrFetchFileFailed, filename, resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -232,6 +235,7 @@ func ListOrgFiles(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse WebDAV base URL: %w", err)
 	}
+
 	basePath := strings.TrimRight(baseURL.Path, "/") + "/"
 
 	// List files in directory (use "." for current directory relative to BaseURL)
@@ -243,6 +247,7 @@ func ListOrgFiles(ctx context.Context) ([]string, error) {
 	logger.Info("Found WebDAV directory items", "count", len(fileInfos), "base_url", config.BaseURL)
 
 	var orgFiles []string
+
 	for _, info := range fileInfos {
 		if !info.IsDir && strings.HasSuffix(info.Path, ".org") {
 			// Extract just the filename from the path
@@ -274,6 +279,7 @@ func ListDailyOrgFiles(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse WebDAV daily URL: %w", err)
 	}
+
 	dailyPath := strings.TrimRight(dailyURL.Path, "/") + "/"
 
 	fileInfos, err := client.ReadDir(ctx, dailyPath, false)
@@ -281,12 +287,14 @@ func ListDailyOrgFiles(ctx context.Context) ([]string, error) {
 		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found") {
 			return []string{}, nil
 		}
+
 		return nil, fmt.Errorf("failed to list daily directory: %w", err)
 	}
 
 	logger.Info("Found WebDAV daily directory items", "count", len(fileInfos), "base_url", dailyBaseURL)
 
 	var orgFiles []string
+
 	for _, info := range fileInfos {
 		if !info.IsDir && strings.HasSuffix(info.Path, ".org") {
 			parts := strings.Split(strings.TrimPrefix(info.Path, "/"), "/")
@@ -302,12 +310,14 @@ func ListDailyOrgFiles(ctx context.Context) ([]string, error) {
 func FindFileByID(ctx context.Context, id string) (string, error) {
 	// Validate UUID format for security
 	if err := utils.ValidateUUID(id); err != nil {
-		return "", err
+		return "", fmt.Errorf("invalid note id %q: %w", id, err)
 	}
 
 	// Check cache first
 	cacheMutex.RLock()
+
 	filename, exists := idToFilenameCache[id]
+
 	cacheMutex.RUnlock()
 
 	if exists {
@@ -338,7 +348,9 @@ func FindFileByID(ctx context.Context, id string) (string, error) {
 
 		// Cache the mapping
 		cacheMutex.Lock()
+
 		idToFilenameCache[fileID] = file
+
 		cacheMutex.Unlock()
 
 		// Check if this is the file we're looking for
@@ -347,7 +359,7 @@ func FindFileByID(ctx context.Context, id string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("note with ID %s not found (scanned %d files)", id, len(files))
+	return "", fmt.Errorf("%w: %s (scanned %d files)", ErrZKNoteNotFound, id, len(files))
 }
 
 // ListZKNotes returns all zettelkasten notes with IDs and titles.
@@ -418,6 +430,7 @@ func annotateRestrictedNoteLinks(htmlContent string) string {
 		if len(matches) < 4 {
 			return link
 		}
+
 		noteID := matches[3]
 		if IsPublicNoteFromCache(noteID) {
 			return link
@@ -429,11 +442,13 @@ func annotateRestrictedNoteLinks(htmlContent string) string {
 				if len(classMatches) < 2 {
 					return classAttr
 				}
+
 				for _, existing := range strings.Fields(classMatches[1]) {
 					if existing == "restricted-link" {
 						return classAttr
 					}
 				}
+
 				return fmt.Sprintf(` class="%s restricted-link"`, classMatches[1])
 			})
 		}
@@ -477,7 +492,7 @@ func GetNoteByIDWithBasePath(ctx context.Context, id string, basePath string) (*
 		Title:    title,
 		Filename: filename,
 		IsPublic: isPublic,
-		HTMLBody: template.HTML(html),
+		HTMLBody: template.HTML(html), //nolint:gosec // HTML is generated by trusted org parser.
 	}, nil
 }
 
@@ -507,6 +522,6 @@ func GetIndexNote(ctx context.Context) (*ZKNote, error) {
 		Title:    title,
 		Filename: config.IndexFile,
 		IsPublic: isPublic,
-		HTMLBody: template.HTML(html),
+		HTMLBody: template.HTML(html), //nolint:gosec // HTML is generated by trusted org parser.
 	}, nil
 }

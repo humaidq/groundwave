@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025 Humaid Alqasimi
+// SPDX-License-Identifier: Apache-2.0
+
 package whatsapp
 
 import "testing"
@@ -6,10 +9,12 @@ func TestNewWALogger(t *testing.T) {
 	t.Parallel()
 
 	base := newWALogger("pairing")
+
 	wa, ok := base.(*waLogger)
 	if !ok {
 		t.Fatalf("unexpected logger type: %T", base)
 	}
+
 	if wa.module != "pairing" {
 		t.Fatalf("unexpected module name: %q", wa.module)
 	}
@@ -20,19 +25,23 @@ func TestWALoggerSub(t *testing.T) {
 
 	root := &waLogger{base: logger, module: ""}
 	sub := root.Sub("transport")
+
 	transport, ok := sub.(*waLogger)
 	if !ok {
 		t.Fatalf("unexpected sub logger type: %T", sub)
 	}
+
 	if transport.module != "transport" {
 		t.Fatalf("unexpected module path for root sub logger: %q", transport.module)
 	}
 
 	nested := transport.Sub("events")
+
 	nestedLogger, ok := nested.(*waLogger)
 	if !ok {
 		t.Fatalf("unexpected nested logger type: %T", nested)
 	}
+
 	if nestedLogger.module != "transport/events" {
 		t.Fatalf("unexpected nested module path: %q", nestedLogger.module)
 	}

@@ -10,6 +10,7 @@ import (
 
 func TestHealthProfileShares(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	user := mustCreateUser(t, "Share User")
@@ -24,6 +25,7 @@ func TestHealthProfileShares(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListHealthProfilesForUser failed: %v", err)
 	}
+
 	if len(profiles) != 1 {
 		t.Fatalf("expected 1 shared profile, got %d", len(profiles))
 	}
@@ -32,6 +34,7 @@ func TestHealthProfileShares(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UserHasHealthProfileAccess failed: %v", err)
 	}
+
 	if !allowed {
 		t.Fatalf("expected access to shared profile")
 	}
@@ -40,6 +43,7 @@ func TestHealthProfileShares(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UserHasHealthFollowupAccess failed: %v", err)
 	}
+
 	if !allowed {
 		t.Fatalf("expected access to shared followup")
 	}
@@ -48,6 +52,7 @@ func TestHealthProfileShares(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListHealthProfileShares failed: %v", err)
 	}
+
 	if len(shares) != 1 {
 		t.Fatalf("expected 1 share, got %d", len(shares))
 	}
@@ -55,6 +60,7 @@ func TestHealthProfileShares(t *testing.T) {
 
 func TestHealthProfileSharesErrors(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	if err := SetHealthProfileShares(ctx, "invalid", []string{}, ""); err == nil {

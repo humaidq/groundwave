@@ -10,6 +10,7 @@ import (
 
 func TestReferenceRangeLookup(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	if err := SyncReferenceRanges(ctx); err != nil {
@@ -26,10 +27,12 @@ func TestReferenceRangeLookup(t *testing.T) {
 	}
 
 	first := defs[0]
+
 	rangeResult, err := GetReferenceRange(ctx, first.TestName, first.AgeRange, first.Gender)
 	if err != nil {
 		t.Fatalf("GetReferenceRange failed: %v", err)
 	}
+
 	if rangeResult == nil {
 		t.Fatalf("expected reference range result")
 	}
@@ -37,6 +40,7 @@ func TestReferenceRangeLookup(t *testing.T) {
 
 func TestGetReferenceRangeFallbacks(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	if err := SyncReferenceRanges(ctx); err != nil {
@@ -48,6 +52,7 @@ func TestGetReferenceRangeFallbacks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetReferenceRange failed: %v", err)
 	}
+
 	if rr == nil || rr.Gender != GenderUnisex {
 		t.Fatalf("expected unisex fallback range")
 	}
@@ -56,6 +61,7 @@ func TestGetReferenceRangeFallbacks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetReferenceRange failed: %v", err)
 	}
+
 	if missing != nil {
 		t.Fatalf("expected nil range for missing test")
 	}

@@ -22,12 +22,20 @@ import (
 // digitRegex matches digits for phone validation
 var digitRegex = regexp.MustCompile(`\d`)
 
+var (
+	updateLogDBFn        = db.UpdateLog
+	updateNoteDBFn       = db.UpdateNote
+	isServiceContactDBFn = db.IsServiceContact
+	updateChatDBFn       = db.UpdateChat
+)
+
 // isValidPhone checks if a phone number has at least 7 digits
 func isValidPhone(phone string) bool {
 	digits := digitRegex.FindAllString(phone, -1)
 	return len(digits) >= 7
 }
 
+// ActivityGridWeek represents one week in the activity heatmap.
 type ActivityGridWeek struct {
 	WeekStart  time.Time
 	WeekEnd    time.Time
@@ -37,6 +45,7 @@ type ActivityGridWeek struct {
 	Tooltip    string
 }
 
+// ActivityGridYear groups weekly activity entries for a calendar year.
 type ActivityGridYear struct {
 	Year  int
 	Weeks []ActivityGridWeek
@@ -44,10 +53,12 @@ type ActivityGridYear struct {
 
 func isoWeekStart(year int) time.Time {
 	jan4 := time.Date(year, time.January, 4, 0, 0, 0, 0, time.UTC)
+
 	weekday := int(jan4.Weekday())
 	if weekday == 0 {
 		weekday = 7
 	}
+
 	return jan4.AddDate(0, 0, -(weekday - 1))
 }
 
@@ -70,16 +81,19 @@ func activityLabel(count int) string {
 	if count == 1 {
 		return "activity"
 	}
+
 	return "activities"
 }
 
 func buildActivityGrid(weekCounts map[string]int, currentYear int, yearCount int) []ActivityGridYear {
 	rows := make([]ActivityGridYear, 0, yearCount)
+
 	startYear := currentYear - yearCount + 1
 	for year := currentYear; year >= startYear; year-- {
 		yearStart := isoWeekStart(year)
 		weeks := make([]ActivityGridWeek, 0, 52)
-		for i := 0; i < 52; i++ {
+
+		for i := range 52 {
 			weekStart := yearStart.AddDate(0, 0, 7*i)
 			weekKey := weekStart.Format("2006-01-02")
 			count := weekCounts[weekKey]
@@ -95,8 +109,10 @@ func buildActivityGrid(weekCounts map[string]int, currentYear int, yearCount int
 				Tooltip:    tooltip,
 			})
 		}
+
 		rows = append(rows, ActivityGridYear{Year: year, Weeks: weeks})
 	}
+
 	return rows
 }
 
@@ -104,6 +120,7 @@ func buildActivityGrid(weekCounts map[string]int, currentYear int, yearCount int
 func NewContactForm(c flamego.Context, t template.Template, data template.Data) {
 	data["IsContacts"] = true
 	isService := c.Query("is_service") == "true"
+
 	data["IsService"] = isService
 	if isService {
 		data["Breadcrumbs"] = []BreadcrumbItem{
@@ -134,8 +151,11 @@ func CreateContact(c flamego.Context, s session.Session, t template.Template, da
 	// Parse form data
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Error parsing form", "error", err)
+
 		data["Error"] = "Failed to parse form data"
+
 		t.HTML(http.StatusBadRequest, "contact_new")
+
 		return
 	}
 
@@ -143,10 +163,13 @@ func CreateContact(c flamego.Context, s session.Session, t template.Template, da
 
 	// Check if this is a CardDAV import
 	cardDAVUUID := getOptionalString(form.Get("carddav_uuid"))
-	var nameGiven string
-	var nameFamily *string
-	var organization *string
-	var title *string
+
+	var (
+		nameGiven    string
+		nameFamily   *string
+		organization *string
+		title        *string
+	)
 
 	if cardDAVUUID != nil && *cardDAVUUID != "" {
 		// Import from CardDAV
@@ -154,7 +177,9 @@ func CreateContact(c flamego.Context, s session.Session, t template.Template, da
 		if err != nil {
 			logger.Error("Error fetching CardDAV contact", "error", err)
 			data["Error"] = "Failed to fetch contact from CardDAV: " + err.Error()
+
 			t.HTML(http.StatusInternalServerError, "contact_new")
+
 			return
 		}
 
@@ -163,12 +188,15 @@ func CreateContact(c flamego.Context, s session.Session, t template.Template, da
 		if nameGiven == "" {
 			nameGiven = cardDAVContact.DisplayName
 		}
+
 		if cardDAVContact.FamilyName != "" {
 			nameFamily = &cardDAVContact.FamilyName
 		}
+
 		if cardDAVContact.Organization != "" {
 			organization = &cardDAVContact.Organization
 		}
+
 		if cardDAVContact.Title != "" {
 			title = &cardDAVContact.Title
 		}
@@ -176,7 +204,9 @@ func CreateContact(c flamego.Context, s session.Session, t template.Template, da
 		// Validate we got at least a name
 		if nameGiven == "" {
 			data["Error"] = "CardDAV contact has no name"
+
 			t.HTML(http.StatusBadRequest, "contact_new")
+
 			return
 		}
 	} else {
@@ -185,9 +215,12 @@ func CreateContact(c flamego.Context, s session.Session, t template.Template, da
 		if nameGiven == "" {
 			data["Error"] = "First name is required"
 			data["FormData"] = form
+
 			t.HTML(http.StatusBadRequest, "contact_new")
+
 			return
 		}
+
 		nameFamily = getOptionalString(form.Get("name_family"))
 		organization = getOptionalString(form.Get("organization"))
 		title = getOptionalString(form.Get("title"))
@@ -198,6 +231,7 @@ func CreateContact(c flamego.Context, s session.Session, t template.Template, da
 	if tierStr == "" {
 		tierStr = "C"
 	}
+
 	tier := db.Tier(tierStr)
 
 	// Check if this is a service contact
@@ -223,7 +257,9 @@ func CreateContact(c flamego.Context, s session.Session, t template.Template, da
 		logger.Error("Error creating contact", "error", err)
 		data["Error"] = "Failed to create contact: " + err.Error()
 		data["FormData"] = form
+
 		t.HTML(http.StatusInternalServerError, "contact_new")
+
 		return
 	}
 
@@ -249,6 +285,7 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 	if contactID == "" {
 		SetErrorFlash(s, "Contact ID is required")
 		c.Redirect("/contacts", http.StatusSeeOther)
+
 		return
 	}
 
@@ -257,6 +294,7 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 		logger.Error("Error fetching contact", "contact_id", contactID, "error", err)
 		SetErrorFlash(s, "Contact not found")
 		c.Redirect("/contacts", http.StatusSeeOther)
+
 		return
 	}
 
@@ -288,11 +326,14 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 		currentYear := time.Now().UTC().Year()
 		start := isoWeekStart(currentYear - 4)
 		end := isoWeekStart(currentYear + 1)
+
 		weekCounts, err := db.ListContactWeeklyActivityCounts(c.Request().Context(), contactID, start, end)
 		if err != nil {
 			logger.Error("Error fetching activity grid for contact", "contact_id", contactID, "error", err)
+
 			weekCounts = map[string]int{}
 		}
+
 		data["ActivityGrid"] = buildActivityGrid(weekCounts, currentYear, 5)
 	}
 
@@ -346,6 +387,7 @@ func ViewContactChats(c flamego.Context, s session.Session, t template.Template,
 	if contactID == "" {
 		SetErrorFlash(s, "Contact ID is required")
 		c.Redirect("/contacts", http.StatusSeeOther)
+
 		return
 	}
 
@@ -354,14 +396,18 @@ func ViewContactChats(c flamego.Context, s session.Session, t template.Template,
 		logger.Error("Error fetching contact", "contact_id", contactID, "error", err)
 		SetErrorFlash(s, "Contact not found")
 		c.Redirect("/contacts", http.StatusSeeOther)
+
 		return
 	}
 
 	if contact.IsService {
 		SetErrorFlash(s, "Chats are not available for service contacts")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
+
+	data["PageRequiresSensitiveAccess"] = true
 
 	if !HasSensitiveAccess(s, time.Now()) {
 		redirectToBreakGlass(c, s)
@@ -398,11 +444,14 @@ func AddContactChat(c flamego.Context, s session.Session) {
 	if err != nil {
 		logger.Error("Error checking service contact", "contact_id", contactID, "error", err)
 		c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
+
 		return
 	}
+
 	if isService {
 		SetErrorFlash(s, "Chats are not available for service contacts")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -414,14 +463,17 @@ func AddContactChat(c flamego.Context, s session.Session) {
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
+
 		return
 	}
 
 	form := c.Request().Form
+
 	message := strings.TrimSpace(form.Get("message"))
 	if message == "" {
 		SetErrorFlash(s, "Message content is required")
 		c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
+
 		return
 	}
 
@@ -455,9 +507,11 @@ func GenerateContactChatSummary(c flamego.Context, s session.Session) {
 	contactID := c.Param("id")
 	if contactID == "" {
 		c.ResponseWriter().WriteHeader(http.StatusBadRequest)
+
 		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "contact ID is required"}); err != nil {
 			logger.Error("Error encoding chat summary error", "error", err)
 		}
+
 		return
 	}
 
@@ -467,36 +521,45 @@ func GenerateContactChatSummary(c flamego.Context, s session.Session) {
 	if err != nil {
 		logger.Error("Error fetching contact", "contact_id", contactID, "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusNotFound)
+
 		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "contact not found"}); err != nil {
 			logger.Error("Error encoding chat summary error", "error", err)
 		}
+
 		return
 	}
 
 	if contact.IsService {
 		c.ResponseWriter().WriteHeader(http.StatusBadRequest)
+
 		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "service contacts have no chat summary"}); err != nil {
 			logger.Error("Error encoding chat summary error", "error", err)
 		}
+
 		return
 	}
 
 	if !HasSensitiveAccess(s, time.Now()) {
 		c.ResponseWriter().WriteHeader(http.StatusForbidden)
+
 		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "sensitive access is locked"}); err != nil {
 			logger.Error("Error encoding chat summary error", "error", err)
 		}
+
 		return
 	}
 
 	since := time.Now().Add(-48 * time.Hour)
+
 	chats, err := db.GetContactChatsSince(ctx, contactID, since)
 	if err != nil {
 		logger.Error("Error fetching chats for contact", "contact_id", contactID, "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
+
 		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "failed to load chat history"}); err != nil {
 			logger.Error("Error encoding chat summary error", "error", err)
 		}
+
 		return
 	}
 
@@ -504,24 +567,29 @@ func GenerateContactChatSummary(c flamego.Context, s session.Session) {
 		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]interface{}{"summary": "No recent chats", "empty": true}); err != nil {
 			logger.Error("Error encoding chat summary response", "error", err)
 		}
+
 		return
 	}
 
 	var summaryBuilder strings.Builder
+
 	if err := db.StreamContactChatSummary(ctx, &contact.Contact, chats, func(chunk string) error {
 		summaryBuilder.WriteString(chunk)
 		return nil
 	}); err != nil {
 		logger.Error("Error generating chat summary", "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
+
 		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{"error": "failed to generate summary"}); err != nil {
 			logger.Error("Error encoding chat summary error", "error", err)
 		}
+
 		return
 	}
 
 	summary := strings.TrimSpace(summaryBuilder.String())
 	isEmpty := false
+
 	if summary == "" {
 		summary = "No recent chats"
 		isEmpty = true
@@ -570,6 +638,7 @@ func EditContactForm(c flamego.Context, s session.Session, t template.Template, 
 	if contactID == "" {
 		SetErrorFlash(s, "Contact ID is required")
 		c.Redirect("/contacts", http.StatusSeeOther)
+
 		return
 	}
 
@@ -578,11 +647,13 @@ func EditContactForm(c flamego.Context, s session.Session, t template.Template, 
 		logger.Error("Error fetching contact", "contact_id", contactID, "error", err)
 		SetErrorFlash(s, "Contact not found")
 		c.Redirect("/contacts", http.StatusSeeOther)
+
 		return
 	}
 
 	data["Contact"] = contact
 	data["ContactName"] = contact.NameDisplay
+
 	data["IsContacts"] = true
 	if contact.IsService {
 		data["Breadcrumbs"] = []BreadcrumbItem{
@@ -598,23 +669,28 @@ func EditContactForm(c flamego.Context, s session.Session, t template.Template, 
 			{Name: "Edit", URL: "", IsCurrent: true},
 		}
 	}
+
 	t.HTML(http.StatusOK, "contact_edit")
 }
 
 // UpdateContact handles the contact update form submission
-func UpdateContact(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+func UpdateContact(c flamego.Context, s session.Session, _ template.Template, data template.Data) {
 	contactID := c.Param("id")
 	if contactID == "" {
 		SetErrorFlash(s, "Contact ID is required")
 		c.Redirect("/contacts", http.StatusSeeOther)
+
 		return
 	}
 
 	// Parse form data
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Error parsing form", "error", err)
+
 		data["Error"] = "Failed to parse form data"
+
 		c.Redirect("/contact/"+contactID+"/edit", http.StatusSeeOther)
+
 		return
 	}
 
@@ -625,7 +701,9 @@ func UpdateContact(c flamego.Context, s session.Session, t template.Template, da
 	if nameGiven == "" {
 		data["Error"] = "First name is required"
 		data["FormData"] = form
+
 		c.Redirect("/contact/"+contactID+"/edit", http.StatusSeeOther)
+
 		return
 	}
 
@@ -634,11 +712,13 @@ func UpdateContact(c flamego.Context, s session.Session, t template.Template, da
 	if tierStr == "" {
 		tierStr = "C"
 	}
+
 	tier := db.Tier(tierStr)
 
 	// Check if service status toggle was requested
 	if form.Get("toggle_service") == "true" {
 		isService := form.Get("is_service") == "true"
+
 		err := db.ToggleServiceStatus(c.Request().Context(), contactID, isService)
 		if err != nil {
 			logger.Error("Error toggling service status", "error", err)
@@ -661,7 +741,9 @@ func UpdateContact(c flamego.Context, s session.Session, t template.Template, da
 	if err != nil {
 		logger.Error("Error updating contact", "error", err)
 		data["Error"] = "Failed to update contact: " + err.Error()
+
 		c.Redirect("/contact/"+contactID+"/edit", http.StatusSeeOther)
+
 		return
 	}
 
@@ -692,15 +774,18 @@ func AddEmail(c flamego.Context, s session.Session) {
 		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
 	form := c.Request().Form
 	email := strings.TrimSpace(form.Get("email"))
 	isPrimary := isPrimaryChecked(form.Get("is_primary"))
+
 	if email == "" {
 		SetErrorFlash(s, "Email address is required")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -715,6 +800,7 @@ func AddEmail(c flamego.Context, s session.Session) {
 		logger.Error("Error getting contact", "error", err)
 		SetErrorFlash(s, "Contact not found")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -726,6 +812,7 @@ func AddEmail(c flamego.Context, s session.Session) {
 				contact.Emails[i].IsPrimary = false
 			}
 		}
+
 		newEmail := db.ContactEmail{
 			Email:     email,
 			EmailType: emailType,
@@ -773,20 +860,24 @@ func AddPhone(c flamego.Context, s session.Session) {
 		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
 	form := c.Request().Form
+
 	phone := strings.TrimSpace(form.Get("phone"))
 	if phone == "" {
 		SetErrorFlash(s, "Phone number is required")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
 	if !isValidPhone(phone) {
 		SetErrorFlash(s, "Phone number must have at least 7 digits")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -803,6 +894,7 @@ func AddPhone(c flamego.Context, s session.Session) {
 		logger.Error("Error getting contact", "error", err)
 		SetErrorFlash(s, "Contact not found")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -814,6 +906,7 @@ func AddPhone(c flamego.Context, s session.Session) {
 				contact.Phones[i].IsPrimary = false
 			}
 		}
+
 		newPhone := db.ContactPhone{
 			Phone:     phone,
 			PhoneType: phoneType,
@@ -860,10 +953,12 @@ func AddURL(c flamego.Context) {
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
 	form := c.Request().Form
+
 	url := strings.TrimSpace(form.Get("url"))
 	if url == "" {
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
@@ -958,6 +1053,7 @@ func UpdateEmail(c flamego.Context, s session.Session) {
 		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -969,6 +1065,7 @@ func UpdateEmail(c flamego.Context, s session.Session) {
 	if email == "" {
 		SetErrorFlash(s, "Email address is required")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -1001,6 +1098,7 @@ func UpdateEmail(c flamego.Context, s session.Session) {
 				}
 			}
 		}
+
 		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
 			logger.Error("Error pushing email update to CardDAV", "error", err)
 		}
@@ -1023,6 +1121,7 @@ func UpdatePhone(c flamego.Context, s session.Session) {
 		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -1034,12 +1133,14 @@ func UpdatePhone(c flamego.Context, s session.Session) {
 	if phone == "" {
 		SetErrorFlash(s, "Phone number is required")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
 	if !isValidPhone(phone) {
 		SetErrorFlash(s, "Phone number must have at least 7 digits")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -1072,6 +1173,7 @@ func UpdatePhone(c flamego.Context, s session.Session) {
 				}
 			}
 		}
+
 		if err := db.UpdateCardDAVContact(c.Request().Context(), contact); err != nil {
 			logger.Error("Error pushing phone update to CardDAV", "error", err)
 		}
@@ -1129,6 +1231,7 @@ func AddLog(c flamego.Context) {
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -1189,6 +1292,7 @@ func UpdateLog(c flamego.Context, s session.Session) {
 		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -1202,7 +1306,7 @@ func UpdateLog(c flamego.Context, s session.Session) {
 		Content:   getOptionalString(form.Get("content")),
 	}
 
-	if err := db.UpdateLog(c.Request().Context(), input); err != nil {
+	if err := updateLogDBFn(c.Request().Context(), input); err != nil {
 		logger.Error("Error updating log", "error", err)
 		SetErrorFlash(s, "Failed to update log")
 	}
@@ -1211,7 +1315,7 @@ func UpdateLog(c flamego.Context, s session.Session) {
 }
 
 // LinkCardDAV handles linking a contact with a CardDAV contact
-func LinkCardDAV(c flamego.Context, t template.Template, data template.Data) {
+func LinkCardDAV(c flamego.Context, _ template.Template, data template.Data) {
 	contactID := c.Param("id")
 	if contactID == "" {
 		c.Redirect("/", http.StatusSeeOther)
@@ -1221,10 +1325,12 @@ func LinkCardDAV(c flamego.Context, t template.Template, data template.Data) {
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
 	form := c.Request().Form
+
 	cardDAVUUID := strings.TrimSpace(form.Get("carddav_uuid"))
 	if cardDAVUUID == "" {
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
@@ -1235,21 +1341,28 @@ func LinkCardDAV(c flamego.Context, t template.Template, data template.Data) {
 	isLinked, err := db.IsCardDAVUUIDLinked(c.Request().Context(), cardDAVUUID)
 	if err != nil {
 		logger.Error("Error checking if CardDAV UUID is linked", "error", err)
+
 		data["Error"] = "Failed to check CardDAV link status"
+
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
 	if isLinked {
 		logger.Warn("CardDAV UUID already linked to another contact", "carddav_uuid", cardDAVUUID)
+
 		data["Error"] = "This CardDAV contact is already linked to another contact"
+
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
 	err = db.LinkCardDAV(c.Request().Context(), contactID, cardDAVUUID)
 	if err != nil {
 		logger.Error("Error linking CardDAV contact", "error", err)
+
 		data["Error"] = "Failed to link CardDAV contact"
 	} else {
 		logger.Info("Successfully linked contact with CardDAV UUID", "contact_id", contactID, "carddav_uuid", cardDAVUUID)
@@ -1324,16 +1437,19 @@ func ListCardDAVContacts(c flamego.Context) {
 	if err != nil {
 		logger.Error("Error listing CardDAV contacts", "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
+
 		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{
 			"error": "Failed to fetch CardDAV contacts: " + err.Error(),
 		}); err != nil {
 			logger.Error("Error encoding CardDAV contacts error", "error", err)
 		}
+
 		return
 	}
 
 	// Filter out hidden contacts
 	var filteredContacts []db.CardDAVContact
+
 	for _, contact := range contacts {
 		if !shouldHideCardDAVContact(contact) {
 			filteredContacts = append(filteredContacts, contact)
@@ -1345,11 +1461,13 @@ func ListCardDAVContacts(c flamego.Context) {
 	if err != nil {
 		logger.Error("Error getting linked CardDAV UUIDs", "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
+
 		if err := json.NewEncoder(c.ResponseWriter()).Encode(map[string]string{
 			"error": "Failed to fetch linked CardDAV UUIDs: " + err.Error(),
 		}); err != nil {
 			logger.Error("Error encoding CardDAV links error", "error", err)
 		}
+
 		return
 	}
 
@@ -1360,6 +1478,7 @@ func ListCardDAVContacts(c flamego.Context) {
 		if !isLinked {
 			isService = false // Not linked means not a service contact
 		}
+
 		contactsWithStatus = append(contactsWithStatus, CardDAVContactWithStatus{
 			CardDAVContact: contact,
 			IsLinked:       isLinked,
@@ -1368,13 +1487,14 @@ func ListCardDAVContacts(c flamego.Context) {
 	}
 
 	c.ResponseWriter().Header().Set("Content-Type", "application/json")
+
 	if err := json.NewEncoder(c.ResponseWriter()).Encode(contactsWithStatus); err != nil {
 		logger.Error("Error encoding CardDAV contacts response", "error", err)
 	}
 }
 
 // CardDAVPicker renders the CardDAV contact picker popup
-func CardDAVPicker(c flamego.Context, t template.Template, data template.Data) {
+func CardDAVPicker(_ flamego.Context, t template.Template, _ template.Data) {
 	t.HTML(http.StatusOK, "carddav_picker")
 }
 
@@ -1389,10 +1509,12 @@ func AddNote(c flamego.Context) {
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
 	form := c.Request().Form
+
 	content := strings.TrimSpace(form.Get("content"))
 	if content == "" {
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
@@ -1427,14 +1549,17 @@ func UpdateNote(c flamego.Context, s session.Session) {
 		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
 	form := c.Request().Form
+
 	content := strings.TrimSpace(form.Get("content"))
 	if content == "" {
 		SetErrorFlash(s, "Note content is required")
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -1445,7 +1570,7 @@ func UpdateNote(c flamego.Context, s session.Session) {
 		NotedAt:   getOptionalString(form.Get("noted_at")),
 	}
 
-	if err := db.UpdateNote(c.Request().Context(), input); err != nil {
+	if err := updateNoteDBFn(c.Request().Context(), input); err != nil {
 		logger.Error("Error updating note", "error", err)
 		SetErrorFlash(s, "Failed to update note")
 	}
@@ -1482,6 +1607,7 @@ func AddTag(c flamego.Context) {
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Error parsing form", "error", err)
 		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -1524,10 +1650,13 @@ func ListServiceContacts(c flamego.Context, t template.Template, data template.D
 	// Get tag filter from URL query
 	tagIDs := c.QueryStrings("tag")
 
-	var contacts []db.ContactListItem
-	var err error
+	var (
+		contacts []db.ContactListItem
+		err      error
+	)
 
 	// Use ListContactsWithFilters if tags are specified
+
 	if len(tagIDs) > 0 {
 		opts := db.ContactListOptions{
 			TagIDs:    tagIDs,
@@ -1540,6 +1669,7 @@ func ListServiceContacts(c flamego.Context, t template.Template, data template.D
 
 	if err != nil {
 		logger.Error("Error fetching service contacts", "error", err)
+
 		data["Error"] = "Failed to load service contacts"
 	} else {
 		data["ServiceContacts"] = contacts
@@ -1560,6 +1690,7 @@ func ListServiceContacts(c flamego.Context, t template.Template, data template.D
 		{Name: "Contacts", URL: "/contacts", IsCurrent: false},
 		{Name: "Service Contacts", URL: "", IsCurrent: true},
 	}
+
 	t.HTML(http.StatusOK, "service_contacts")
 }
 
@@ -1571,6 +1702,7 @@ func BulkContactLogForm(c flamego.Context, t template.Template, data template.Da
 	contacts, err := db.ListContacts(ctx)
 	if err != nil {
 		logger.Error("Error fetching contacts", "error", err)
+
 		data["Error"] = "Failed to load contacts"
 	} else {
 		data["Contacts"] = contacts
@@ -1593,6 +1725,7 @@ func BulkAddLog(c flamego.Context, s session.Session) {
 		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form data")
 		c.Redirect("/bulk-contact-log", http.StatusSeeOther)
+
 		return
 	}
 
@@ -1603,6 +1736,7 @@ func BulkAddLog(c flamego.Context, s session.Session) {
 	if len(contactIDs) == 0 {
 		SetErrorFlash(s, "Please select at least one contact")
 		c.Redirect("/bulk-contact-log", http.StatusSeeOther)
+
 		return
 	}
 
@@ -1614,6 +1748,7 @@ func BulkAddLog(c flamego.Context, s session.Session) {
 
 	// Track successes and failures
 	successCount := 0
+
 	var failedContacts []string
 
 	// Loop through contacts and add log to each
@@ -1657,20 +1792,24 @@ func UpdateContactChat(c flamego.Context, s session.Session) {
 		return
 	}
 
-	isService, err := db.IsServiceContact(c.Request().Context(), contactID)
-	if err != nil {
-		logger.Error("Error checking service contact", "contact_id", contactID, "error", err)
-		c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
-		return
-	}
-	if isService {
-		SetErrorFlash(s, "Chats are not available for service contacts")
-		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+	if !HasSensitiveAccess(s, time.Now()) {
+		redirectToBreakGlass(c, s)
 		return
 	}
 
-	if !HasSensitiveAccess(s, time.Now()) {
-		redirectToBreakGlass(c, s)
+	isService, err := isServiceContactDBFn(c.Request().Context(), contactID)
+	if err != nil {
+		logger.Error("Error checking service contact", "contact_id", contactID, "error", err)
+		SetErrorFlash(s, "Failed to load contact chat settings")
+		c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
+
+		return
+	}
+
+	if isService {
+		SetErrorFlash(s, "Chats are not available for service contacts")
+		c.Redirect("/contact/"+contactID, http.StatusSeeOther)
+
 		return
 	}
 
@@ -1678,14 +1817,17 @@ func UpdateContactChat(c flamego.Context, s session.Session) {
 		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
+
 		return
 	}
 
 	form := c.Request().Form
+
 	message := strings.TrimSpace(form.Get("message"))
 	if message == "" {
 		SetErrorFlash(s, "Message content is required")
 		c.Redirect("/contact/"+contactID+"/chats", http.StatusSeeOther)
+
 		return
 	}
 
@@ -1698,7 +1840,7 @@ func UpdateContactChat(c flamego.Context, s session.Session) {
 		SentAt:    getOptionalString(form.Get("sent_at")),
 	}
 
-	if err := db.UpdateChat(c.Request().Context(), input); err != nil {
+	if err := updateChatDBFn(c.Request().Context(), input); err != nil {
 		logger.Error("Error updating chat entry", "error", err)
 		SetErrorFlash(s, "Failed to update chat entry")
 	}

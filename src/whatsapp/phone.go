@@ -24,6 +24,7 @@ func JIDToPhone(jid string) string {
 	if len(parts) > 0 {
 		return parts[0]
 	}
+
 	return jid
 }
 

@@ -50,7 +50,7 @@ func SyncQRZLogbooks(ctx context.Context, apiKeys []string) (QRZLogbookSyncResul
 
 	keys := normalizeQRZAPIKeys(apiKeys)
 	if len(keys) == 0 {
-		return result, fmt.Errorf("no QRZ API keys provided")
+		return result, ErrNoQRZAPIKeysProvided
 	}
 
 	result.RequestedLogbooks = len(keys)
@@ -71,7 +71,9 @@ func SyncQRZLogbooks(ctx context.Context, apiKeys []string) (QRZLogbookSyncResul
 		processed, syncErr := syncSingleQRZLogbook(ctx, client, apiKey, modSince)
 		if syncErr != nil {
 			result.FailedLogbooks++
+
 			logger.Error("QRZ logbook sync failed", "logbook_index", idx+1, "error", syncErr)
+
 			continue
 		}
 
@@ -80,7 +82,7 @@ func SyncQRZLogbooks(ctx context.Context, apiKeys []string) (QRZLogbookSyncResul
 	}
 
 	if result.SyncedLogbooks == 0 {
-		return result, fmt.Errorf("failed to sync all QRZ logbooks")
+		return result, ErrSyncAllQRZLogbooksFailed
 	}
 
 	return result, nil
@@ -95,9 +97,11 @@ func normalizeQRZAPIKeys(apiKeys []string) []string {
 		if value == "" {
 			continue
 		}
+
 		if _, exists := seen[value]; exists {
 			continue
 		}
+
 		seen[value] = struct{}{}
 		normalized = append(normalized, value)
 	}
@@ -109,7 +113,7 @@ func syncSingleQRZLogbook(ctx context.Context, client *http.Client, apiKey strin
 	afterLogID := 0
 	processedTotal := 0
 
-	for page := 0; page < qrzLogbookFetchMaxPages; page++ {
+	for range qrzLogbookFetchMaxPages {
 		option := buildQRZFetchOption(modSince, afterLogID)
 
 		response, err := fetchQRZLogbookPage(ctx, client, apiKey, option)
@@ -134,6 +138,7 @@ func syncSingleQRZLogbook(ctx context.Context, client *http.Client, apiKey strin
 		if err != nil {
 			return processedTotal, fmt.Errorf("failed to import QRZ QSOs: %w", err)
 		}
+
 		processedTotal += processed
 
 		if len(parser.QSOs) < qrzLogbookFetchPageSize {
@@ -142,12 +147,13 @@ func syncSingleQRZLogbook(ctx context.Context, client *http.Client, apiKey strin
 
 		maxLogID := maxQRZLogbookID(response.ADIF)
 		if maxLogID <= afterLogID {
-			return processedTotal, fmt.Errorf("unable to continue QRZ pagination (missing APP_QRZLOG_LOGID)")
+			return processedTotal, ErrQRZPaginationMissingLogID
 		}
+
 		afterLogID = maxLogID + 1
 	}
 
-	return processedTotal, fmt.Errorf("QRZ pagination limit reached (%d pages)", qrzLogbookFetchMaxPages)
+	return processedTotal, fmt.Errorf("%w (%d pages)", ErrQRZPaginationLimitReached, qrzLogbookFetchMaxPages)
 }
 
 func buildQRZFetchOption(modSince string, afterLogID int) string {
@@ -159,6 +165,7 @@ func buildQRZFetchOption(modSince string, afterLogID int) string {
 	if modSince != "" {
 		options = append(options, "MODSINCE:"+modSince)
 	}
+
 	return strings.Join(options, ",")
 }
 
@@ -172,6 +179,7 @@ func fetchQRZLogbookPage(ctx context.Context, client *http.Client, apiKey string
 	if err != nil {
 		return nil, fmt.Errorf("failed to create QRZ logbook request: %w", err)
 	}
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", qrzLogbookUserAgent)
 
@@ -179,6 +187,7 @@ func fetchQRZLogbookPage(ctx context.Context, client *http.Client, apiKey string
 	if err != nil {
 		return nil, fmt.Errorf("failed to call QRZ logbook API: %w", err)
 	}
+
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			logger.Warn("Failed to close QRZ logbook response body", "error", err)
@@ -191,7 +200,7 @@ func fetchQRZLogbookPage(ctx context.Context, client *http.Client, apiKey string
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("QRZ logbook API returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("%w: %d", ErrQRZLogbookAPIReturnedStatus, resp.StatusCode)
 	}
 
 	parsed, err := parseQRZLogbookResponse(body)
@@ -204,7 +213,8 @@ func fetchQRZLogbookPage(ctx context.Context, client *http.Client, apiKey string
 		if reason == "" {
 			reason = "unknown error"
 		}
-		return nil, fmt.Errorf("QRZ logbook API %s: %s", strings.ToLower(parsed.Result), reason)
+
+		return nil, fmt.Errorf("%w %s: %s", ErrQRZLogbookAPIError, strings.ToLower(parsed.Result), reason)
 	}
 
 	return parsed, nil
@@ -217,11 +227,13 @@ func parseQRZLogbookResponse(raw []byte) (*qrzLogbookFetchResponse, error) {
 	if result == "" {
 		result = strings.ToUpper(strings.TrimSpace(fields["STATUS"]))
 	}
+
 	if result == "" {
-		return nil, fmt.Errorf("QRZ logbook response missing RESULT")
+		return nil, ErrQRZLogbookResponseMissing
 	}
 
 	count := 0
+
 	if countValue := strings.TrimSpace(fields["COUNT"]); countValue != "" {
 		parsedCount, err := strconv.Atoi(countValue)
 		if err == nil {
@@ -246,12 +258,14 @@ func parseQRZResponseFields(raw string) map[string]string {
 		}
 
 		pair := strings.SplitN(part, "=", 2)
+
 		key := strings.ToUpper(strings.TrimSpace(pair[0]))
 		if key == "" {
 			continue
 		}
 
 		value := ""
+
 		if len(pair) == 2 {
 			decodedValue, err := url.QueryUnescape(pair[1])
 			if err != nil {
@@ -269,15 +283,18 @@ func parseQRZResponseFields(raw string) map[string]string {
 
 func maxQRZLogbookID(adif string) int {
 	maxLogID := 0
+
 	matches := qrzLogbookIDFieldRegex.FindAllStringSubmatch(adif, -1)
 	for _, match := range matches {
 		if len(match) != 2 {
 			continue
 		}
+
 		logID, err := strconv.Atoi(match[1])
 		if err != nil {
 			continue
 		}
+
 		if logID > maxLogID {
 			maxLogID = logID
 		}

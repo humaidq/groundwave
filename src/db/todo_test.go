@@ -17,6 +17,7 @@ func TestGetTodoNote(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
+
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("#+TITLE: Tasks\n* TODO Test"))
 	}))
@@ -30,6 +31,7 @@ func TestGetTodoNote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTodoNote failed: %v", err)
 	}
+
 	if note.Title != "Tasks" {
 		t.Fatalf("expected title Tasks, got %q", note.Title)
 	}

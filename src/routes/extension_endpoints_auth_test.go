@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025 Humaid Alqasimi
+// SPDX-License-Identifier: Apache-2.0
+
 package routes
 
 import (
@@ -21,6 +24,7 @@ func newExtensionEndpointAuthTestApp() *flamego.Flame {
 	f.Options("/ext/contacts-no-linkedin", ExtensionContactsWithoutLinkedIn)
 	f.Options("/ext/linkedin-lookup", ExtensionLinkedInLookup)
 	f.Options("/ext/linkedin-assign", ExtensionLinkedInAssign)
+
 	return f
 }
 
@@ -29,6 +33,7 @@ func isolateExtensionTokenStore(t *testing.T) {
 
 	originalStore := extTokens
 	extTokens = newExtensionTokenStore()
+
 	t.Cleanup(func() {
 		extTokens = originalStore
 	})
@@ -40,9 +45,11 @@ func assertExtensionCORSHeaders(t *testing.T, rec *httptest.ResponseRecorder) {
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "*" {
 		t.Fatalf("unexpected Access-Control-Allow-Origin: %q", got)
 	}
+
 	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, OPTIONS" {
 		t.Fatalf("unexpected Access-Control-Allow-Methods: %q", got)
 	}
+
 	if got := rec.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type, "+extensionTokenHeader {
 		t.Fatalf("unexpected Access-Control-Allow-Headers: %q", got)
 	}
@@ -55,6 +62,7 @@ func assertExtensionAuthError(t *testing.T, rec *httptest.ResponseRecorder) {
 	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
 		t.Fatalf("failed decoding auth error response: %v", err)
 	}
+
 	if valid, ok := payload["valid"]; !ok || valid {
 		t.Fatalf("expected valid=false auth payload, got %#v", payload)
 	}
@@ -67,6 +75,7 @@ func assertExtensionErrorMessage(t *testing.T, rec *httptest.ResponseRecorder, w
 	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
 		t.Fatalf("failed decoding error response: %v", err)
 	}
+
 	if got := payload["error"]; got != want {
 		t.Fatalf("unexpected error message: got %q, want %q", got, want)
 	}
@@ -74,6 +83,7 @@ func assertExtensionErrorMessage(t *testing.T, rec *httptest.ResponseRecorder, w
 
 func TestExtensionEndpointsRejectMissingToken(t *testing.T) {
 	isolateExtensionTokenStore(t)
+
 	f := newExtensionEndpointAuthTestApp()
 
 	tests := []struct {
@@ -89,7 +99,6 @@ func TestExtensionEndpointsRejectMissingToken(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
 			if tc.method == http.MethodPost {
@@ -102,6 +111,7 @@ func TestExtensionEndpointsRejectMissingToken(t *testing.T) {
 			if rec.Code != http.StatusUnauthorized {
 				t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rec.Code)
 			}
+
 			assertExtensionCORSHeaders(t, rec)
 			assertExtensionAuthError(t, rec)
 		})
@@ -110,6 +120,7 @@ func TestExtensionEndpointsRejectMissingToken(t *testing.T) {
 
 func TestExtensionPostEndpointsRejectBadPayloadWithValidToken(t *testing.T) {
 	isolateExtensionTokenStore(t)
+
 	f := newExtensionEndpointAuthTestApp()
 
 	const token = "issued-token"
@@ -125,7 +136,6 @@ func TestExtensionPostEndpointsRejectBadPayloadWithValidToken(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -137,6 +147,7 @@ func TestExtensionPostEndpointsRejectBadPayloadWithValidToken(t *testing.T) {
 			if rec.Code != http.StatusBadRequest {
 				t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 			}
+
 			assertExtensionCORSHeaders(t, rec)
 			assertExtensionErrorMessage(t, rec, "invalid request body")
 		})
@@ -145,6 +156,7 @@ func TestExtensionPostEndpointsRejectBadPayloadWithValidToken(t *testing.T) {
 
 func TestExtensionEndpointsHandleOptionsPreflight(t *testing.T) {
 	isolateExtensionTokenStore(t)
+
 	f := newExtensionEndpointAuthTestApp()
 
 	paths := []string{
@@ -155,7 +167,6 @@ func TestExtensionEndpointsHandleOptionsPreflight(t *testing.T) {
 	}
 
 	for _, path := range paths {
-		path := path
 		t.Run(path, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodOptions, path, nil)
 			req.Header.Set("Origin", "https://attacker.example")
@@ -167,7 +178,9 @@ func TestExtensionEndpointsHandleOptionsPreflight(t *testing.T) {
 			if rec.Code != http.StatusNoContent {
 				t.Fatalf("expected status %d, got %d", http.StatusNoContent, rec.Code)
 			}
+
 			assertExtensionCORSHeaders(t, rec)
+
 			if body := strings.TrimSpace(rec.Body.String()); body != "" {
 				t.Fatalf("expected empty preflight body, got %q", body)
 			}
@@ -177,6 +190,7 @@ func TestExtensionEndpointsHandleOptionsPreflight(t *testing.T) {
 
 func TestExtensionValidateRejectsTokenBypassVectors(t *testing.T) {
 	isolateExtensionTokenStore(t)
+
 	f := newExtensionEndpointAuthTestApp()
 
 	const token = "issued-token"
@@ -201,7 +215,6 @@ func TestExtensionValidateRejectsTokenBypassVectors(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
 			for key, value := range tc.headers {
@@ -214,6 +227,7 @@ func TestExtensionValidateRejectsTokenBypassVectors(t *testing.T) {
 			if rec.Code != http.StatusUnauthorized {
 				t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rec.Code)
 			}
+
 			assertExtensionCORSHeaders(t, rec)
 			assertExtensionAuthError(t, rec)
 		})
@@ -222,6 +236,7 @@ func TestExtensionValidateRejectsTokenBypassVectors(t *testing.T) {
 
 func TestExtensionLinkedInAssignRejectsMaliciousURLPayload(t *testing.T) {
 	isolateExtensionTokenStore(t)
+
 	f := newExtensionEndpointAuthTestApp()
 
 	const token = "issued-token"
@@ -241,6 +256,7 @@ func TestExtensionLinkedInAssignRejectsMaliciousURLPayload(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
+
 	assertExtensionCORSHeaders(t, rec)
 	assertExtensionErrorMessage(t, rec, "invalid LinkedIn URL")
 }

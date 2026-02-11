@@ -10,6 +10,7 @@ import (
 
 func TestJournalDayLocations(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	day := time.Date(2025, time.January, 2, 0, 0, 0, 0, time.UTC)
@@ -21,6 +22,7 @@ func TestJournalDayLocations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListJournalDayLocations failed: %v", err)
 	}
+
 	if len(locations) != 1 {
 		t.Fatalf("expected 1 location, got %d", len(locations))
 	}
@@ -33,6 +35,7 @@ func TestJournalDayLocations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListJournalDayLocations failed: %v", err)
 	}
+
 	if len(locations) != 0 {
 		t.Fatalf("expected 0 locations, got %d", len(locations))
 	}

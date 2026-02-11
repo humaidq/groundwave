@@ -16,7 +16,7 @@ import (
 // GetCommentsForZettel fetches all comments for a specific zettel
 func GetCommentsForZettel(ctx context.Context, zettelID string) ([]ZettelComment, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	// Validate zettel ID format
@@ -38,8 +38,10 @@ func GetCommentsForZettel(ctx context.Context, zettelID string) ([]ZettelComment
 	defer rows.Close()
 
 	var comments []ZettelComment
+
 	for rows.Next() {
 		var comment ZettelComment
+
 		err := rows.Scan(
 			&comment.ID,
 			&comment.ZettelID,
@@ -50,6 +52,7 @@ func GetCommentsForZettel(ctx context.Context, zettelID string) ([]ZettelComment
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan comment: %w", err)
 		}
+
 		comments = append(comments, comment)
 	}
 
@@ -63,7 +66,7 @@ func GetCommentsForZettel(ctx context.Context, zettelID string) ([]ZettelComment
 // CreateZettelComment creates a new comment for a zettel
 func CreateZettelComment(ctx context.Context, zettelID string, content string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	// Validate zettel ID format
@@ -73,7 +76,7 @@ func CreateZettelComment(ctx context.Context, zettelID string, content string) e
 
 	// Validate content is not empty
 	if content == "" {
-		return fmt.Errorf("comment content cannot be empty")
+		return ErrCommentContentEmpty
 	}
 
 	query := `
@@ -92,7 +95,7 @@ func CreateZettelComment(ctx context.Context, zettelID string, content string) e
 // DeleteZettelComment deletes a comment by ID
 func DeleteZettelComment(ctx context.Context, commentID uuid.UUID) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `DELETE FROM zettel_comments WHERE id = $1`
@@ -103,32 +106,36 @@ func DeleteZettelComment(ctx context.Context, commentID uuid.UUID) error {
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("comment not found: %s", commentID)
+		return fmt.Errorf("%w: %s", ErrCommentNotFound, commentID)
 	}
 
 	return nil
 }
 
-// UpdateZettelComment updates a comment by ID
-func UpdateZettelComment(ctx context.Context, commentID uuid.UUID, content string) error {
+// UpdateZettelComment updates a comment by ID for a specific zettel.
+func UpdateZettelComment(ctx context.Context, zettelID string, commentID uuid.UUID, content string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
+	}
+
+	if err := utils.ValidateUUID(zettelID); err != nil {
+		return fmt.Errorf("invalid zettel ID: %w", err)
 	}
 
 	content = strings.TrimSpace(content)
 	if content == "" {
-		return fmt.Errorf("comment content cannot be empty")
+		return ErrCommentContentEmpty
 	}
 
-	query := `UPDATE zettel_comments SET content = $1 WHERE id = $2`
+	query := `UPDATE zettel_comments SET content = $1 WHERE id = $2 AND zettel_id = $3`
 
-	result, err := pool.Exec(ctx, query, content, commentID)
+	result, err := pool.Exec(ctx, query, content, commentID, zettelID)
 	if err != nil {
 		return fmt.Errorf("failed to update zettel comment: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("comment not found: %s", commentID)
+		return fmt.Errorf("%w: %s", ErrCommentNotFound, commentID)
 	}
 
 	return nil
@@ -137,7 +144,7 @@ func UpdateZettelComment(ctx context.Context, commentID uuid.UUID, content strin
 // DeleteAllZettelComments deletes all comments for a zettel ID
 func DeleteAllZettelComments(ctx context.Context, zettelID string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	if err := utils.ValidateUUID(zettelID); err != nil {
@@ -158,7 +165,7 @@ func DeleteAllZettelComments(ctx context.Context, zettelID string) error {
 // Returns comments with zettel metadata (title, filename, orphaned status)
 func GetAllZettelComments(ctx context.Context) ([]ZettelCommentWithNote, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	// Get all comments ordered by zettel_id and creation time
@@ -175,8 +182,10 @@ func GetAllZettelComments(ctx context.Context) ([]ZettelCommentWithNote, error) 
 	defer rows.Close()
 
 	var comments []ZettelComment
+
 	for rows.Next() {
 		var comment ZettelComment
+
 		err := rows.Scan(
 			&comment.ID,
 			&comment.ZettelID,
@@ -187,6 +196,7 @@ func GetAllZettelComments(ctx context.Context) ([]ZettelCommentWithNote, error) 
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan comment: %w", err)
 		}
+
 		comments = append(comments, comment)
 	}
 
@@ -195,7 +205,8 @@ func GetAllZettelComments(ctx context.Context) ([]ZettelCommentWithNote, error) 
 	}
 
 	// Enrich comments with zettel metadata
-	var enrichedComments []ZettelCommentWithNote
+	enrichedComments := make([]ZettelCommentWithNote, 0, len(comments))
+
 	zettelCache := make(map[string]*ZKNote) // Cache to avoid fetching same zettel multiple times
 
 	for _, comment := range comments {
@@ -221,6 +232,7 @@ func GetAllZettelComments(ctx context.Context) ([]ZettelCommentWithNote, error) 
 			if err != nil {
 				// Zettel not found (orphaned)
 				logger.Warn("Zettel not found for orphaned comment", "zettel_id", comment.ZettelID, "error", err)
+
 				enriched.OrphanedNote = true
 				enriched.ZettelTitle = "[Note Not Found]"
 				enriched.ZettelFilename = ""
@@ -243,10 +255,11 @@ func GetAllZettelComments(ctx context.Context) ([]ZettelCommentWithNote, error) 
 // Useful for displaying a badge in navigation
 func GetZettelCommentCount(ctx context.Context) (int, error) {
 	if pool == nil {
-		return 0, fmt.Errorf("database connection not initialized")
+		return 0, ErrDatabaseConnectionNotInitialized
 	}
 
 	var count int
+
 	query := `SELECT COUNT(*) FROM zettel_comments`
 
 	err := pool.QueryRow(ctx, query).Scan(&count)

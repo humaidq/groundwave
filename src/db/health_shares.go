@@ -25,7 +25,7 @@ type HealthProfileShare struct {
 // ListHealthProfilesForUser returns profiles shared with a user.
 func ListHealthProfilesForUser(ctx context.Context, userID string) ([]HealthProfileSummary, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -44,8 +44,10 @@ func ListHealthProfilesForUser(ctx context.Context, userID string) ([]HealthProf
 	defer rows.Close()
 
 	var profiles []HealthProfileSummary
+
 	for rows.Next() {
 		var profile HealthProfileSummary
+
 		err := rows.Scan(
 			&profile.ID, &profile.Name, &profile.DateOfBirth, &profile.Gender, &profile.Description,
 			&profile.IsPrimary,
@@ -55,6 +57,7 @@ func ListHealthProfilesForUser(ctx context.Context, userID string) ([]HealthProf
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan profile: %w", err)
 		}
+
 		profiles = append(profiles, profile)
 	}
 
@@ -68,7 +71,7 @@ func ListHealthProfilesForUser(ctx context.Context, userID string) ([]HealthProf
 // UserHasHealthProfileAccess checks whether a user can access a profile.
 func UserHasHealthProfileAccess(ctx context.Context, userID, profileID string) (bool, error) {
 	if pool == nil {
-		return false, fmt.Errorf("database connection not initialized")
+		return false, ErrDatabaseConnectionNotInitialized
 	}
 
 	var exists bool
@@ -85,10 +88,11 @@ func UserHasHealthProfileAccess(ctx context.Context, userID, profileID string) (
 // UserHasHealthFollowupAccess checks whether a user can access a follow-up.
 func UserHasHealthFollowupAccess(ctx context.Context, userID, followupID string) (bool, error) {
 	if pool == nil {
-		return false, fmt.Errorf("database connection not initialized")
+		return false, ErrDatabaseConnectionNotInitialized
 	}
 
 	var exists bool
+
 	query := `
 		SELECT EXISTS(
 			SELECT 1
@@ -107,7 +111,7 @@ func UserHasHealthFollowupAccess(ctx context.Context, userID, followupID string)
 // ListHealthProfileShares returns all profile shares.
 func ListHealthProfileShares(ctx context.Context) ([]HealthProfileShare, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -115,6 +119,7 @@ func ListHealthProfileShares(ctx context.Context) ([]HealthProfileShare, error) 
 		FROM health_profile_shares
 		ORDER BY created_at DESC
 	`
+
 	rows, err := pool.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list profile shares: %w", err)
@@ -122,11 +127,13 @@ func ListHealthProfileShares(ctx context.Context) ([]HealthProfileShare, error) 
 	defer rows.Close()
 
 	var shares []HealthProfileShare
+
 	for rows.Next() {
 		var share HealthProfileShare
 		if err := rows.Scan(&share.UserID, &share.ProfileID, &share.CreatedAt, &share.CreatedBy); err != nil {
 			return nil, fmt.Errorf("failed to scan profile share: %w", err)
 		}
+
 		shares = append(shares, share)
 	}
 
@@ -140,20 +147,22 @@ func ListHealthProfileShares(ctx context.Context) ([]HealthProfileShare, error) 
 // SetHealthProfileShares replaces the profile shares for a user.
 func SetHealthProfileShares(ctx context.Context, userID string, profileIDs []string, createdBy string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	userUUID, err := uuid.Parse(userID)
 	if err != nil {
-		return fmt.Errorf("invalid user ID")
+		return ErrInvalidUserID
 	}
 
 	var createdByUUID *uuid.UUID
+
 	if createdBy != "" {
 		parsed, err := uuid.Parse(createdBy)
 		if err != nil {
-			return fmt.Errorf("invalid creator ID")
+			return ErrInvalidCreatorID
 		}
+
 		createdByUUID = &parsed
 	}
 
@@ -161,6 +170,7 @@ func SetHealthProfileShares(ctx context.Context, userID string, profileIDs []str
 	if err != nil {
 		return fmt.Errorf("failed to start transaction: %w", err)
 	}
+
 	defer func() {
 		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
 			logger.Warn("Failed to rollback health profile shares", "error", err)
@@ -174,8 +184,9 @@ func SetHealthProfileShares(ctx context.Context, userID string, profileIDs []str
 	for _, profileID := range profileIDs {
 		profileUUID, err := uuid.Parse(profileID)
 		if err != nil {
-			return fmt.Errorf("invalid profile ID")
+			return ErrInvalidProfileID
 		}
+
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO health_profile_shares (user_id, profile_id, created_by) VALUES ($1, $2, $3)`,
 			userUUID, profileUUID, createdByUUID,

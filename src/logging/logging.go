@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/log"
 )
 
+// Log source tags used in structured logger contexts.
 const (
 	SourceApp        = "app"
 	SourceWeb        = "web"
@@ -38,6 +39,7 @@ func Init() {
 		})
 
 		stdLogger := baseLogger.With("source", SourceApp).StandardLog(log.StandardLogOptions{ForceLevel: log.InfoLevel})
+
 		stdlog.SetFlags(0)
 		stdlog.SetOutput(stdLogger.Writer())
 	})

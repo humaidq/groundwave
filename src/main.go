@@ -16,6 +16,7 @@ import (
 
 func main() {
 	logging.Init()
+
 	logger := logging.Logger(logging.SourceApp)
 
 	app := &cli.Command{

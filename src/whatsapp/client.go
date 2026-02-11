@@ -24,6 +24,7 @@ import (
 // Status represents the WhatsApp connection status
 type Status string
 
+// Status values describe the lifecycle of the WhatsApp client connection.
 const (
 	StatusDisconnected Status = "disconnected"
 	StatusConnecting   Status = "connecting"
@@ -59,6 +60,7 @@ func GetClient() *Client {
 // Initialize sets up the WhatsApp client with PostgreSQL storage
 func Initialize(ctx context.Context, databaseURL string, onMessage MessageHandler) error {
 	var initErr error
+
 	once.Do(func() {
 		// Set device name to "Groundwave" for WhatsApp linked devices
 		store.SetOSInfo("Groundwave", [3]uint32{1, 0, 0})
@@ -90,11 +92,11 @@ func Initialize(ctx context.Context, databaseURL string, onMessage MessageHandle
 
 		// If we have an existing device, try to reconnect
 		if deviceStore.ID != nil {
-			go func() {
-				if err := instance.Reconnect(context.Background()); err != nil {
+			go func(reconnectCtx context.Context) {
+				if err := instance.Reconnect(reconnectCtx); err != nil {
 					logger.Error("WhatsApp reconnect failed", "error", err)
 				}
-			}()
+			}(ctx)
 		}
 	})
 
@@ -105,6 +107,7 @@ func Initialize(ctx context.Context, databaseURL string, onMessage MessageHandle
 func (c *Client) GetStatus() Status {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
 	return c.status
 }
 
@@ -112,6 +115,7 @@ func (c *Client) GetStatus() Status {
 func (c *Client) GetQRCode() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
 	return c.qrCode
 }
 
@@ -119,6 +123,7 @@ func (c *Client) GetQRCode() string {
 func (c *Client) setStatus(status Status) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	c.status = status
 }
 
@@ -126,6 +131,7 @@ func (c *Client) setStatus(status Status) {
 func (c *Client) setQRCode(qrCode string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	c.qrCode = qrCode
 }
 
@@ -148,7 +154,9 @@ func (c *Client) Connect(ctx context.Context) error {
 			c.setStatus(StatusDisconnected)
 			return fmt.Errorf("failed to connect: %w", err)
 		}
+
 		c.setStatus(StatusConnected)
+
 		return nil
 	}
 
@@ -167,6 +175,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	go func() {
 		for evt := range qrChan {
 			logger.Info("WhatsApp QR event", "event", evt.Event)
+
 			if evt.Event == "code" {
 				// Generate QR code image
 				png, err := qrcode.Encode(evt.Code, qrcode.Medium, 256)
@@ -174,6 +183,7 @@ func (c *Client) Connect(ctx context.Context) error {
 					logger.Error("Failed to generate QR code", "error", err)
 					continue
 				}
+
 				c.setQRCode(base64.StdEncoding.EncodeToString(png))
 				logger.Info("WhatsApp QR code generated")
 			} else if evt.Event == "success" {
@@ -196,9 +206,9 @@ func (c *Client) Connect(ctx context.Context) error {
 }
 
 // Reconnect attempts to reconnect with existing credentials
-func (c *Client) Reconnect(ctx context.Context) error {
+func (c *Client) Reconnect(_ context.Context) error {
 	if c.deviceStore.ID == nil {
-		return fmt.Errorf("no existing session to reconnect")
+		return errNoExistingSessionToReconnect
 	}
 
 	c.setStatus(StatusConnecting)
@@ -216,6 +226,7 @@ func (c *Client) Reconnect(ctx context.Context) error {
 
 	c.setStatus(StatusConnected)
 	logger.Info("WhatsApp reconnected successfully")
+
 	return nil
 }
 
@@ -224,6 +235,7 @@ func (c *Client) Disconnect() {
 	if c.client != nil {
 		c.client.Disconnect()
 	}
+
 	c.setStatus(StatusDisconnected)
 	c.setQRCode("")
 }
@@ -235,6 +247,7 @@ func (c *Client) Logout() error {
 	}
 
 	ctx := context.Background()
+
 	err := c.client.Logout(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to logout: %w", err)
@@ -248,6 +261,7 @@ func (c *Client) Logout() error {
 	if err != nil {
 		return fmt.Errorf("failed to get new device: %w", err)
 	}
+
 	c.deviceStore = deviceStore
 
 	return nil
@@ -313,6 +327,7 @@ func resolveOtherPartyJID(info types.MessageInfo) types.JID {
 		if !info.RecipientAlt.IsEmpty() {
 			return info.RecipientAlt.ToNonAD()
 		}
+
 		return info.Chat.ToNonAD()
 	}
 
@@ -320,9 +335,11 @@ func resolveOtherPartyJID(info types.MessageInfo) types.JID {
 	if !info.Sender.IsEmpty() {
 		return info.Sender.ToNonAD()
 	}
+
 	if !info.SenderAlt.IsEmpty() {
 		return info.SenderAlt.ToNonAD()
 	}
+
 	return info.Chat.ToNonAD()
 }
 

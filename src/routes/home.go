@@ -27,8 +27,10 @@ func Welcome(c flamego.Context, s session.Session, t template.Template, data tem
 	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil {
 		logger.Error("Failed to resolve admin state", "error", err)
+
 		isAdmin = false
 	}
+
 	data["IsAdmin"] = isAdmin
 
 	if isAdmin {
@@ -36,14 +38,17 @@ func Welcome(c flamego.Context, s session.Session, t template.Template, data tem
 		totalContacts, err := db.GetContactsCount(ctx)
 		if err != nil {
 			logger.Error("Error fetching contacts count", "error", err)
+
 			totalContacts = 0
 		}
+
 		data["TotalContacts"] = totalContacts
 
 		// Get overdue contacts count
 		overdueContacts, err := db.GetOverdueContacts(ctx)
 		if err != nil {
 			logger.Error("Error fetching overdue contacts", "error", err)
+
 			data["OverdueCount"] = 0
 		} else {
 			data["OverdueCount"] = len(overdueContacts)
@@ -53,14 +58,17 @@ func Welcome(c flamego.Context, s session.Session, t template.Template, data tem
 		qsoCount, err := db.GetQSOCount(ctx)
 		if err != nil {
 			logger.Error("Error fetching QSO count", "error", err)
+
 			qsoCount = 0
 		}
+
 		data["QSOCount"] = qsoCount
 
 		// Get notes count (from zettelkasten cache)
 		orgFiles, err := db.ListOrgFiles(ctx)
 		if err != nil {
 			logger.Error("Error fetching org files", "error", err)
+
 			data["NotesCount"] = 0
 		} else {
 			data["NotesCount"] = len(orgFiles)
@@ -79,17 +87,21 @@ func Welcome(c flamego.Context, s session.Session, t template.Template, data tem
 	inventoryCount, err := db.GetInventoryCount(ctx)
 	if err != nil {
 		logger.Error("Error fetching inventory count", "error", err)
+
 		inventoryCount = 0
 	}
+
 	data["InventoryCount"] = inventoryCount
 
 	if !isAdmin {
 		data["HealthProfileCount"] = 0
+
 		userID, ok := getSessionUserID(s)
 		if ok {
 			profiles, err := db.ListHealthProfilesForUser(ctx, userID)
 			if err != nil {
 				logger.Error("Error fetching shared health profiles", "error", err)
+
 				data["HealthProfileCount"] = 0
 			} else {
 				data["HealthProfileCount"] = len(profiles)
@@ -98,6 +110,7 @@ func Welcome(c flamego.Context, s session.Session, t template.Template, data tem
 	}
 
 	data["IsWelcome"] = true
+
 	t.HTML(http.StatusOK, "welcome")
 }
 
@@ -114,8 +127,12 @@ func Home(c flamego.Context, s session.Session, t template.Template, data templa
 
 	// Get data filters from URL query
 	filterStrs := c.QueryStrings("filter")
-	var filters []db.ContactFilter
-	var activeFilters []string
+
+	var (
+		filters       []db.ContactFilter
+		activeFilters []string
+	)
+
 	for _, f := range filterStrs {
 		filter := db.ContactFilter(f)
 		if db.ValidContactFilters[filter] {
@@ -124,8 +141,10 @@ func Home(c flamego.Context, s session.Session, t template.Template, data templa
 		}
 	}
 
-	var contacts []db.ContactListItem
-	var err error
+	var (
+		contacts []db.ContactListItem
+		err      error
+	)
 
 	// Use ListContactsWithFilters to handle locked-mode sorting
 	opts := db.ContactListOptions{
@@ -134,10 +153,11 @@ func Home(c flamego.Context, s session.Session, t template.Template, data templa
 		IsService:      false,
 		AlphabeticSort: !sensitiveAccess, // Sort alphabetically when locked
 	}
-	contacts, err = db.ListContactsWithFilters(ctx, opts)
 
+	contacts, err = db.ListContactsWithFilters(ctx, opts)
 	if err != nil {
 		logger.Error("Error fetching contacts", "error", err)
+
 		data["Error"] = "Failed to load contacts"
 	} else {
 		data["Contacts"] = contacts
@@ -159,6 +179,7 @@ func Home(c flamego.Context, s session.Session, t template.Template, data templa
 	overdueContacts, err := db.GetOverdueContacts(ctx)
 	if err != nil {
 		logger.Error("Error fetching overdue contacts", "error", err)
+
 		data["OverdueCount"] = 0
 	} else {
 		data["OverdueCount"] = len(overdueContacts)
@@ -180,6 +201,7 @@ func Overdue(c flamego.Context, s session.Session, t template.Template, data tem
 	contacts, err := db.GetOverdueContacts(c.Request().Context())
 	if err != nil {
 		logger.Error("Error fetching overdue contacts", "error", err)
+
 		data["Error"] = "Failed to load overdue contacts"
 	} else {
 		data["OverdueContacts"] = contacts
@@ -191,6 +213,7 @@ func Overdue(c flamego.Context, s session.Session, t template.Template, data tem
 		{Name: "Contacts", URL: "/contacts", IsCurrent: false},
 		{Name: "Overdue", URL: "", IsCurrent: true},
 	}
+
 	t.HTML(http.StatusOK, "overdue")
 }
 
@@ -213,6 +236,7 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 	logs, err := db.ListContactLogsTimeline(ctx)
 	if err != nil {
 		logger.Error("Error fetching contact logs", "error", err)
+
 		data["Error"] = "Failed to load timeline"
 		logs = []db.ContactLogTimelineEntry{}
 	}
@@ -220,6 +244,7 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 	qsos, err := db.ListQSOs(ctx)
 	if err != nil {
 		logger.Error("Error fetching QSOs", "error", err)
+
 		qsos = []db.QSOListItem{}
 	}
 
@@ -232,16 +257,20 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 	}
 
 	var followups []db.HealthFollowupSummary
+
 	if primaryProfile != nil {
 		data["PrimaryHealthProfileName"] = primaryProfile.Name
+
 		followups, err = db.ListFollowups(ctx, primaryProfile.ID.String())
 		if err != nil {
 			logger.Error("Error fetching follow-ups for primary health profile", "error", err)
+
 			followups = []db.HealthFollowupSummary{}
 		}
 	}
 
 	dayMap := make(map[string]*TimelineDay)
+
 	for i := range journalEntries {
 		entry := &journalEntries[i]
 		dateString := entry.DateString
@@ -266,6 +295,7 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 			followup.FollowupDate.Location(),
 		)
 		dateString := entryDate.Format("2006-01-02")
+
 		day, exists := dayMap[dateString]
 		if !exists {
 			day = &TimelineDay{
@@ -279,6 +309,7 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 			}
 			dayMap[dateString] = day
 		}
+
 		day.Followups = append(day.Followups, followup)
 	}
 
@@ -287,6 +318,7 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 		if err != nil {
 			continue
 		}
+
 		day, exists := dayMap[date]
 		if !exists {
 			day = &TimelineDay{
@@ -300,6 +332,7 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 			}
 			dayMap[date] = day
 		}
+
 		day.Notes = append(day.Notes, notes...)
 	}
 
@@ -312,6 +345,7 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 			logEntry.LoggedAt.Location(),
 		)
 		dateString := entryDate.Format("2006-01-02")
+
 		day, exists := dayMap[dateString]
 		if !exists {
 			day = &TimelineDay{
@@ -325,10 +359,12 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 			}
 			dayMap[dateString] = day
 		}
+
 		day.Logs = append(day.Logs, logEntry)
 	}
 
 	qsoCountries := make(map[string]map[string]struct{})
+
 	for _, qso := range qsos {
 		entryDate := time.Date(
 			qso.QSODate.Year(),
@@ -338,6 +374,7 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 			qso.QSODate.Location(),
 		)
 		dateString := entryDate.Format("2006-01-02")
+
 		day, exists := dayMap[dateString]
 		if !exists {
 			day = &TimelineDay{
@@ -351,7 +388,9 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 			}
 			dayMap[dateString] = day
 		}
+
 		day.QSOCount++
+
 		if qso.Country != nil {
 			country := strings.TrimSpace(*qso.Country)
 			if country != "" {
@@ -360,6 +399,7 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 					countries = make(map[string]struct{})
 					qsoCountries[dateString] = countries
 				}
+
 				countries[country] = struct{}{}
 				day.QSOCountryCount = len(countries)
 			}
@@ -388,6 +428,7 @@ func Timeline(c flamego.Context, t template.Template, data template.Data) {
 // ViewJournalEntry renders a full daily journal entry.
 func ViewJournalEntry(c flamego.Context, t template.Template, data template.Data) {
 	date := c.Param("date")
+
 	entry, exists := db.GetJournalEntryByDate(date)
 	if !exists {
 		data["Error"] = "Journal entry not found"
@@ -396,7 +437,9 @@ func ViewJournalEntry(c flamego.Context, t template.Template, data template.Data
 			{Name: date, URL: "", IsCurrent: true},
 		}
 		data["IsTimeline"] = true
+
 		t.HTML(http.StatusNotFound, "journal_entry")
+
 		return
 	}
 
@@ -411,8 +454,10 @@ func ViewJournalEntry(c flamego.Context, t template.Template, data template.Data
 	locations, err := db.ListJournalDayLocations(c.Request().Context(), entry.Date)
 	if err != nil {
 		logger.Error("Error fetching journal day locations", "error", err)
+
 		locations = []db.JournalDayLocation{}
 	}
+
 	data["Locations"] = locations
 
 	t.HTML(http.StatusOK, "journal_entry")
@@ -424,12 +469,14 @@ func AddJournalLocation(c flamego.Context, s session.Session) {
 	if date == "" {
 		SetErrorFlash(s, "Date is required")
 		c.Redirect("/timeline", http.StatusSeeOther)
+
 		return
 	}
 
 	if _, exists := db.GetJournalEntryByDate(date); !exists {
 		SetErrorFlash(s, "Journal entry not found")
 		c.Redirect("/timeline", http.StatusSeeOther)
+
 		return
 	}
 
@@ -437,14 +484,17 @@ func AddJournalLocation(c flamego.Context, s session.Session) {
 		logger.Error("Error parsing form", "error", err)
 		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/journal/"+date, http.StatusSeeOther)
+
 		return
 	}
 
 	latStr := strings.TrimSpace(c.Request().Form.Get("location_lat"))
+
 	lonStr := strings.TrimSpace(c.Request().Form.Get("location_lon"))
 	if latStr == "" || lonStr == "" {
 		SetErrorFlash(s, "Latitude and longitude are required")
 		c.Redirect("/journal/"+date, http.StatusSeeOther)
+
 		return
 	}
 
@@ -452,6 +502,7 @@ func AddJournalLocation(c flamego.Context, s session.Session) {
 	if err != nil {
 		SetErrorFlash(s, "Latitude must be a number")
 		c.Redirect("/journal/"+date, http.StatusSeeOther)
+
 		return
 	}
 
@@ -459,18 +510,21 @@ func AddJournalLocation(c flamego.Context, s session.Session) {
 	if err != nil {
 		SetErrorFlash(s, "Longitude must be a number")
 		c.Redirect("/journal/"+date, http.StatusSeeOther)
+
 		return
 	}
 
 	if lat < -90 || lat > 90 {
 		SetErrorFlash(s, "Latitude must be between -90 and 90")
 		c.Redirect("/journal/"+date, http.StatusSeeOther)
+
 		return
 	}
 
 	if lon < -180 || lon > 180 {
 		SetErrorFlash(s, "Longitude must be between -180 and 180")
 		c.Redirect("/journal/"+date, http.StatusSeeOther)
+
 		return
 	}
 
@@ -478,6 +532,7 @@ func AddJournalLocation(c flamego.Context, s session.Session) {
 	if err != nil {
 		SetErrorFlash(s, "Invalid date format")
 		c.Redirect("/journal/"+date, http.StatusSeeOther)
+
 		return
 	}
 
@@ -486,6 +541,7 @@ func AddJournalLocation(c flamego.Context, s session.Session) {
 		logger.Error("Error creating journal day location", "error", err)
 		SetErrorFlash(s, "Failed to add location")
 		c.Redirect("/journal/"+date, http.StatusSeeOther)
+
 		return
 	}
 
@@ -496,10 +552,12 @@ func AddJournalLocation(c flamego.Context, s session.Session) {
 // DeleteJournalLocation handles removing a location from a journal day.
 func DeleteJournalLocation(c flamego.Context, s session.Session) {
 	date := c.Param("date")
+
 	locationID := c.Param("location_id")
 	if date == "" || locationID == "" {
 		SetErrorFlash(s, "Invalid request")
 		c.Redirect("/timeline", http.StatusSeeOther)
+
 		return
 	}
 
@@ -507,6 +565,7 @@ func DeleteJournalLocation(c flamego.Context, s session.Session) {
 	if err != nil {
 		SetErrorFlash(s, "Invalid location ID")
 		c.Redirect("/journal/"+date, http.StatusSeeOther)
+
 		return
 	}
 
@@ -515,6 +574,7 @@ func DeleteJournalLocation(c flamego.Context, s session.Session) {
 		logger.Error("Error deleting journal day location", "error", err)
 		SetErrorFlash(s, "Failed to delete location")
 		c.Redirect("/journal/"+date, http.StatusSeeOther)
+
 		return
 	}
 

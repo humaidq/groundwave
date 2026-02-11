@@ -10,6 +10,7 @@ import (
 
 func TestInitRequiresDatabaseURL(t *testing.T) {
 	t.Setenv("DATABASE_URL", "")
+
 	if err := Init(testContext()); err == nil {
 		t.Fatalf("expected error when DATABASE_URL is missing")
 	}
@@ -17,6 +18,7 @@ func TestInitRequiresDatabaseURL(t *testing.T) {
 
 func TestInitInvalidDatabaseURL(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://")
+
 	if err := Init(testContext()); err == nil {
 		t.Fatalf("expected error for invalid database url")
 	}
@@ -33,6 +35,7 @@ func TestGetPoolAndClose(t *testing.T) {
 	}
 
 	Close()
+
 	if err := initTestPool(testContext(), baseURL, testSchemaName); err != nil {
 		t.Fatalf("failed to re-init pool: %v", err)
 	}
@@ -50,6 +53,7 @@ func TestSyncSchema(t *testing.T) {
 	}
 
 	t.Setenv("DATABASE_URL", searchPathURL)
+
 	if err := SyncSchema(testContext()); err != nil {
 		t.Fatalf("SyncSchema failed: %v", err)
 	}
@@ -62,13 +66,17 @@ func TestInitSuccess(t *testing.T) {
 	}
 
 	Close()
+
 	if err := Init(testContext()); err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
+
 	if GetPool() == nil {
 		t.Fatalf("expected pool to be initialized")
 	}
+
 	Close()
+
 	if err := initTestPool(testContext(), baseURL, testSchemaName); err != nil {
 		t.Fatalf("failed to re-init pool: %v", err)
 	}

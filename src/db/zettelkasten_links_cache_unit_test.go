@@ -50,15 +50,19 @@ func TestBuildJournalPreview(t *testing.T) {
 	if !hasMore {
 		t.Fatalf("expected more content")
 	}
+
 	if strings.Contains(preview, "#+TITLE") {
 		t.Fatalf("did not expect title in preview")
 	}
+
 	if strings.Contains(preview, "Heading") {
 		t.Fatalf("did not expect heading in preview")
 	}
+
 	if !strings.Contains(preview, "Paragraph one line.") {
 		t.Fatalf("expected first paragraph in preview")
 	}
+
 	if !strings.Contains(preview, "Paragraph two line.") {
 		t.Fatalf("expected second paragraph in preview")
 	}
@@ -67,6 +71,7 @@ func TestBuildJournalPreview(t *testing.T) {
 	if len(preview) == 0 || len(preview) > 10 {
 		t.Fatalf("expected truncated preview length, got %d", len(preview))
 	}
+
 	if !hasMore {
 		t.Fatalf("expected truncated preview to report more content")
 	}
@@ -96,17 +101,21 @@ func TestAnnotateRestrictedNoteLinks(t *testing.T) {
 	}
 
 	backlinkMutex.Lock()
+
 	publicNoteCache = map[string]bool{publicID: true}
 	lastCacheBuild = time.Now()
+
 	backlinkMutex.Unlock()
 
 	got := annotateRestrictedNoteLinks(input)
 	if strings.Contains(got, "restricted-link\" href=\"/note/"+publicID) {
 		t.Fatalf("did not expect public note to be restricted")
 	}
+
 	if !strings.Contains(got, "class=\"existing restricted-link\" href=\"/note/"+restrictedWithClass) {
 		t.Fatalf("expected restricted class to be added to existing class")
 	}
+
 	if !strings.Contains(got, "<a class=\"restricted-link\" href=\"/note/"+restrictedNoClass) {
 		t.Fatalf("expected restricted class to be added")
 	}
@@ -116,6 +125,7 @@ func TestGetJournalEntryByDateInvalid(t *testing.T) {
 	if _, ok := GetJournalEntryByDate(""); ok {
 		t.Fatalf("expected empty date to be invalid")
 	}
+
 	if _, ok := GetJournalEntryByDate("2024-99-99"); ok {
 		t.Fatalf("expected invalid date format to be rejected")
 	}
@@ -123,10 +133,12 @@ func TestGetJournalEntryByDateInvalid(t *testing.T) {
 
 func assertContactIDPresent(t *testing.T, values []string, target string) {
 	t.Helper()
+
 	for _, value := range values {
 		if value == target {
 			return
 		}
 	}
+
 	t.Fatalf("expected contact id %s in %+v", target, values)
 }

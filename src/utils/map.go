@@ -17,6 +17,7 @@ import (
 	"github.com/pd0mz/go-maidenhead"
 )
 
+// MapConfig defines rendering options for generated map images.
 type MapConfig struct {
 	Width      int
 	Height     int
@@ -40,12 +41,14 @@ var newMapContext = func() mapContext {
 
 var parseLocator = maidenhead.ParseLocator
 
+//nolint:gosec // Output path is controlled by application code and tests.
 var createFile = func(name string) (io.WriteCloser, error) {
 	return os.Create(name)
 }
 
 var encodePNG = png.Encode
 
+// DefaultMapConfig returns sensible defaults for map rendering.
 func DefaultMapConfig() MapConfig {
 	return MapConfig{
 		Width:      800,
@@ -55,6 +58,7 @@ func DefaultMapConfig() MapConfig {
 	}
 }
 
+// CreateGridMap renders a map image showing two Maidenhead locators.
 func CreateGridMap(myGrid, theirGrid string, config MapConfig) error {
 	ctx := newMapContext()
 	ctx.SetSize(config.Width, config.Height)
@@ -86,6 +90,7 @@ func CreateGridMap(myGrid, theirGrid string, config MapConfig) error {
 	if latRange < 1.0 {
 		latRange = 1.0
 	}
+
 	if lonRange < 1.0 {
 		lonRange = 1.0
 	}
@@ -153,6 +158,7 @@ func calculateZoomLevel(minLat, maxLat, minLon, maxLon float64, width, height in
 	if zoom < 1 {
 		zoom = 1
 	}
+
 	if zoom > 18 {
 		zoom = 18
 	}
@@ -160,6 +166,7 @@ func calculateZoomLevel(minLat, maxLat, minLon, maxLon float64, width, height in
 	return int(math.Floor(zoom))
 }
 
+// CreateGridMapWithDistance renders a map and returns great-circle distance in kilometers.
 func CreateGridMapWithDistance(myGrid, theirGrid string, config MapConfig) (float64, error) {
 	myPoint, err := parseLocator(myGrid)
 	if err != nil {
@@ -190,6 +197,7 @@ func saveImage(img image.Image, filename string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", filename, err)
 	}
+
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
 			fmt.Printf("Warning: failed to close file: %v\n", closeErr)

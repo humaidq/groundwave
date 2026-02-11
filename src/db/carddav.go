@@ -6,6 +6,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -78,7 +79,7 @@ func GetCardDAVConfig() (*CardDAVConfig, error) {
 	password := os.Getenv("CARDDAV_PASSWORD")
 
 	if url == "" || username == "" || password == "" {
-		return nil, fmt.Errorf("CardDAV configuration incomplete: CARDDAV_URL, CARDDAV_USERNAME, and CARDDAV_PASSWORD must all be set")
+		return nil, ErrCardDAVConfigIncomplete
 	}
 
 	return &CardDAVConfig{
@@ -117,7 +118,13 @@ type basicAuthTransport struct {
 
 func (t *basicAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.SetBasicAuth(t.Username, t.Password)
-	return t.Base.RoundTrip(req)
+
+	resp, err := t.Base.RoundTrip(req)
+	if err != nil {
+		return nil, fmt.Errorf("carddav round trip failed: %w", err)
+	}
+
+	return resp, nil
 }
 
 // ListCardDAVContacts fetches all contacts from the CardDAV server
@@ -138,7 +145,7 @@ func ListCardDAVContacts(ctx context.Context) ([]CardDAVContact, error) {
 	}
 
 	// Fetch the VCF file via HTTP GET
-	req, err := http.NewRequestWithContext(ctx, "GET", config.URL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, config.URL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -147,6 +154,7 @@ func ListCardDAVContacts(ctx context.Context) ([]CardDAVContact, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch VCF file: %w", err)
 	}
+
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			logger.Warn("Failed to close CardDAV response body", "error", err)
@@ -154,16 +162,17 @@ func ListCardDAVContacts(ctx context.Context) ([]CardDAVContact, error) {
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch VCF file: HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("%w: HTTP %d", ErrFetchVCFFileFailed, resp.StatusCode)
 	}
 
 	// Parse the VCF file
 	decoder := vcard.NewDecoder(resp.Body)
+
 	var contacts []CardDAVContact
 
 	for {
 		card, err := decoder.Decode()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
 			return nil, fmt.Errorf("failed to parse VCF: %w", err)
@@ -195,11 +204,12 @@ func GetCardDAVContact(ctx context.Context, uuid string) (*CardDAVContact, error
 	// Debug: print all available UUIDs if not found
 	fmt.Printf("CardDAV contact not found. Looking for: %s\n", uuid)
 	fmt.Printf("Available UUIDs:\n")
+
 	for _, contact := range contacts {
 		fmt.Printf("  - %s (%s)\n", contact.UUID, contact.DisplayName)
 	}
 
-	return nil, fmt.Errorf("contact with UUID %s not found (checked %d contacts)", uuid, len(contacts))
+	return nil, fmt.Errorf("%w: %s (checked %d contacts)", ErrCardDAVContactByUUIDNotFound, uuid, len(contacts))
 }
 
 // parseVCard converts a vCard to our CardDAVContact struct
@@ -258,6 +268,7 @@ func parseVCard(card vcard.Card) CardDAVContact {
 			} else if field.Params.HasType("home") {
 				emailType = "home"
 			}
+
 			contact.Emails = append(contact.Emails, CardDAVEmail{
 				Email:     field.Value,
 				Type:      emailType,
@@ -280,6 +291,7 @@ func parseVCard(card vcard.Card) CardDAVContact {
 			} else if field.Params.HasType("fax") {
 				phoneType = "fax"
 			}
+
 			contact.Phones = append(contact.Phones, CardDAVPhone{
 				Phone:     field.Value,
 				Type:      phoneType,
@@ -296,6 +308,7 @@ func parseVCard(card vcard.Card) CardDAVContact {
 		} else if addr.Params.HasType("home") {
 			addrType = "home"
 		}
+
 		contact.Addresses = append(contact.Addresses, CardDAVAddress{
 			Street:     addr.StreetAddress,
 			Locality:   addr.Locality,
@@ -339,11 +352,13 @@ func normalizeCardDAVPhoto(photoField *vcard.Field) string {
 	if mediaType == "" {
 		mediaType = mediaTypeFromPhotoParams(photoField.Params)
 	}
+
 	if mediaType == "" {
 		mediaType = "image/jpeg"
 	}
 
 	value = strings.Join(strings.Fields(value), "")
+
 	return fmt.Sprintf("data:%s;base64,%s", mediaType, value)
 }
 
@@ -353,9 +368,11 @@ func mediaTypeFromPhotoParams(params vcard.Params) string {
 		if paramType == "" {
 			continue
 		}
+
 		if strings.Contains(paramType, "/") {
 			return paramType
 		}
+
 		switch paramType {
 		case "png":
 			return "image/png"
@@ -398,11 +415,14 @@ func normalizeCardDAVEmail(value string) string {
 	if value == "" {
 		return ""
 	}
+
 	lower := strings.ToLower(value)
 	if strings.HasPrefix(lower, "mailto:") {
 		value = value[len("mailto:"):]
 	}
+
 	value = strings.TrimSpace(value)
+
 	return strings.ToLower(value)
 }
 
@@ -411,10 +431,12 @@ func normalizeCardDAVPhone(value string) string {
 	if value == "" {
 		return ""
 	}
+
 	lower := strings.ToLower(value)
 	if strings.HasPrefix(lower, "tel:") {
 		value = value[len("tel:"):]
 	}
+
 	return strings.TrimSpace(value)
 }
 
@@ -424,6 +446,7 @@ func normalizePhoneDigits(value string) string {
 	}
 
 	var b strings.Builder
+
 	for _, r := range value {
 		if r >= '0' && r <= '9' {
 			b.WriteRune(r)
@@ -483,13 +506,16 @@ func selectPrimaryPhoneByDigits(preferredPhoneDigits string, insertedPhones []st
 
 func isCardDAVEmailAvailable(ctx context.Context, contactID, email string) (bool, error) {
 	var existingContactID string
+
 	err := pool.QueryRow(ctx, `SELECT contact_id FROM contact_emails WHERE lower(email) = lower($1) LIMIT 1`, email).Scan(&existingContactID)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return true, nil
 		}
-		return false, err
+
+		return false, fmt.Errorf("failed to query existing contact email: %w", err)
 	}
+
 	return existingContactID == contactID, nil
 }
 
@@ -509,14 +535,14 @@ func parseDateString(s string) (time.Time, error) {
 		}
 	}
 
-	return time.Time{}, fmt.Errorf("unable to parse date: %s", s)
+	return time.Time{}, fmt.Errorf("%w: %s", ErrUnableToParseDate, s)
 }
 
 // SyncContactFromCardDAV updates a contact's details from CardDAV
 // It syncs: name_given, name_family, organization, title, emails, phones
 func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	// Fetch the CardDAV contact
@@ -534,6 +560,7 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 			nameDisplay = cardDAVContact.FamilyName
 		}
 	}
+
 	if nameDisplay == "" {
 		nameDisplay = cardDAVContact.DisplayName
 	}
@@ -577,6 +604,7 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 			updated_at = now()
 		WHERE id = $7
 	`
+
 	_, err = pool.Exec(ctx, query,
 		nameDisplay,
 		nameGiven,
@@ -597,7 +625,9 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 	}
 
 	preferredEmail := normalizeCardDAVEmail(preferredEmailValue(cardDAVContact.Emails))
-	var insertedEmails []string
+
+	insertedEmails := make([]string, 0, len(cardDAVContact.Emails))
+
 	for _, email := range cardDAVContact.Emails {
 		normalizedEmail := normalizeCardDAVEmail(email.Email)
 		if normalizedEmail == "" {
@@ -605,6 +635,7 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 		}
 		// Map CardDAV email type to database enum
 		emailType := "other"
+
 		switch email.Type {
 		case "work":
 			emailType = "work"
@@ -617,6 +648,7 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 			fmt.Printf("Warning: failed to check CardDAV email availability %s: %v\n", normalizedEmail, err)
 			continue
 		}
+
 		if !emailAvailable {
 			fmt.Printf("Warning: skipped duplicate CardDAV email %s for contact %s\n", normalizedEmail, contactID)
 			continue
@@ -632,6 +664,7 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 			fmt.Printf("Warning: failed to sync CardDAV email %s: %v\n", normalizedEmail, err)
 			continue
 		}
+
 		insertedEmails = append(insertedEmails, normalizedEmail)
 	}
 
@@ -655,13 +688,17 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 
 	preferredPhone := normalizeCardDAVPhone(preferredPhoneValue(cardDAVContact.Phones))
 	preferredPhoneDigits := normalizePhoneDigits(preferredPhone)
-	var insertedPhones []string
+
+	insertedPhones := make([]string, 0, len(cardDAVContact.Phones))
+
 	seenPhones := make(map[string]bool)
+
 	for _, phone := range cardDAVContact.Phones {
 		normalizedPhone := normalizeCardDAVPhone(phone.Phone)
 		if normalizedPhone == "" {
 			continue
 		}
+
 		phoneDigits := normalizePhoneDigits(normalizedPhone)
 		if phoneDigits == "" {
 			continue
@@ -670,9 +707,11 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 		if seenPhones[phoneDigits] {
 			continue
 		}
+
 		seenPhones[phoneDigits] = true
 		// Map CardDAV phone type to database enum
 		phoneType := "other"
+
 		switch phone.Type {
 		case "cell":
 			phoneType = "cell"
@@ -693,6 +732,7 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 			fmt.Printf("Warning: failed to sync CardDAV phone %s: %v\n", normalizedPhone, err)
 			continue
 		}
+
 		insertedPhones = append(insertedPhones, normalizedPhone)
 	}
 
@@ -714,7 +754,7 @@ func SyncContactFromCardDAV(ctx context.Context, contactID string, cardDAVUUID s
 // SyncAllCardDAVContacts syncs all contacts that are linked to CardDAV
 func SyncAllCardDAVContacts(ctx context.Context) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	// Check if CardDAV is configured
@@ -726,6 +766,7 @@ func SyncAllCardDAVContacts(ctx context.Context) error {
 
 	// Get all contacts with CardDAV UUIDs
 	query := `SELECT id, carddav_uuid FROM contacts WHERE carddav_uuid IS NOT NULL`
+
 	rows, err := pool.Query(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to query contacts with CardDAV UUIDs: %w", err)
@@ -733,11 +774,15 @@ func SyncAllCardDAVContacts(ctx context.Context) error {
 	defer rows.Close()
 
 	var syncErrors []string
+
 	syncCount := 0
 
 	for rows.Next() {
-		var contactID string
-		var cardDAVUUID string
+		var (
+			contactID   string
+			cardDAVUUID string
+		)
+
 		err := rows.Scan(&contactID, &cardDAVUUID)
 		if err != nil {
 			syncErrors = append(syncErrors, fmt.Sprintf("failed to scan contact: %v", err))
@@ -750,6 +795,7 @@ func SyncAllCardDAVContacts(ctx context.Context) error {
 			syncErrors = append(syncErrors, fmt.Sprintf("failed to sync contact %s: %v", contactID, err))
 			continue
 		}
+
 		syncCount++
 	}
 
@@ -759,6 +805,7 @@ func SyncAllCardDAVContacts(ctx context.Context) error {
 
 	if len(syncErrors) > 0 {
 		fmt.Printf("CardDAV sync completed with %d contacts synced, %d errors:\n", syncCount, len(syncErrors))
+
 		for _, errMsg := range syncErrors {
 			fmt.Printf("  - %s\n", errMsg)
 		}
@@ -796,6 +843,7 @@ func CreateCardDAVContact(ctx context.Context, contact *ContactDetail) (string, 
 	if contact.NameGiven != nil {
 		nameGiven = *contact.NameGiven
 	}
+
 	nameFamily := ""
 	if contact.NameFamily != nil {
 		nameFamily = *contact.NameFamily
@@ -827,6 +875,7 @@ func CreateCardDAVContact(ctx context.Context, contact *ContactDetail) (string, 
 			if email.EmailType == EmailWork {
 				emailType = "work"
 			}
+
 			card.Add(vcard.FieldEmail, &vcard.Field{
 				Value:  email.Email,
 				Params: vcard.Params{vcard.ParamType: []string{emailType}},
@@ -838,14 +887,22 @@ func CreateCardDAVContact(ctx context.Context, contact *ContactDetail) (string, 
 	for _, phone := range contact.Phones {
 		if phone.Source != "carddav" {
 			phoneType := "cell"
+
 			switch phone.PhoneType {
+			case PhoneCell:
+				phoneType = "cell"
 			case PhoneHome:
 				phoneType = "home"
 			case PhoneWork:
 				phoneType = "work"
 			case PhoneFax:
 				phoneType = "fax"
+			case PhonePager:
+				phoneType = "pager"
+			case PhoneOther:
+				phoneType = "other"
 			}
+
 			card.Add(vcard.FieldTelephone, &vcard.Field{
 				Value:  phone.Phone,
 				Params: vcard.Params{vcard.ParamType: []string{phoneType}},
@@ -857,7 +914,7 @@ func CreateCardDAVContact(ctx context.Context, contact *ContactDetail) (string, 
 	vcard.ToV4(card)
 
 	// Path is relative to the collection URL (just the filename)
-	path := fmt.Sprintf("%s.vcf", newUUID)
+	path := newUUID + ".vcf"
 
 	// Create the contact on the server using PUT
 	_, err = client.PutAddressObject(ctx, path, card)
@@ -884,6 +941,7 @@ func findCardDAVContactPath(ctx context.Context, client *carddav.Client, uuid st
 
 	// Find the contact with matching UID
 	uuidLower := strings.ToLower(uuid)
+
 	for _, obj := range results {
 		if obj.Card != nil {
 			cardUID := obj.Card.Value(vcard.FieldUID)
@@ -893,7 +951,7 @@ func findCardDAVContactPath(ctx context.Context, client *carddav.Client, uuid st
 		}
 	}
 
-	return "", fmt.Errorf("contact with UID %s not found in CardDAV server", uuid)
+	return "", fmt.Errorf("%w in CardDAV server: %s", ErrCardDAVContactByUIDNotFound, uuid)
 }
 
 // UpdateCardDAVContact updates an existing contact on the CardDAV server
@@ -901,7 +959,7 @@ func findCardDAVContactPath(ctx context.Context, client *carddav.Client, uuid st
 // and preserves all other fields (notes, photo, birthday, addresses, etc.)
 func UpdateCardDAVContact(ctx context.Context, contact *ContactDetail) error {
 	if contact.CardDAVUUID == nil || *contact.CardDAVUUID == "" {
-		return fmt.Errorf("contact is not linked to CardDAV")
+		return ErrContactNotLinkedToCardDAV
 	}
 
 	config, err := GetCardDAVConfig()
@@ -930,7 +988,9 @@ func UpdateCardDAVContact(ctx context.Context, contact *ContactDetail) error {
 		fmt.Printf("[DEBUG] Failed to fetch CardDAV contact: %v\n", err)
 		return fmt.Errorf("failed to fetch existing CardDAV contact: %w", err)
 	}
+
 	fmt.Printf("[DEBUG] Successfully fetched CardDAV contact\n")
+
 	card := existingObj.Card
 
 	// Update name fields, preserving components we don't manage (prefix, suffix, middle name)
@@ -938,6 +998,7 @@ func UpdateCardDAVContact(ctx context.Context, contact *ContactDetail) error {
 	if contact.NameGiven != nil {
 		nameGiven = *contact.NameGiven
 	}
+
 	nameFamily := ""
 	if contact.NameFamily != nil {
 		nameFamily = *contact.NameFamily
@@ -945,6 +1006,7 @@ func UpdateCardDAVContact(ctx context.Context, contact *ContactDetail) error {
 
 	// Get existing name to preserve additional fields
 	existingName := card.Name()
+
 	var additionalName, honorificPrefix, honorificSuffix string
 	if existingName != nil {
 		additionalName = existingName.AdditionalName
@@ -967,27 +1029,32 @@ func UpdateCardDAVContact(ctx context.Context, contact *ContactDetail) error {
 
 	// Update organization - remove existing and add if present
 	delete(card, vcard.FieldOrganization)
+
 	if contact.Organization != nil && *contact.Organization != "" {
 		card.SetValue(vcard.FieldOrganization, *contact.Organization)
 	}
 
 	// Update title - remove existing and add if present
 	delete(card, vcard.FieldTitle)
+
 	if contact.Title != nil && *contact.Title != "" {
 		card.SetValue(vcard.FieldTitle, *contact.Title)
 	}
 
 	// Update emails - remove existing and add all from local
 	delete(card, vcard.FieldEmail)
+
 	for _, email := range contact.Emails {
 		emailType := "home"
 		if email.EmailType == EmailWork {
 			emailType = "work"
 		}
+
 		params := vcard.Params{vcard.ParamType: []string{emailType}}
 		if email.IsPrimary {
 			params.Set(vcard.ParamPreferred, "1")
 		}
+
 		card.Add(vcard.FieldEmail, &vcard.Field{
 			Value:  email.Email,
 			Params: params,
@@ -996,20 +1063,30 @@ func UpdateCardDAVContact(ctx context.Context, contact *ContactDetail) error {
 
 	// Update phones - remove existing and add all from local
 	delete(card, vcard.FieldTelephone)
+
 	for _, phone := range contact.Phones {
 		phoneType := "cell"
+
 		switch phone.PhoneType {
+		case PhoneCell:
+			phoneType = "cell"
 		case PhoneHome:
 			phoneType = "home"
 		case PhoneWork:
 			phoneType = "work"
 		case PhoneFax:
 			phoneType = "fax"
+		case PhonePager:
+			phoneType = "pager"
+		case PhoneOther:
+			phoneType = "other"
 		}
+
 		params := vcard.Params{vcard.ParamType: []string{phoneType}}
 		if phone.IsPrimary {
 			params.Set(vcard.ParamPreferred, "1")
 		}
+
 		card.Add(vcard.FieldTelephone, &vcard.Field{
 			Value:  phone.Phone,
 			Params: params,
@@ -1023,5 +1100,6 @@ func UpdateCardDAVContact(ctx context.Context, contact *ContactDetail) error {
 	}
 
 	fmt.Printf("UpdateCardDAVContact: Successfully updated CardDAV contact %s\n", existingUUID)
+
 	return nil
 }

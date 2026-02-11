@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025 Humaid Alqasimi
+// SPDX-License-Identifier: Apache-2.0
+
 package routes
 
 import (
@@ -56,9 +59,11 @@ func TestBuildLedgerMonthlySeriesUsesOpeningBalanceAndMonthEndResolution(t *test
 	if points[0].Label != "Jan 2026" || points[0].Balance != 900 {
 		t.Fatalf("unexpected January point: %#v", points[0])
 	}
+
 	if points[1].Label != "Feb 2026" || points[1].Balance != 950 {
 		t.Fatalf("unexpected February point: %#v", points[1])
 	}
+
 	if points[2].Label != "Mar 2026" || points[2].Balance != 950 {
 		t.Fatalf("unexpected March point: %#v", points[2])
 	}
@@ -121,6 +126,7 @@ func TestBuildLedgerMonthlySeriesUsesLatestReconciliationCutoff(t *testing.T) {
 	if points[0].Label != "Jan 2026" || points[0].Balance != 670 {
 		t.Fatalf("unexpected January point: %#v", points[0])
 	}
+
 	if points[1].Label != "Feb 2026" || points[1].Balance != 690 {
 		t.Fatalf("unexpected February point: %#v", points[1])
 	}
@@ -156,9 +162,11 @@ func TestBuildLedgerNetWorthSeriesAggregatesByMonth(t *testing.T) {
 	if netWorth[0].Label != "Jan 2026" || netWorth[0].Balance != 100 {
 		t.Fatalf("unexpected January net worth point: %#v", netWorth[0])
 	}
+
 	if netWorth[1].Label != "Feb 2026" || netWorth[1].Balance != 160 {
 		t.Fatalf("unexpected February net worth point: %#v", netWorth[1])
 	}
+
 	if netWorth[2].Label != "Mar 2026" || netWorth[2].Balance != 70 {
 		t.Fatalf("unexpected March net worth point: %#v", netWorth[2])
 	}
@@ -182,6 +190,7 @@ func TestLedgerHistoryCutoffMonth(t *testing.T) {
 	t.Parallel()
 
 	now := mustParseRFC3339(t, "2026-03-15T00:00:00Z")
+
 	cutoff := ledgerHistoryCutoffMonth(ledgerHistoryRangePreset{Value: "12m", Months: 12}, now)
 	if cutoff == nil {
 		t.Fatal("expected cutoff month")

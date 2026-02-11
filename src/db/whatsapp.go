@@ -6,9 +6,12 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 var nonDigitRegex = regexp.MustCompile(`[^\d]`)
@@ -22,7 +25,7 @@ func normalizePhone(phone string) string {
 // This is used for automatic contact tracking (e.g., WhatsApp messages).
 func UpdateContactAutoTimestamp(ctx context.Context, contactID string, timestamp time.Time) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -45,12 +48,12 @@ func UpdateContactAutoTimestamp(ctx context.Context, contactID string, timestamp
 // Also checks CardDAV phone numbers for contacts linked to CardDAV.
 func FindContactByPhone(ctx context.Context, phoneNumber string) (*string, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	normalized := normalizePhone(phoneNumber)
 	if normalized == "" {
-		return nil, nil
+		return nil, nil //nolint:nilnil // Empty input is treated as no lookup result.
 	}
 
 	// First, try to find in local contact_phones table
@@ -88,25 +91,23 @@ func FindContactByPhone(ctx context.Context, phoneNumber string) (*string, error
 	`
 
 	var contactID string
+
 	err := pool.QueryRow(ctx, query, normalized).Scan(&contactID)
 	if err == nil {
 		return &contactID, nil
 	}
-	if err.Error() != "no rows in result set" {
+
+	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("failed to find contact by phone: %w", err)
 	}
 
 	// Not found in local database, check CardDAV
-	contactID, err = findContactByCardDAVPhone(ctx, normalized)
-	if err != nil {
-		// Log error but don't fail - CardDAV is optional
-		return nil, nil
-	}
-	if contactID != "" {
-		return &contactID, nil
+	cardDAVContactID, cardDAVErr := findContactByCardDAVPhone(ctx, normalized)
+	if cardDAVErr == nil && cardDAVContactID != "" {
+		return &cardDAVContactID, nil
 	}
 
-	return nil, nil
+	return nil, nil //nolint:nilnil // No match is a valid, non-error outcome.
 }
 
 // findContactByCardDAVPhone searches for a contact by checking CardDAV phone numbers.
@@ -135,6 +136,7 @@ func findContactByCardDAVPhone(ctx context.Context, normalizedPhone string) (str
 			END,
 			created_at
 	`
+
 	rows, err := pool.Query(ctx, query)
 	if err != nil {
 		return "", fmt.Errorf("failed to query CardDAV-linked contacts: %w", err)
@@ -146,6 +148,7 @@ func findContactByCardDAVPhone(ctx context.Context, normalizedPhone string) (str
 		cardDAVUUID string
 		tier        string
 	}
+
 	var contacts []cardDAVContact
 
 	for rows.Next() {
@@ -153,6 +156,7 @@ func findContactByCardDAVPhone(ctx context.Context, normalizedPhone string) (str
 		if err := rows.Scan(&c.id, &c.cardDAVUUID, &c.tier); err != nil {
 			continue
 		}
+
 		contacts = append(contacts, c)
 	}
 
@@ -168,6 +172,7 @@ func findContactByCardDAVPhone(ctx context.Context, normalizedPhone string) (str
 
 	// Build a map of CardDAV UUID to phones for quick lookup
 	cardDAVPhones := make(map[string][]string)
+
 	for _, cdContact := range cardDAVContacts {
 		for _, phone := range cdContact.Phones {
 			cardDAVPhones[cdContact.UUID] = append(cardDAVPhones[cdContact.UUID], phone.Phone)
@@ -180,6 +185,7 @@ func findContactByCardDAVPhone(ctx context.Context, normalizedPhone string) (str
 		if !ok {
 			continue
 		}
+
 		for _, phone := range phones {
 			if phonesMatch(normalizedPhone, normalizePhone(phone)) {
 				return c.id, nil
@@ -210,6 +216,7 @@ func phonesMatch(normalized1, normalized2 string) bool {
 		if len(suffix1) > 9 {
 			suffix1 = suffix1[len(suffix1)-9:]
 		}
+
 		suffix2 := normalized2
 		if len(suffix2) > 9 {
 			suffix2 = suffix2[len(suffix2)-9:]
@@ -219,6 +226,7 @@ func phonesMatch(normalized1, normalized2 string) bool {
 		if len(normalized1) >= len(suffix2) && normalized1[len(normalized1)-len(suffix2):] == suffix2 {
 			return true
 		}
+
 		if len(normalized2) >= len(suffix1) && normalized2[len(normalized2)-len(suffix1):] == suffix1 {
 			return true
 		}

@@ -7,6 +7,7 @@ package db
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -37,9 +38,11 @@ type PostgresSessionStore struct {
 
 // PostgresSessionIniter returns the Initer for the PostgreSQL session store
 func PostgresSessionIniter() session.Initer {
-	return func(ctx context.Context, args ...interface{}) (session.Store, error) {
-		var config PostgresSessionConfig
-		var idWriter session.IDWriter
+	return func(_ context.Context, args ...interface{}) (session.Store, error) {
+		var (
+			config   PostgresSessionConfig
+			idWriter session.IDWriter
+		)
 
 		for _, arg := range args {
 			switch value := arg.(type) {
@@ -50,7 +53,7 @@ func PostgresSessionIniter() session.Initer {
 			case nil:
 				continue
 			default:
-				return nil, errors.New("invalid PostgresSessionIniter argument")
+				return nil, ErrInvalidPostgresSessionIniterArgument
 			}
 		}
 
@@ -58,15 +61,19 @@ func PostgresSessionIniter() session.Initer {
 		if config.Lifetime == 0 {
 			config.Lifetime = 30 * 24 * time.Hour // 30 days
 		}
+
 		if config.TableName == "" {
 			config.TableName = "flamego_sessions"
 		}
+
 		if config.Encoder == nil {
 			config.Encoder = session.GobEncoder
 		}
+
 		if config.Decoder == nil {
 			config.Decoder = session.GobDecoder
 		}
+
 		if idWriter == nil {
 			idWriter = func(http.ResponseWriter, *http.Request, string) {}
 		}
@@ -85,10 +92,12 @@ func PostgresSessionIniter() session.Initer {
 // Exist returns true if the session with given ID exists and hasn't expired
 func (s *PostgresSessionStore) Exist(ctx context.Context, sid string) bool {
 	var exists bool
+
 	err := pool.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM `+s.config.TableName+` WHERE id = $1 AND expires_at > NOW())`,
 		sid,
 	).Scan(&exists)
+
 	return err == nil && exists
 }
 
@@ -96,13 +105,14 @@ func (s *PostgresSessionStore) Exist(ctx context.Context, sid string) bool {
 // a new session with the same ID is created and returned.
 func (s *PostgresSessionStore) Read(ctx context.Context, sid string) (session.Session, error) {
 	var data []byte
+
 	err := pool.QueryRow(ctx,
 		`SELECT data FROM `+s.config.TableName+` WHERE id = $1 AND expires_at > NOW()`,
 		sid,
 	).Scan(&data)
 
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return nil, err
+		return nil, fmt.Errorf("failed to read session %q: %w", sid, err)
 	}
 
 	// If session doesn't exist, create a new one
@@ -111,13 +121,13 @@ func (s *PostgresSessionStore) Read(ctx context.Context, sid string) (session.Se
 	}
 
 	// Decode session data
-	sessionData, err := s.decoder(data)
-	if err != nil {
-		// If we can't decode, create a new session
-		return session.NewBaseSession(sid, s.encoder, s.idWriter), nil
+	sessionData, decodeErr := s.decoder(data)
+	if decodeErr == nil {
+		return session.NewBaseSessionWithData(sid, s.encoder, s.idWriter, sessionData), nil
 	}
 
-	return session.NewBaseSessionWithData(sid, s.encoder, s.idWriter, sessionData), nil
+	// If we can't decode, create a new session
+	return session.NewBaseSession(sid, s.encoder, s.idWriter), nil
 }
 
 // Destroy deletes session with given ID from the session store completely
@@ -126,18 +136,27 @@ func (s *PostgresSessionStore) Destroy(ctx context.Context, sid string) error {
 		`DELETE FROM `+s.config.TableName+` WHERE id = $1`,
 		sid,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to delete session %q: %w", sid, err)
+	}
+
+	return nil
 }
 
 // Touch updates the expiry time of the session with given ID
 func (s *PostgresSessionStore) Touch(ctx context.Context, sid string) error {
 	expiresAt := time.Now().Add(s.config.Lifetime)
+
 	_, err := pool.Exec(ctx,
 		`UPDATE `+s.config.TableName+` SET expires_at = $1 WHERE id = $2`,
 		expiresAt,
 		sid,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to update session expiry %q: %w", sid, err)
+	}
+
+	return nil
 }
 
 // Save persists session data to the session store
@@ -145,7 +164,7 @@ func (s *PostgresSessionStore) Save(ctx context.Context, sess session.Session) e
 	// Encode session data
 	data, err := sess.Encode()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to encode session %q: %w", sess.ID(), err)
 	}
 
 	expiresAt := time.Now().Add(s.config.Lifetime)
@@ -161,8 +180,11 @@ func (s *PostgresSessionStore) Save(ctx context.Context, sess session.Session) e
 		data,
 		expiresAt,
 	)
+	if err != nil {
+		return fmt.Errorf("failed to save session %q: %w", sess.ID(), err)
+	}
 
-	return err
+	return nil
 }
 
 // SessionData represents a decoded session for the security page
@@ -181,7 +203,11 @@ func (s *PostgresSessionStore) GC(ctx context.Context) error {
 	_, err := pool.Exec(ctx,
 		`DELETE FROM `+s.config.TableName+` WHERE expires_at < NOW()`,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to garbage collect sessions: %w", err)
+	}
+
+	return nil
 }
 
 // ListValidSessions returns all valid authenticated sessions for security page
@@ -190,18 +216,21 @@ func (s *PostgresSessionStore) ListValidSessions(ctx context.Context) ([]Session
 		`SELECT id, data, expires_at FROM `+s.config.TableName+` WHERE expires_at > NOW() ORDER BY expires_at DESC`,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query valid sessions: %w", err)
 	}
 	defer rows.Close()
 
 	var sessions []SessionData
+
 	for rows.Next() {
-		var id string
-		var data []byte
-		var expiresAt time.Time
+		var (
+			id        string
+			data      []byte
+			expiresAt time.Time
+		)
 
 		if err := rows.Scan(&id, &data, &expiresAt); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to scan session row: %w", err)
 		}
 
 		// Decode session data
@@ -213,6 +242,7 @@ func (s *PostgresSessionStore) ListValidSessions(ctx context.Context) ([]Session
 
 		// Extract device info
 		deviceLabel := "Unknown device"
+
 		if val, ok := sessionData["device_label"]; ok && val != nil {
 			if str, ok := val.(string); ok && str != "" {
 				deviceLabel = str
@@ -220,6 +250,7 @@ func (s *PostgresSessionStore) ListValidSessions(ctx context.Context) ([]Session
 		}
 
 		deviceIP := "Unknown IP"
+
 		if val, ok := sessionData["device_ip"]; ok && val != nil {
 			if str, ok := val.(string); ok && str != "" {
 				deviceIP = str
@@ -228,6 +259,7 @@ func (s *PostgresSessionStore) ListValidSessions(ctx context.Context) ([]Session
 
 		// Check authentication status
 		authenticated := false
+
 		if val, ok := sessionData["authenticated"]; ok && val != nil {
 			if auth, ok := val.(bool); ok {
 				authenticated = auth
@@ -235,6 +267,7 @@ func (s *PostgresSessionStore) ListValidSessions(ctx context.Context) ([]Session
 		}
 
 		userID := ""
+
 		if val, ok := sessionData["user_id"]; ok && val != nil {
 			if str, ok := val.(string); ok {
 				userID = str
@@ -242,6 +275,7 @@ func (s *PostgresSessionStore) ListValidSessions(ctx context.Context) ([]Session
 		}
 
 		userDisplay := ""
+
 		if val, ok := sessionData["user_display_name"]; ok && val != nil {
 			if str, ok := val.(string); ok {
 				userDisplay = str
@@ -265,7 +299,7 @@ func (s *PostgresSessionStore) ListValidSessions(ctx context.Context) ([]Session
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to iterate session rows: %w", err)
 	}
 
 	return sessions, nil
@@ -279,16 +313,20 @@ func (s *PostgresSessionStore) InvalidateOtherSessions(ctx context.Context, curr
 	}
 
 	deleted := 0
+
 	for _, sess := range sessions {
 		if sess.ID == currentID {
 			continue
 		}
+
 		if userID != "" && sess.UserID != "" && sess.UserID != userID {
 			continue
 		}
+
 		if err := s.Destroy(ctx, sess.ID); err != nil {
 			return deleted, err
 		}
+
 		deleted++
 	}
 

@@ -10,6 +10,7 @@ import (
 
 func TestHealthProfileLifecycle(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	profileID, err := CreateHealthProfile(ctx, "Alice", nil, nil, nil, true)
@@ -21,6 +22,7 @@ func TestHealthProfileLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetHealthProfile failed: %v", err)
 	}
+
 	if profile.Name != "Alice" {
 		t.Fatalf("expected profile name Alice, got %q", profile.Name)
 	}
@@ -29,6 +31,7 @@ func TestHealthProfileLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetPrimaryHealthProfile failed: %v", err)
 	}
+
 	if primary == nil || primary.ID.String() != profileID {
 		t.Fatalf("expected primary profile to match")
 	}
@@ -42,6 +45,7 @@ func TestHealthProfileLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListHealthProfiles failed: %v", err)
 	}
+
 	if len(profiles) != 1 {
 		t.Fatalf("expected 1 profile, got %d", len(profiles))
 	}
@@ -53,6 +57,7 @@ func TestHealthProfileLifecycle(t *testing.T) {
 
 func TestHealthFollowupsAndLabResults(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	profileID := mustCreateHealthProfile(t, "Lab Profile", true)
@@ -66,6 +71,7 @@ func TestHealthFollowupsAndLabResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListFollowups failed: %v", err)
 	}
+
 	if len(followups) != 2 {
 		t.Fatalf("expected 2 followups, got %d", len(followups))
 	}
@@ -96,11 +102,13 @@ func TestHealthFollowupsAndLabResults(t *testing.T) {
 	}
 
 	var firstResultID string
+
 	for i, input := range results {
 		resultID, err := CreateLabResult(ctx, input)
 		if err != nil {
 			t.Fatalf("CreateLabResult failed: %v", err)
 		}
+
 		if i == 0 {
 			firstResultID = resultID
 		}
@@ -118,6 +126,7 @@ func TestHealthFollowupsAndLabResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLabResultsByFollowup failed: %v", err)
 	}
+
 	if len(grouped) == 0 {
 		t.Fatalf("expected grouped results")
 	}
@@ -126,6 +135,7 @@ func TestHealthFollowupsAndLabResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLabResultsByFollowupWithCalculated failed: %v", err)
 	}
+
 	if len(withCalculated) == 0 {
 		t.Fatalf("expected calculated results")
 	}
@@ -134,6 +144,7 @@ func TestHealthFollowupsAndLabResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLabResultsByTestName failed: %v", err)
 	}
+
 	if len(nameResults) != 2 {
 		t.Fatalf("expected 2 triglycerides results, got %d", len(nameResults))
 	}
@@ -142,6 +153,7 @@ func TestHealthFollowupsAndLabResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLabResultsByTestNameWithCalculated failed: %v", err)
 	}
+
 	if len(calcSeries) != 2 {
 		t.Fatalf("expected 2 ratio results, got %d", len(calcSeries))
 	}
@@ -150,6 +162,7 @@ func TestHealthFollowupsAndLabResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLabResultsByTestNameWithCalculated failed: %v", err)
 	}
+
 	if len(coeffSeries) != 2 {
 		t.Fatalf("expected 2 coefficient results, got %d", len(coeffSeries))
 	}
@@ -158,6 +171,7 @@ func TestHealthFollowupsAndLabResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTestNamesWithCounts failed: %v", err)
 	}
+
 	if len(counts) == 0 {
 		t.Fatalf("expected test name counts")
 	}
@@ -166,6 +180,7 @@ func TestHealthFollowupsAndLabResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTestNamesWithCountsIncludingCalculated failed: %v", err)
 	}
+
 	if len(countsWithCalculated) <= len(counts) {
 		t.Fatalf("expected additional calculated tests")
 	}
@@ -181,6 +196,7 @@ func TestHealthFollowupsAndLabResults(t *testing.T) {
 
 func TestLabResultsByTestNameWithCalculatedAbsoluteCounts(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	profileID := mustCreateHealthProfile(t, "Calc Profile", true)
@@ -202,6 +218,7 @@ func TestLabResultsByTestNameWithCalculatedAbsoluteCounts(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateLabResult failed: %v", err)
 	}
+
 	if _, err := CreateLabResult(ctx, CreateLabResultInput{
 		FollowupID: followupID1,
 		TestName:   "Neutrophils",
@@ -210,6 +227,7 @@ func TestLabResultsByTestNameWithCalculatedAbsoluteCounts(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateLabResult failed: %v", err)
 	}
+
 	if _, err := CreateLabResult(ctx, CreateLabResultInput{
 		FollowupID: followupID1,
 		TestName:   "Neutrophils (Absolute)",
@@ -227,6 +245,7 @@ func TestLabResultsByTestNameWithCalculatedAbsoluteCounts(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateLabResult failed: %v", err)
 	}
+
 	if _, err := CreateLabResult(ctx, CreateLabResultInput{
 		FollowupID: followupID2,
 		TestName:   "Neutrophils",
@@ -244,6 +263,7 @@ func TestLabResultsByTestNameWithCalculatedAbsoluteCounts(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateLabResult failed: %v", err)
 	}
+
 	if _, err := CreateLabResult(ctx, CreateLabResultInput{
 		FollowupID: followupID2,
 		TestName:   "Triglycerides",
@@ -257,11 +277,14 @@ func TestLabResultsByTestNameWithCalculatedAbsoluteCounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLabResultsByTestNameWithCalculated failed: %v", err)
 	}
+
 	if len(absoluteResults) != 2 {
 		t.Fatalf("expected 2 absolute results, got %d", len(absoluteResults))
 	}
+
 	assertFloatClose(t, absoluteResults[0].TestValue, 2.5)
 	assertFloatClose(t, absoluteResults[1].TestValue, 3.0)
+
 	if absoluteResults[1].TestUnit == nil || *absoluteResults[1].TestUnit != unitWBC {
 		t.Fatalf("expected calculated unit to be %s", unitWBC)
 	}
@@ -270,6 +293,7 @@ func TestLabResultsByTestNameWithCalculatedAbsoluteCounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLabResultsByTestNameWithCalculated failed: %v", err)
 	}
+
 	if len(nonCalc) != 2 {
 		t.Fatalf("expected 2 triglycerides results, got %d", len(nonCalc))
 	}
@@ -277,12 +301,14 @@ func TestLabResultsByTestNameWithCalculatedAbsoluteCounts(t *testing.T) {
 
 func TestGetPrimaryHealthProfileNoRows(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	primary, err := GetPrimaryHealthProfile(ctx)
 	if err != nil {
 		t.Fatalf("GetPrimaryHealthProfile failed: %v", err)
 	}
+
 	if primary != nil {
 		t.Fatalf("expected no primary profile")
 	}

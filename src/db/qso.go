@@ -46,6 +46,7 @@ func (q *QSOListItem) FormatQSOTime() string {
 // TimestampUTC returns the QSO date+time in UTC.
 func (q *QSOListItem) TimestampUTC() time.Time {
 	timeOn := q.TimeOn.UTC()
+
 	return time.Date(
 		q.QSODate.Year(),
 		q.QSODate.Month(),
@@ -68,6 +69,7 @@ func (q *QSOListItem) GetFlagCode() string {
 	if q.Country == nil {
 		return ""
 	}
+
 	return utils.CountryFlagCode(*q.Country)
 }
 
@@ -83,6 +85,7 @@ func (q *QSOHallOfFameItem) GetFlagCode() string {
 	if q.Country == nil {
 		return ""
 	}
+
 	return utils.CountryFlagCode(*q.Country)
 }
 
@@ -96,7 +99,7 @@ type QSODetail struct {
 // ListQSOs returns all QSOs sorted by date/time (most recent first)
 func ListQSOs(ctx context.Context) ([]QSOListItem, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -121,8 +124,10 @@ func ListQSOs(ctx context.Context) ([]QSOListItem, error) {
 	defer rows.Close()
 
 	var qsos []QSOListItem
+
 	for rows.Next() {
 		var qso QSOListItem
+
 		err := rows.Scan(
 			&qso.ID,
 			&qso.Call,
@@ -137,6 +142,7 @@ func ListQSOs(ctx context.Context) ([]QSOListItem, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan QSO: %w", err)
 		}
+
 		qsos = append(qsos, qso)
 	}
 
@@ -150,7 +156,7 @@ func ListQSOs(ctx context.Context) ([]QSOListItem, error) {
 // ListRecentQSOs returns the most recent N QSOs sorted by date/time
 func ListRecentQSOs(ctx context.Context, limit int) ([]QSOListItem, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -176,8 +182,10 @@ func ListRecentQSOs(ctx context.Context, limit int) ([]QSOListItem, error) {
 	defer rows.Close()
 
 	var qsos []QSOListItem
+
 	for rows.Next() {
 		var qso QSOListItem
+
 		err := rows.Scan(
 			&qso.ID,
 			&qso.Call,
@@ -192,6 +200,7 @@ func ListRecentQSOs(ctx context.Context, limit int) ([]QSOListItem, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan QSO: %w", err)
 		}
+
 		qsos = append(qsos, qso)
 	}
 
@@ -206,7 +215,7 @@ func ListRecentQSOs(ctx context.Context, limit int) ([]QSOListItem, error) {
 // Merge logic: file values override DB values, but DB values are kept if file field is empty
 func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {
 	if pool == nil {
-		return 0, fmt.Errorf("database connection not initialized")
+		return 0, ErrDatabaseConnectionNotInitialized
 	}
 
 	imported := 0
@@ -222,6 +231,7 @@ func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {
 
 		// Parse optional time_off
 		var timeOff *time.Time
+
 		if qso.QSODateOff != "" && qso.TimeOff != "" {
 			t, err := parseADIFTimestamp(qso.QSODateOff, qso.TimeOff)
 			if err == nil {
@@ -231,11 +241,13 @@ func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {
 
 		// Parse optional qso_date_off
 		dateOff := ""
+
 		if qso.QSODateOff != "" {
 			if d, err := parseADIFDate(qso.QSODateOff); err == nil {
 				dateOff = d.Format("2006-01-02")
 			}
 		}
+
 		if dateOff == "" && timeOff != nil {
 			if d, err := parseADIFDate(qso.QSODate); err == nil {
 				dateOff = d.Format("2006-01-02")
@@ -280,6 +292,7 @@ func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {
 					updated_at = NOW()
 				WHERE call = $25 AND qso_date = $26 AND time_on = $27
 			`
+
 			_, err = pool.Exec(ctx, query,
 				qso.Band,
 				qso.Freq,
@@ -312,6 +325,7 @@ func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {
 			if err != nil {
 				return imported, fmt.Errorf("failed to update QSO: %w", err)
 			}
+
 			updated++
 		} else {
 			// INSERT new QSO
@@ -340,6 +354,7 @@ func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {
 					CASE WHEN $27 != '' THEN $27::qsl_status ELSE NULL END
 				)
 			`
+
 			_, err = pool.Exec(ctx, query,
 				qso.Call,
 				timestamp,
@@ -372,13 +387,16 @@ func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {
 			if err != nil {
 				return imported, fmt.Errorf("failed to insert QSO: %w", err)
 			}
+
 			imported++
 		}
 	}
 
 	// After importing, try to link QSOs to contacts by matching call signs
 	linkedQuery := `SELECT link_all_qsos_to_contacts()`
+
 	var linkedCount int
+
 	err := pool.QueryRow(ctx, linkedQuery).Scan(&linkedCount)
 	if err != nil {
 		// Log error but don't fail the import
@@ -393,11 +411,14 @@ func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {
 // qsoExists checks if a QSO with the same call, date, and time already exists
 func qsoExists(ctx context.Context, call string, timestamp time.Time) (bool, error) {
 	query := `SELECT EXISTS(SELECT 1 FROM qsos WHERE call = $1 AND qso_date = $2 AND time_on = $3)`
+
 	var exists bool
+
 	err := pool.QueryRow(ctx, query, call, timestamp, timestamp).Scan(&exists)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to check existing qso: %w", err)
 	}
+
 	return exists, nil
 }
 
@@ -406,34 +427,47 @@ func parseADIFTimestamp(date, timeOn string) (time.Time, error) {
 	// ADIF date format: YYYYMMDD
 	// ADIF time format: HHMMSS or HHMM
 	if len(date) != 8 {
-		return time.Time{}, fmt.Errorf("invalid date format: %s", date)
+		return time.Time{}, fmt.Errorf("%w: %s", ErrInvalidDateFormat, date)
 	}
 
 	// Pad time if needed
 	if len(timeOn) == 4 {
 		timeOn = timeOn + "00"
 	}
+
 	if len(timeOn) != 6 {
-		return time.Time{}, fmt.Errorf("invalid time format: %s", timeOn)
+		return time.Time{}, fmt.Errorf("%w: %s", ErrInvalidTimeFormat, timeOn)
 	}
 
 	layout := "20060102150405"
 	dateTime := date + timeOn
-	return time.Parse(layout, dateTime)
+
+	parsed, err := time.Parse(layout, dateTime)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to parse adif timestamp %q: %w", dateTime, err)
+	}
+
+	return parsed, nil
 }
 
 // parseADIFDate parses ADIF date (YYYYMMDD) into a time.Time
 func parseADIFDate(date string) (time.Time, error) {
 	if len(date) != 8 {
-		return time.Time{}, fmt.Errorf("invalid date format: %s", date)
+		return time.Time{}, fmt.Errorf("%w: %s", ErrInvalidDateFormat, date)
 	}
-	return time.Parse("20060102", date)
+
+	parsed, err := time.Parse("20060102", date)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to parse adif date %q: %w", date, err)
+	}
+
+	return parsed, nil
 }
 
 // GetQSO returns a single QSO by ID with contact information if linked
 func GetQSO(ctx context.Context, id string) (*QSODetail, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -447,7 +481,9 @@ func GetQSO(ctx context.Context, id string) (*QSODetail, error) {
 	`
 
 	var detail QSODetail
+
 	detail.QSO = &QSO{} // Initialize the embedded pointer
+
 	err := pool.QueryRow(ctx, query, id).Scan(
 		&detail.ID,
 		&detail.ContactID,
@@ -629,7 +665,7 @@ func GetQSO(ctx context.Context, id string) (*QSODetail, error) {
 // GetQSOsByCallSign returns all QSOs for a specific call sign
 func GetQSOsByCallSign(ctx context.Context, callSign string) ([]QSOListItem, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -655,8 +691,10 @@ func GetQSOsByCallSign(ctx context.Context, callSign string) ([]QSOListItem, err
 	defer rows.Close()
 
 	var qsos []QSOListItem
+
 	for rows.Next() {
 		var qso QSOListItem
+
 		err := rows.Scan(
 			&qso.ID,
 			&qso.Call,
@@ -671,6 +709,7 @@ func GetQSOsByCallSign(ctx context.Context, callSign string) ([]QSOListItem, err
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan QSO: %w", err)
 		}
+
 		qsos = append(qsos, qso)
 	}
 
@@ -684,11 +723,13 @@ func GetQSOsByCallSign(ctx context.Context, callSign string) ([]QSOListItem, err
 // GetQSOCount returns the total number of QSOs
 func GetQSOCount(ctx context.Context) (int, error) {
 	if pool == nil {
-		return 0, fmt.Errorf("database connection not initialized")
+		return 0, ErrDatabaseConnectionNotInitialized
 	}
 
 	var count int
+
 	query := `SELECT COUNT(*) FROM qsos`
+
 	err := pool.QueryRow(ctx, query).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count QSOs: %w", err)
@@ -700,11 +741,13 @@ func GetQSOCount(ctx context.Context) (int, error) {
 // GetUniqueCountriesCount returns the number of unique countries worked.
 func GetUniqueCountriesCount(ctx context.Context) (int, error) {
 	if pool == nil {
-		return 0, fmt.Errorf("database connection not initialized")
+		return 0, ErrDatabaseConnectionNotInitialized
 	}
 
 	var count int
+
 	query := `SELECT COUNT(DISTINCT country) FROM qsos WHERE country IS NOT NULL AND country <> ''`
+
 	err := pool.QueryRow(ctx, query).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count unique countries: %w", err)
@@ -716,11 +759,13 @@ func GetUniqueCountriesCount(ctx context.Context) (int, error) {
 // GetLatestQSOTime returns the most recent QSO timestamp.
 func GetLatestQSOTime(ctx context.Context) (*time.Time, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `SELECT MAX(qso_date + time_on) FROM qsos`
+
 	var latest *time.Time
+
 	err := pool.QueryRow(ctx, query).Scan(&latest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch latest QSO time: %w", err)
@@ -732,7 +777,7 @@ func GetLatestQSOTime(ctx context.Context) (*time.Time, error) {
 // GetPaperQSLHallOfFame returns deduplicated QSOs where paper QSL was received.
 func GetPaperQSLHallOfFame(ctx context.Context) ([]QSOHallOfFameItem, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -752,8 +797,10 @@ func GetPaperQSLHallOfFame(ctx context.Context) ([]QSOHallOfFameItem, error) {
 	defer rows.Close()
 
 	var entries []QSOHallOfFameItem
+
 	for rows.Next() {
 		var entry QSOHallOfFameItem
+
 		err := rows.Scan(
 			&entry.Call,
 			&entry.Name,
@@ -762,6 +809,7 @@ func GetPaperQSLHallOfFame(ctx context.Context) ([]QSOHallOfFameItem, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan hall of fame entry: %w", err)
 		}
+
 		entries = append(entries, entry)
 	}
 
@@ -775,7 +823,7 @@ func GetPaperQSLHallOfFame(ctx context.Context) ([]QSOHallOfFameItem, error) {
 // FindClosestQSOByCallAndTime finds the closest matching QSO within a tolerance window.
 func FindClosestQSOByCallAndTime(ctx context.Context, callSign string, searchTime time.Time, toleranceMinutes int) (*QSODetail, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -788,11 +836,13 @@ func FindClosestQSOByCallAndTime(ctx context.Context, callSign string, searchTim
 	`
 
 	var id string
+
 	err := pool.QueryRow(ctx, query, callSign, searchTime.UTC(), toleranceMinutes).Scan(&id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
+			return nil, nil //nolint:nilnil // No nearby QSO is a valid, non-error search result.
 		}
+
 		return nil, fmt.Errorf("failed to search QSO: %w", err)
 	}
 

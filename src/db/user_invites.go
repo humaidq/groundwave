@@ -35,7 +35,7 @@ type UserInvite struct {
 // CreateUserInvite creates a new invite token.
 func CreateUserInvite(ctx context.Context, createdBy string, displayName string) (*UserInvite, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	token, err := generateInviteToken()
@@ -44,11 +44,13 @@ func CreateUserInvite(ctx context.Context, createdBy string, displayName string)
 	}
 
 	var createdByID *uuid.UUID
+
 	if strings.TrimSpace(createdBy) != "" {
 		parsed, err := uuid.Parse(createdBy)
 		if err != nil {
-			return nil, fmt.Errorf("invalid creator ID")
+			return nil, ErrInvalidCreatorID
 		}
+
 		createdByID = &parsed
 	}
 
@@ -58,6 +60,7 @@ func CreateUserInvite(ctx context.Context, createdBy string, displayName string)
 	}
 
 	var invite UserInvite
+
 	query := `
 		INSERT INTO user_invites (token, display_name, created_by)
 		VALUES ($1, $2, $3)
@@ -80,7 +83,7 @@ func CreateUserInvite(ctx context.Context, createdBy string, displayName string)
 // ListPendingUserInvites returns all unused, unexpired invites.
 func ListPendingUserInvites(ctx context.Context) ([]UserInvite, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -90,6 +93,7 @@ func ListPendingUserInvites(ctx context.Context) ([]UserInvite, error) {
 		  AND created_at >= NOW() - INTERVAL '24 hours'
 		ORDER BY created_at DESC
 	`
+
 	rows, err := pool.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list invites: %w", err)
@@ -97,6 +101,7 @@ func ListPendingUserInvites(ctx context.Context) ([]UserInvite, error) {
 	defer rows.Close()
 
 	var invites []UserInvite
+
 	for rows.Next() {
 		var invite UserInvite
 		if err := rows.Scan(
@@ -109,6 +114,7 @@ func ListPendingUserInvites(ctx context.Context) ([]UserInvite, error) {
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan invite: %w", err)
 		}
+
 		invites = append(invites, invite)
 	}
 
@@ -122,7 +128,7 @@ func ListPendingUserInvites(ctx context.Context) ([]UserInvite, error) {
 // ListExpiredUserInvites returns all unused invites older than 24 hours.
 func ListExpiredUserInvites(ctx context.Context) ([]UserInvite, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -132,6 +138,7 @@ func ListExpiredUserInvites(ctx context.Context) ([]UserInvite, error) {
 		  AND created_at < NOW() - INTERVAL '24 hours'
 		ORDER BY created_at DESC
 	`
+
 	rows, err := pool.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list expired invites: %w", err)
@@ -139,6 +146,7 @@ func ListExpiredUserInvites(ctx context.Context) ([]UserInvite, error) {
 	defer rows.Close()
 
 	var invites []UserInvite
+
 	for rows.Next() {
 		var invite UserInvite
 		if err := rows.Scan(
@@ -151,6 +159,7 @@ func ListExpiredUserInvites(ctx context.Context) ([]UserInvite, error) {
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan expired invite: %w", err)
 		}
+
 		invites = append(invites, invite)
 	}
 
@@ -164,10 +173,11 @@ func ListExpiredUserInvites(ctx context.Context) ([]UserInvite, error) {
 // GetUserInviteByToken returns an active invite by its token.
 func GetUserInviteByToken(ctx context.Context, token string) (*UserInvite, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	var invite UserInvite
+
 	query := `
 		SELECT id, token, display_name, created_at, used_at, created_by
 		FROM user_invites
@@ -175,6 +185,7 @@ func GetUserInviteByToken(ctx context.Context, token string) (*UserInvite, error
 		  AND used_at IS NULL
 		  AND created_at >= NOW() - INTERVAL '24 hours'
 	`
+
 	err := pool.QueryRow(ctx, query, token).Scan(
 		&invite.ID,
 		&invite.Token,
@@ -185,8 +196,9 @@ func GetUserInviteByToken(ctx context.Context, token string) (*UserInvite, error
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
+			return nil, nil //nolint:nilnil // Missing or expired token should return no invite without error.
 		}
+
 		return nil, fmt.Errorf("failed to get invite: %w", err)
 	}
 
@@ -196,10 +208,11 @@ func GetUserInviteByToken(ctx context.Context, token string) (*UserInvite, error
 // GetUserInviteByID returns an active invite by its ID.
 func GetUserInviteByID(ctx context.Context, id string) (*UserInvite, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	var invite UserInvite
+
 	query := `
 		SELECT id, token, display_name, created_at, used_at, created_by
 		FROM user_invites
@@ -207,6 +220,7 @@ func GetUserInviteByID(ctx context.Context, id string) (*UserInvite, error) {
 		  AND used_at IS NULL
 		  AND created_at >= NOW() - INTERVAL '24 hours'
 	`
+
 	err := pool.QueryRow(ctx, query, id).Scan(
 		&invite.ID,
 		&invite.Token,
@@ -217,8 +231,9 @@ func GetUserInviteByID(ctx context.Context, id string) (*UserInvite, error) {
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
+			return nil, nil //nolint:nilnil // Missing or expired invite ID should return no invite without error.
 		}
+
 		return nil, fmt.Errorf("failed to get invite: %w", err)
 	}
 
@@ -228,7 +243,7 @@ func GetUserInviteByID(ctx context.Context, id string) (*UserInvite, error) {
 // MarkUserInviteUsed marks an active invite as used.
 func MarkUserInviteUsed(ctx context.Context, id string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	command, err := pool.Exec(ctx, `
@@ -241,8 +256,9 @@ func MarkUserInviteUsed(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("failed to mark invite used: %w", err)
 	}
+
 	if command.RowsAffected() == 0 {
-		return fmt.Errorf("invite not found")
+		return ErrInviteNotFound
 	}
 
 	return nil
@@ -251,7 +267,7 @@ func MarkUserInviteUsed(ctx context.Context, id string) error {
 // RegenerateExpiredUserInvite rotates an expired invite token and resets its TTL.
 func RegenerateExpiredUserInvite(ctx context.Context, id string) (*UserInvite, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	token, err := generateInviteToken()
@@ -260,6 +276,7 @@ func RegenerateExpiredUserInvite(ctx context.Context, id string) (*UserInvite, e
 	}
 
 	var invite UserInvite
+
 	query := `
 		UPDATE user_invites
 		SET token = $1,
@@ -269,6 +286,7 @@ func RegenerateExpiredUserInvite(ctx context.Context, id string) (*UserInvite, e
 		  AND created_at < NOW() - INTERVAL '24 hours'
 		RETURNING id, token, display_name, created_at, used_at, created_by
 	`
+
 	err = pool.QueryRow(ctx, query, token, id).Scan(
 		&invite.ID,
 		&invite.Token,
@@ -280,11 +298,13 @@ func RegenerateExpiredUserInvite(ctx context.Context, id string) (*UserInvite, e
 	if err == nil {
 		return &invite, nil
 	}
+
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("failed to regenerate invite: %w", err)
 	}
 
 	var isExpired bool
+
 	err = pool.QueryRow(ctx, `
 		SELECT created_at < NOW() - INTERVAL '24 hours'
 		FROM user_invites
@@ -293,29 +313,32 @@ func RegenerateExpiredUserInvite(ctx context.Context, id string) (*UserInvite, e
 	`, id).Scan(&isExpired)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("invite not found")
+			return nil, ErrInviteNotFound
 		}
+
 		return nil, fmt.Errorf("failed to load invite status: %w", err)
 	}
+
 	if !isExpired {
 		return nil, ErrInviteNotExpired
 	}
 
-	return nil, fmt.Errorf("invite not found")
+	return nil, ErrInviteNotFound
 }
 
 // DeleteUserInvite removes an invite by ID.
 func DeleteUserInvite(ctx context.Context, id string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	command, err := pool.Exec(ctx, `DELETE FROM user_invites WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete invite: %w", err)
 	}
+
 	if command.RowsAffected() == 0 {
-		return fmt.Errorf("invite not found")
+		return ErrInviteNotFound
 	}
 
 	return nil
@@ -326,5 +349,6 @@ func generateInviteToken() (string, error) {
 	if _, err := rand.Read(buffer); err != nil {
 		return "", fmt.Errorf("failed to generate invite token: %w", err)
 	}
+
 	return base64.RawURLEncoding.EncodeToString(buffer), nil
 }

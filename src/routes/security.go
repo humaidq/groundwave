@@ -22,6 +22,8 @@ import (
 	"github.com/humaidq/groundwave/db"
 )
 
+var regenerateExpiredUserInviteDBFn = db.RegenerateExpiredUserInvite
+
 // SessionMetadataMiddleware captures and stores device and IP info in the session
 func SessionMetadataMiddleware() flamego.Handler {
 	return func(c flamego.Context, s session.Session) {
@@ -84,6 +86,7 @@ func getClientIP(r *flamego.Request) string {
 		if idx := strings.Index(xff, ","); idx != -1 {
 			first = xff[:idx]
 		}
+
 		if first = strings.TrimSpace(first); first != "" {
 			return first
 		}
@@ -98,6 +101,7 @@ func getClientIP(r *flamego.Request) string {
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		return host
 	}
+
 	return r.RemoteAddr
 }
 
@@ -115,6 +119,7 @@ func formatDuration(d time.Duration) string {
 	if days > 0 {
 		parts = append(parts, fmt.Sprintf("%dd", days))
 	}
+
 	if days > 0 {
 		if hours > 0 {
 			parts = append(parts, fmt.Sprintf("%dh", hours))
@@ -133,9 +138,11 @@ func formatDuration(d time.Duration) string {
 	if len(parts) == 0 {
 		return "in 0m"
 	}
+
 	if len(parts) == 1 {
 		return "in " + parts[0]
 	}
+
 	return "in " + parts[0] + " " + parts[1]
 }
 
@@ -151,12 +158,15 @@ func buildExternalURL(r *flamego.Request, path string) string {
 	if host == "" {
 		host = r.Host
 	}
+
 	if host == "" {
 		return path
 	}
+
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
+
 	return scheme + "://" + host + path
 }
 
@@ -221,12 +231,16 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 	userID, ok := getSessionUserID(s)
 	if !ok {
 		data["Error"] = "Unable to resolve current user"
+
 		t.HTML(http.StatusInternalServerError, "security")
+
 		return
 	}
 
 	ctx := c.Request().Context()
+
 	var err error
+
 	isAdmin := false
 	if admin, err := resolveSessionIsAdmin(ctx, s); err == nil {
 		isAdmin = admin
@@ -236,16 +250,20 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 	}
 
 	var users []db.User
+
 	userNameByID := make(map[string]string)
 	usersLoaded := false
+
 	if isAdmin {
 		users, err = db.ListUsers(ctx)
 		if err != nil {
 			logger.Error("Failed to load users", "error", err)
+
 			data["ShareError"] = "Failed to load user list"
 			data["AccountError"] = "Failed to load user list"
 		} else {
 			usersLoaded = true
+
 			for _, user := range users {
 				userNameByID[user.ID.String()] = user.DisplayName
 			}
@@ -256,7 +274,9 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 	postgresStore, ok := store.(*db.PostgresSessionStore)
 	if !ok {
 		data["Error"] = "Unable to access session information"
+
 		t.HTML(http.StatusInternalServerError, "security")
+
 		return
 	}
 
@@ -267,26 +287,32 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 	sessions, err := postgresStore.ListValidSessions(ctx)
 	if err != nil {
 		data["Error"] = "Failed to load session information"
+
 		t.HTML(http.StatusInternalServerError, "security")
+
 		return
 	}
 
 	// Convert to view models and mark current session
-	var sessionInfos []SessionInfo
+	sessionInfos := make([]SessionInfo, 0, len(sessions))
+
 	for _, sess := range sessions {
 		if !isAdmin {
 			if sess.UserID == "" || sess.UserID != userID {
 				continue
 			}
 		}
+
 		isCurrent := sess.ID == currentSessionID
 		expiresIn := formatDuration(time.Until(sess.ExpiresAt))
+
 		userName := strings.TrimSpace(sess.UserDisplay)
 		if userName == "" && sess.UserID != "" {
 			if name, ok := userNameByID[sess.UserID]; ok {
 				userName = name
 			}
 		}
+
 		if userName == "" {
 			userName = "Unknown user"
 		}
@@ -306,7 +332,9 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 	passkeys, err := db.ListUserPasskeys(ctx, userID)
 	if err != nil {
 		data["Error"] = "Failed to load passkey information"
+
 		t.HTML(http.StatusInternalServerError, "security")
+
 		return
 	}
 
@@ -316,6 +344,7 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 		if passkey.Label != nil && strings.TrimSpace(*passkey.Label) != "" {
 			label = strings.TrimSpace(*passkey.Label)
 		}
+
 		passkeyInfos = append(passkeyInfos, PasskeyInfo{
 			ID:        passkey.ID.String(),
 			Label:     label,
@@ -326,6 +355,7 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 
 	if isAdmin && usersLoaded {
 		adminCount := 0
+
 		for _, user := range users {
 			if user.IsAdmin {
 				adminCount++
@@ -345,6 +375,7 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 				CanDelete:   canDelete,
 			})
 		}
+
 		data["Accounts"] = accountInfos
 	}
 
@@ -359,6 +390,7 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 		invites, err := db.ListPendingUserInvites(ctx)
 		if err != nil {
 			logger.Error("Failed to load invites", "error", err)
+
 			data["InviteError"] = "Failed to load user invites"
 		} else {
 			inviteInfos := make([]InviteInfo, 0, len(invites))
@@ -367,14 +399,17 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 				if invite.DisplayName != nil && strings.TrimSpace(*invite.DisplayName) != "" {
 					displayName = strings.TrimSpace(*invite.DisplayName)
 				}
+
 				expiresAt := invite.CreatedAt.Add(24 * time.Hour)
 				setupURL := baseSetupURL + "?token=" + url.QueryEscape(invite.Token)
+
 				qrCode := ""
 				if png, err := qrcode.Encode(setupURL, qrcode.Medium, 256); err == nil {
 					qrCode = base64.StdEncoding.EncodeToString(png)
 				} else {
 					logger.Error("Failed to generate invite QR code", "error", err)
 				}
+
 				inviteInfos = append(inviteInfos, InviteInfo{
 					ID:          invite.ID.String(),
 					DisplayName: displayName,
@@ -386,12 +421,14 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 					QRCode:      qrCode,
 				})
 			}
+
 			data["UserInvites"] = inviteInfos
 		}
 
 		expiredInvites, expiredErr := db.ListExpiredUserInvites(ctx)
 		if expiredErr != nil {
 			logger.Error("Failed to load expired invites", "error", expiredErr)
+
 			data["InviteError"] = "Failed to load user invites"
 		} else {
 			expiredInviteInfos := make([]InviteInfo, 0, len(expiredInvites))
@@ -400,6 +437,7 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 				if invite.DisplayName != nil && strings.TrimSpace(*invite.DisplayName) != "" {
 					displayName = strings.TrimSpace(*invite.DisplayName)
 				}
+
 				expiresAt := invite.CreatedAt.Add(24 * time.Hour)
 				expiredInviteInfos = append(expiredInviteInfos, InviteInfo{
 					ID:          invite.ID.String(),
@@ -410,6 +448,7 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 					IsExpired:   true,
 				})
 			}
+
 			data["ExpiredUserInvites"] = expiredInviteInfos
 		}
 
@@ -417,20 +456,25 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 			profiles, err := db.ListHealthProfiles(ctx)
 			if err != nil {
 				logger.Error("Failed to load health profiles", "error", err)
+
 				data["ShareError"] = "Failed to load health profiles"
 			} else {
 				shareRows, err := db.ListHealthProfileShares(ctx)
 				if err != nil {
 					logger.Error("Failed to load health shares", "error", err)
+
 					data["ShareError"] = "Failed to load health shares"
 				} else {
 					shareMap := make(map[string]map[string]bool)
+
 					for _, share := range shareRows {
 						userKey := share.UserID.String()
 						profileKey := share.ProfileID.String()
+
 						if shareMap[userKey] == nil {
 							shareMap[userKey] = make(map[string]bool)
 						}
+
 						shareMap[userKey][profileKey] = true
 					}
 
@@ -444,15 +488,19 @@ func Security(c flamego.Context, s session.Session, store session.Store, t templ
 					}
 
 					userShares := make([]UserShareInfo, 0)
+
 					for _, user := range users {
 						if user.IsAdmin {
 							continue
 						}
+
 						userKey := user.ID.String()
+
 						sharedProfiles := shareMap[userKey]
 						if sharedProfiles == nil {
 							sharedProfiles = make(map[string]bool)
 						}
+
 						userShares = append(userShares, UserShareInfo{
 							ID:               userKey,
 							DisplayName:      user.DisplayName,
@@ -481,6 +529,7 @@ func InvalidateOtherSessions(c flamego.Context, s session.Session, store session
 	if !ok {
 		SetErrorFlash(s, "Unable to access session information")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -488,6 +537,7 @@ func InvalidateOtherSessions(c flamego.Context, s session.Session, store session
 	if !ok {
 		SetErrorFlash(s, "Unable to resolve current user")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -500,12 +550,14 @@ func InvalidateOtherSessions(c flamego.Context, s session.Session, store session
 	if err != nil {
 		SetErrorFlash(s, "Failed to invalidate other sessions")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
 	if deleted == 0 {
 		SetInfoFlash(s, "No other sessions to invalidate")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -519,6 +571,7 @@ func InvalidateSession(c flamego.Context, s session.Session, store session.Store
 	if !ok {
 		SetErrorFlash(s, "Unable to access session information")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -526,6 +579,7 @@ func InvalidateSession(c flamego.Context, s session.Session, store session.Store
 	if sessionID == "" {
 		SetErrorFlash(s, "Missing session ID")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -533,6 +587,7 @@ func InvalidateSession(c flamego.Context, s session.Session, store session.Store
 	if !ok {
 		SetErrorFlash(s, "Unable to resolve current user")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -545,10 +600,12 @@ func InvalidateSession(c flamego.Context, s session.Session, store session.Store
 	if err != nil {
 		SetErrorFlash(s, "Failed to load session information")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
 	var target *db.SessionData
+
 	for _, sess := range sessions {
 		if sess.ID == sessionID {
 			target = &sess
@@ -559,6 +616,7 @@ func InvalidateSession(c flamego.Context, s session.Session, store session.Store
 	if target == nil {
 		SetErrorFlash(s, "Session not found")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -566,6 +624,7 @@ func InvalidateSession(c flamego.Context, s session.Session, store session.Store
 		if target.UserID == "" || target.UserID != userID {
 			SetErrorFlash(s, "Access restricted")
 			c.Redirect("/security", http.StatusSeeOther)
+
 			return
 		}
 	}
@@ -573,6 +632,7 @@ func InvalidateSession(c flamego.Context, s session.Session, store session.Store
 	if err := postgresStore.Destroy(c.Request().Context(), sessionID); err != nil {
 		SetErrorFlash(s, "Failed to invalidate session")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -591,6 +651,7 @@ func DeletePasskey(c flamego.Context, s session.Session) {
 	if !ok {
 		SetErrorFlash(s, "Unable to resolve current user")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -598,11 +659,14 @@ func DeletePasskey(c flamego.Context, s session.Session) {
 	if err != nil {
 		SetErrorFlash(s, "Failed to load passkeys")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
+
 	if count <= 1 {
 		SetWarningFlash(s, "You must keep at least one passkey")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -610,12 +674,14 @@ func DeletePasskey(c flamego.Context, s session.Session) {
 	if passkeyID == "" {
 		SetErrorFlash(s, "Missing passkey ID")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
 	if err := db.DeleteUserPasskey(c.Request().Context(), userID, passkeyID); err != nil {
 		SetErrorFlash(s, "Failed to delete passkey")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -626,16 +692,19 @@ func DeletePasskey(c flamego.Context, s session.Session) {
 // CreateUserInvite generates a new invite token (admin only).
 func CreateUserInvite(c flamego.Context, s session.Session) {
 	ctx := c.Request().Context()
+
 	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil || !isAdmin {
 		SetErrorFlash(s, "Access restricted")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
 	if err := c.Request().ParseForm(); err != nil {
 		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -645,6 +714,7 @@ func CreateUserInvite(c flamego.Context, s session.Session) {
 	if _, err := db.CreateUserInvite(ctx, userID, displayName); err != nil {
 		SetErrorFlash(s, "Failed to create invite")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -655,10 +725,12 @@ func CreateUserInvite(c flamego.Context, s session.Session) {
 // RegenerateUserInvite refreshes an expired invite link (admin only).
 func RegenerateUserInvite(c flamego.Context, s session.Session) {
 	ctx := c.Request().Context()
+
 	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil || !isAdmin {
 		SetErrorFlash(s, "Access restricted")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -666,17 +738,20 @@ func RegenerateUserInvite(c flamego.Context, s session.Session) {
 	if inviteID == "" {
 		SetErrorFlash(s, "Missing invite ID")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
-	if _, err := db.RegenerateExpiredUserInvite(ctx, inviteID); err != nil {
+	if _, err := regenerateExpiredUserInviteDBFn(ctx, inviteID); err != nil {
 		switch {
 		case errors.Is(err, db.ErrInviteNotExpired):
 			SetWarningFlash(s, "Invite has not expired yet")
 		default:
 			SetErrorFlash(s, "Failed to regenerate invite")
 		}
+
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -687,10 +762,12 @@ func RegenerateUserInvite(c flamego.Context, s session.Session) {
 // DeleteUserInvite revokes a pending invite (admin only).
 func DeleteUserInvite(c flamego.Context, s session.Session) {
 	ctx := c.Request().Context()
+
 	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil || !isAdmin {
 		SetErrorFlash(s, "Access restricted")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -698,12 +775,14 @@ func DeleteUserInvite(c flamego.Context, s session.Session) {
 	if inviteID == "" {
 		SetErrorFlash(s, "Missing invite ID")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
 	if err := db.DeleteUserInvite(ctx, inviteID); err != nil {
 		SetErrorFlash(s, "Failed to revoke invite")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -714,10 +793,12 @@ func DeleteUserInvite(c flamego.Context, s session.Session) {
 // DeleteUserAccount removes a user account (admin only).
 func DeleteUserAccount(c flamego.Context, s session.Session, store session.Store) {
 	ctx := c.Request().Context()
+
 	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil || !isAdmin {
 		SetErrorFlash(s, "Access restricted")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -725,6 +806,7 @@ func DeleteUserAccount(c flamego.Context, s session.Session, store session.Store
 	if userID == "" {
 		SetErrorFlash(s, "Missing user ID")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -732,11 +814,14 @@ func DeleteUserAccount(c flamego.Context, s session.Session, store session.Store
 	if !ok {
 		SetErrorFlash(s, "Unable to resolve current user")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
+
 	if userID == currentUserID {
 		SetErrorFlash(s, "You cannot delete your own account")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -744,6 +829,7 @@ func DeleteUserAccount(c flamego.Context, s session.Session, store session.Store
 	if err != nil {
 		SetErrorFlash(s, "User not found")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -752,17 +838,22 @@ func DeleteUserAccount(c flamego.Context, s session.Session, store session.Store
 		if err != nil {
 			SetErrorFlash(s, "Failed to load user list")
 			c.Redirect("/security", http.StatusSeeOther)
+
 			return
 		}
+
 		adminCount := 0
+
 		for _, user := range users {
 			if user.IsAdmin {
 				adminCount++
 			}
 		}
+
 		if adminCount <= 1 {
 			SetErrorFlash(s, "Cannot delete the last admin account")
 			c.Redirect("/security", http.StatusSeeOther)
+
 			return
 		}
 	}
@@ -771,6 +862,7 @@ func DeleteUserAccount(c flamego.Context, s session.Session, store session.Store
 	if !ok {
 		SetErrorFlash(s, "Unable to access session information")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -778,6 +870,7 @@ func DeleteUserAccount(c flamego.Context, s session.Session, store session.Store
 	if err != nil {
 		SetErrorFlash(s, "Failed to load session information")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -785,9 +878,11 @@ func DeleteUserAccount(c flamego.Context, s session.Session, store session.Store
 		if sess.UserID != userID {
 			continue
 		}
+
 		if err := postgresStore.Destroy(ctx, sess.ID); err != nil {
 			SetErrorFlash(s, "Failed to invalidate user sessions")
 			c.Redirect("/security", http.StatusSeeOther)
+
 			return
 		}
 	}
@@ -795,6 +890,7 @@ func DeleteUserAccount(c flamego.Context, s session.Session, store session.Store
 	if err := db.DeleteUser(ctx, userID); err != nil {
 		SetErrorFlash(s, "Failed to delete account")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -805,16 +901,19 @@ func DeleteUserAccount(c flamego.Context, s session.Session, store session.Store
 // UpdateHealthProfileShares updates shared profiles for a user (admin only).
 func UpdateHealthProfileShares(c flamego.Context, s session.Session) {
 	ctx := c.Request().Context()
+
 	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil || !isAdmin {
 		SetErrorFlash(s, "Access restricted")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
 	if err := c.Request().ParseForm(); err != nil {
 		SetErrorFlash(s, "Failed to parse form")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -822,6 +921,7 @@ func UpdateHealthProfileShares(c flamego.Context, s session.Session) {
 	if strings.TrimSpace(userID) == "" {
 		SetErrorFlash(s, "Missing user ID")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
@@ -829,19 +929,24 @@ func UpdateHealthProfileShares(c flamego.Context, s session.Session) {
 	if err != nil {
 		SetErrorFlash(s, "User not found")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
+
 	if targetUser.IsAdmin {
 		SetErrorFlash(s, "Cannot update shares for admin user")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 
 	profileIDs := c.Request().Form["profile_id"]
+
 	createdBy, _ := getSessionUserID(s)
 	if err := db.SetHealthProfileShares(ctx, userID, profileIDs, createdBy); err != nil {
 		SetErrorFlash(s, "Failed to update health shares")
 		c.Redirect("/security", http.StatusSeeOther)
+
 		return
 	}
 

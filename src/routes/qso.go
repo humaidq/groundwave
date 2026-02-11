@@ -25,6 +25,7 @@ func populateQSLPageData(ctx context.Context, data template.Data) {
 	requests, err := db.ListOpenQSLCardRequests(ctx)
 	if err != nil {
 		logger.Error("Error fetching QSL card requests", "error", err)
+
 		data["QSLCardRequestsError"] = "Failed to load pending card requests"
 	} else {
 		data["QSLCardRequests"] = requests
@@ -33,6 +34,7 @@ func populateQSLPageData(ctx context.Context, data template.Data) {
 	qsos, err := db.ListQSOs(ctx)
 	if err != nil {
 		logger.Error("Error fetching QSOs", "error", err)
+
 		if _, exists := data["Error"]; !exists {
 			data["Error"] = "Failed to load QSOs"
 		}
@@ -58,6 +60,7 @@ func DismissQSLCardRequest(c flamego.Context, s session.Session) {
 	if requestID == "" {
 		SetErrorFlash(s, "Invalid QSL card request")
 		c.Redirect("/qsl", http.StatusSeeOther)
+
 		return
 	}
 
@@ -65,6 +68,7 @@ func DismissQSLCardRequest(c flamego.Context, s session.Session) {
 		logger.Error("Error dismissing QSL card request", "request_id", requestID, "error", err)
 		SetErrorFlash(s, "Failed to dismiss QSL card request")
 		c.Redirect("/qsl", http.StatusSeeOther)
+
 		return
 	}
 
@@ -84,8 +88,11 @@ func ViewQSO(c flamego.Context, t template.Template, data template.Data) {
 	qso, err := db.GetQSO(c.Request().Context(), qsoID)
 	if err != nil {
 		logger.Error("Error fetching QSO", "error", err)
+
 		data["Error"] = "Failed to load QSO details"
+
 		c.Redirect("/qsl", http.StatusSeeOther)
+
 		return
 	}
 
@@ -99,25 +106,30 @@ func ViewQSO(c flamego.Context, t template.Template, data template.Data) {
 
 	// Generate map if both grid squares are available
 	mapURL := ""
+
 	if qso.MyGridSquare != nil && *qso.MyGridSquare != "" && qso.GridSquare != nil && *qso.GridSquare != "" {
 		safeCallsign := strings.ReplaceAll(qso.Call, "/", "_")
 		mapFileName := fmt.Sprintf("%s-%s.png", safeCallsign, qsoID)
 		encodedCallsign := url.QueryEscape(qso.Call)
 		mapURL = fmt.Sprintf("/%s-%s.png", encodedCallsign, qsoID)
+
 		generateMapIfNeeded(mapFileName, *qso.MyGridSquare, *qso.GridSquare)
 	}
 
 	data["QSO"] = qso
 	data["MapURL"] = mapURL
+
 	qsoTimestamp := qsoTimestampUTC(qso.QSO)
 	if !qsoTimestamp.IsZero() {
 		encodedCallsign := url.QueryEscape(qso.Call)
 		data["PublicQSLPath"] = fmt.Sprintf("/oqrs/%s-%d", encodedCallsign, qsoTimestamp.Unix())
 	}
+
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "QSL", URL: "/qsl", IsCurrent: false},
 		{Name: qso.Call, URL: "", IsCurrent: true},
 	}
+
 	t.HTML(http.StatusOK, "qso_view")
 }
 
@@ -149,9 +161,11 @@ func ImportADIF(c flamego.Context, s session.Session, t template.Template, data 
 	err := c.Request().ParseMultipartForm(10 << 20)
 	if err != nil {
 		logger.Error("Error parsing form", "error", err)
+
 		data["Error"] = "Failed to parse upload form"
 		populateQSLPageData(c.Request().Context(), data)
 		t.HTML(http.StatusBadRequest, "qsl")
+
 		return
 	}
 
@@ -159,11 +173,14 @@ func ImportADIF(c flamego.Context, s session.Session, t template.Template, data 
 	file, header, err := c.Request().FormFile("adif_file")
 	if err != nil {
 		logger.Error("Error getting file", "error", err)
+
 		data["Error"] = "No file uploaded or invalid file"
 		populateQSLPageData(c.Request().Context(), data)
 		t.HTML(http.StatusBadRequest, "qsl")
+
 		return
 	}
+
 	defer func() {
 		if err := file.Close(); err != nil {
 			logger.Error("Error closing ADIF upload file", "error", err)
@@ -174,12 +191,14 @@ func ImportADIF(c flamego.Context, s session.Session, t template.Template, data 
 
 	// Parse ADIF file
 	parser := utils.NewADIFParser()
+
 	err = parser.ParseFile(file)
 	if err != nil {
 		logger.Error("Error parsing ADIF file", "error", err)
 		data["Error"] = "Failed to parse ADIF file: " + err.Error()
 		populateQSLPageData(c.Request().Context(), data)
 		t.HTML(http.StatusBadRequest, "qsl")
+
 		return
 	}
 
@@ -192,6 +211,7 @@ func ImportADIF(c flamego.Context, s session.Session, t template.Template, data 
 		data["Error"] = "Failed to import QSOs: " + err.Error()
 		populateQSLPageData(c.Request().Context(), data)
 		t.HTML(http.StatusInternalServerError, "qsl")
+
 		return
 	}
 
@@ -204,6 +224,7 @@ func ImportADIF(c flamego.Context, s session.Session, t template.Template, data 
 	} else {
 		SetSuccessFlash(s, fmt.Sprintf("Successfully imported %d QSOs", processed))
 	}
+
 	c.Redirect("/qsl", http.StatusSeeOther)
 }
 
@@ -213,6 +234,7 @@ func ImportQRZLogs(c flamego.Context, s session.Session) {
 	if len(apiKeys) == 0 {
 		SetErrorFlash(s, "QRZ_API_KEY is not configured")
 		c.Redirect("/qsl", http.StatusSeeOther)
+
 		return
 	}
 
@@ -221,18 +243,21 @@ func ImportQRZLogs(c flamego.Context, s session.Session) {
 		logger.Error("Error syncing QRZ logs", "error", err)
 		SetErrorFlash(s, "Failed to sync QRZ logs")
 		c.Redirect("/qsl", http.StatusSeeOther)
+
 		return
 	}
 
 	if result.FailedLogbooks > 0 {
 		SetWarningFlash(s, fmt.Sprintf("Synced %d QSOs from %d QRZ logbook(s); %d failed", result.ProcessedQSOs, result.SyncedLogbooks, result.FailedLogbooks))
 		c.Redirect("/qsl", http.StatusSeeOther)
+
 		return
 	}
 
 	if result.ProcessedQSOs == 0 {
 		SetInfoFlash(s, fmt.Sprintf("QRZ sync complete. No new QSOs found across %d logbook(s)", result.SyncedLogbooks))
 		c.Redirect("/qsl", http.StatusSeeOther)
+
 		return
 	}
 

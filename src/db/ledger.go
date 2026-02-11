@@ -112,7 +112,7 @@ type UpdateLedgerReconciliationInput struct {
 // ListLedgerBudgetsForPeriod returns all budgets for a given month (period_start).
 func ListLedgerBudgetsForPeriod(ctx context.Context, periodStart time.Time) ([]LedgerBudget, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -129,6 +129,7 @@ func ListLedgerBudgetsForPeriod(ctx context.Context, periodStart time.Time) ([]L
 	defer rows.Close()
 
 	var budgets []LedgerBudget
+
 	for rows.Next() {
 		var budget LedgerBudget
 		if err := rows.Scan(
@@ -142,6 +143,7 @@ func ListLedgerBudgetsForPeriod(ctx context.Context, periodStart time.Time) ([]L
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan ledger budget: %w", err)
 		}
+
 		budgets = append(budgets, budget)
 	}
 
@@ -155,7 +157,7 @@ func ListLedgerBudgetsForPeriod(ctx context.Context, periodStart time.Time) ([]L
 // ListLedgerBudgetsWithUsage returns budgets with usage totals for the month.
 func ListLedgerBudgetsWithUsage(ctx context.Context, periodStart time.Time) ([]LedgerBudgetUsage, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -179,9 +181,13 @@ func ListLedgerBudgetsWithUsage(ctx context.Context, periodStart time.Time) ([]L
 	defer rows.Close()
 
 	var budgets []LedgerBudgetUsage
+
 	for rows.Next() {
-		var budget LedgerBudget
-		var totalAmount float64
+		var (
+			budget      LedgerBudget
+			totalAmount float64
+		)
+
 		if err := rows.Scan(
 			&budget.ID,
 			&budget.CategoryName,
@@ -196,16 +202,19 @@ func ListLedgerBudgetsWithUsage(ctx context.Context, periodStart time.Time) ([]L
 		}
 
 		used := -totalAmount
-		if used < 0 {
+		if used <= 0 {
 			used = 0
 		}
+
 		remaining := budget.Amount - used
 		isOver := remaining < 0
 		remainingAbs := math.Abs(remaining)
+
 		progress := 0.0
 		if budget.Amount > 0 {
 			progress = (used / budget.Amount) * 100
 		}
+
 		progress = math.Max(0, math.Min(progress, 100))
 
 		budgets = append(budgets, LedgerBudgetUsage{
@@ -228,14 +237,17 @@ func ListLedgerBudgetsWithUsage(ctx context.Context, periodStart time.Time) ([]L
 // CreateLedgerBudget creates a new budget row.
 func CreateLedgerBudget(ctx context.Context, input CreateLedgerBudgetInput) (uuid.UUID, error) {
 	if pool == nil {
-		return uuid.UUID{}, fmt.Errorf("database connection not initialized")
+		return uuid.UUID{}, ErrDatabaseConnectionNotInitialized
 	}
+
 	if input.CategoryName == "" {
-		return uuid.UUID{}, fmt.Errorf("category name is required")
+		return uuid.UUID{}, ErrCategoryNameRequired
 	}
+
 	if input.Amount <= 0 {
-		return uuid.UUID{}, fmt.Errorf("amount must be greater than zero")
+		return uuid.UUID{}, ErrAmountMustBeGreaterThanZero
 	}
+
 	if input.Currency == "" {
 		input.Currency = "AED"
 	}
@@ -250,13 +262,14 @@ func CreateLedgerBudget(ctx context.Context, input CreateLedgerBudgetInput) (uui
 	if err := pool.QueryRow(ctx, query, input.CategoryName, input.Amount, input.Currency, input.PeriodStart).Scan(&id); err != nil {
 		return uuid.UUID{}, fmt.Errorf("failed to create ledger budget: %w", err)
 	}
+
 	return id, nil
 }
 
 // GetLedgerBudget fetches a single budget by ID.
 func GetLedgerBudget(ctx context.Context, budgetID uuid.UUID) (*LedgerBudget, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -284,14 +297,17 @@ func GetLedgerBudget(ctx context.Context, budgetID uuid.UUID) (*LedgerBudget, er
 // UpdateLedgerBudget updates an existing budget.
 func UpdateLedgerBudget(ctx context.Context, budgetID uuid.UUID, categoryName string, amount float64, currency string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
+
 	if categoryName == "" {
-		return fmt.Errorf("category name is required")
+		return ErrCategoryNameRequired
 	}
+
 	if amount <= 0 {
-		return fmt.Errorf("amount must be greater than zero")
+		return ErrAmountMustBeGreaterThanZero
 	}
+
 	if currency == "" {
 		currency = "AED"
 	}
@@ -306,8 +322,9 @@ func UpdateLedgerBudget(ctx context.Context, budgetID uuid.UUID, categoryName st
 	if err != nil {
 		return fmt.Errorf("failed to update ledger budget: %w", err)
 	}
+
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("budget not found")
+		return ErrBudgetNotFound
 	}
 
 	return nil
@@ -316,15 +333,16 @@ func UpdateLedgerBudget(ctx context.Context, budgetID uuid.UUID, categoryName st
 // DeleteLedgerBudget removes a budget.
 func DeleteLedgerBudget(ctx context.Context, budgetID uuid.UUID) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	result, err := pool.Exec(ctx, `DELETE FROM ledger_budgets WHERE id = $1`, budgetID)
 	if err != nil {
 		return fmt.Errorf("failed to delete ledger budget: %w", err)
 	}
+
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("budget not found")
+		return ErrBudgetNotFound
 	}
 
 	return nil
@@ -333,7 +351,7 @@ func DeleteLedgerBudget(ctx context.Context, budgetID uuid.UUID) error {
 // ListLedgerAccountsWithBalances returns all accounts with derived balances.
 func ListLedgerAccountsWithBalances(ctx context.Context) ([]LedgerAccountSummary, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -367,11 +385,15 @@ func ListLedgerAccountsWithBalances(ctx context.Context) ([]LedgerAccountSummary
 	defer rows.Close()
 
 	var accounts []LedgerAccountSummary
+
 	for rows.Next() {
-		var account LedgerAccount
-		var baseBalance float64
-		var delta float64
-		var reconciledAt sql.NullTime
+		var (
+			account      LedgerAccount
+			baseBalance  float64
+			delta        float64
+			reconciledAt sql.NullTime
+		)
+
 		if err := rows.Scan(
 			&account.ID,
 			&account.Name,
@@ -394,6 +416,7 @@ func ListLedgerAccountsWithBalances(ctx context.Context) ([]LedgerAccountSummary
 		if reconciledAt.Valid {
 			lastReconciledAt = &reconciledAt.Time
 		}
+
 		accounts = append(accounts, LedgerAccountSummary{
 			LedgerAccount:    account,
 			Balance:          baseBalance + delta,
@@ -411,7 +434,7 @@ func ListLedgerAccountsWithBalances(ctx context.Context) ([]LedgerAccountSummary
 // GetLedgerAccount fetches a single account by ID.
 func GetLedgerAccount(ctx context.Context, accountID uuid.UUID) (*LedgerAccount, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -442,7 +465,7 @@ func GetLedgerAccount(ctx context.Context, accountID uuid.UUID) (*LedgerAccount,
 // GetLedgerAccountSummary returns the account with its derived balance.
 func GetLedgerAccountSummary(ctx context.Context, accountID uuid.UUID) (*LedgerAccountSummary, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -469,10 +492,13 @@ func GetLedgerAccountSummary(ctx context.Context, accountID uuid.UUID) (*LedgerA
 		WHERE a.id = $1
 	`
 
-	var account LedgerAccount
-	var baseBalance float64
-	var delta float64
-	var reconciledAt sql.NullTime
+	var (
+		account      LedgerAccount
+		baseBalance  float64
+		delta        float64
+		reconciledAt sql.NullTime
+	)
+
 	if err := pool.QueryRow(ctx, query, accountID).Scan(
 		&account.ID,
 		&account.Name,
@@ -506,13 +532,15 @@ func GetLedgerAccountSummary(ctx context.Context, accountID uuid.UUID) (*LedgerA
 // CreateLedgerAccount creates a new account and returns its ID.
 func CreateLedgerAccount(ctx context.Context, input CreateLedgerAccountInput) (uuid.UUID, error) {
 	if pool == nil {
-		return uuid.UUID{}, fmt.Errorf("database connection not initialized")
+		return uuid.UUID{}, ErrDatabaseConnectionNotInitialized
 	}
+
 	if input.Name == "" {
-		return uuid.UUID{}, fmt.Errorf("account name is required")
+		return uuid.UUID{}, ErrAccountNameRequired
 	}
+
 	if input.AccountType == "" {
-		return uuid.UUID{}, fmt.Errorf("account type is required")
+		return uuid.UUID{}, ErrAccountTypeRequired
 	}
 
 	query := `
@@ -542,13 +570,15 @@ func CreateLedgerAccount(ctx context.Context, input CreateLedgerAccountInput) (u
 // UpdateLedgerAccount updates an existing account.
 func UpdateLedgerAccount(ctx context.Context, input UpdateLedgerAccountInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
+
 	if input.Name == "" {
-		return fmt.Errorf("account name is required")
+		return ErrAccountNameRequired
 	}
+
 	if input.AccountType == "" {
-		return fmt.Errorf("account type is required")
+		return ErrAccountTypeRequired
 	}
 
 	query := `
@@ -573,8 +603,9 @@ func UpdateLedgerAccount(ctx context.Context, input UpdateLedgerAccountInput) er
 	if err != nil {
 		return fmt.Errorf("failed to update ledger account: %w", err)
 	}
+
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("account not found")
+		return ErrAccountNotFound
 	}
 
 	return nil
@@ -583,15 +614,16 @@ func UpdateLedgerAccount(ctx context.Context, input UpdateLedgerAccountInput) er
 // DeleteLedgerAccount removes an account and its related records.
 func DeleteLedgerAccount(ctx context.Context, accountID uuid.UUID) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	result, err := pool.Exec(ctx, `DELETE FROM ledger_accounts WHERE id = $1`, accountID)
 	if err != nil {
 		return fmt.Errorf("failed to delete ledger account: %w", err)
 	}
+
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("account not found")
+		return ErrAccountNotFound
 	}
 
 	return nil
@@ -600,7 +632,7 @@ func DeleteLedgerAccount(ctx context.Context, accountID uuid.UUID) error {
 // ListLedgerAccountTransactions returns all transactions for an account.
 func ListLedgerAccountTransactions(ctx context.Context, accountID uuid.UUID) ([]LedgerTransactionWithBudget, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -620,10 +652,14 @@ func ListLedgerAccountTransactions(ctx context.Context, accountID uuid.UUID) ([]
 	defer rows.Close()
 
 	var transactions []LedgerTransactionWithBudget
+
 	for rows.Next() {
-		var tx LedgerTransaction
-		var budgetName sql.NullString
-		var budgetPeriod sql.NullTime
+		var (
+			tx           LedgerTransaction
+			budgetName   sql.NullString
+			budgetPeriod sql.NullTime
+		)
+
 		if err := rows.Scan(
 			&tx.ID,
 			&tx.AccountID,
@@ -640,14 +676,17 @@ func ListLedgerAccountTransactions(ctx context.Context, accountID uuid.UUID) ([]
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan ledger transaction: %w", err)
 		}
+
 		var budgetNamePtr *string
 		if budgetName.Valid {
 			budgetNamePtr = &budgetName.String
 		}
+
 		var budgetPeriodPtr *time.Time
 		if budgetPeriod.Valid {
 			budgetPeriodPtr = &budgetPeriod.Time
 		}
+
 		transactions = append(transactions, LedgerTransactionWithBudget{
 			LedgerTransaction: tx,
 			BudgetName:        budgetNamePtr,
@@ -665,7 +704,7 @@ func ListLedgerAccountTransactions(ctx context.Context, accountID uuid.UUID) ([]
 // GetLedgerTransaction fetches a single transaction by ID for an account.
 func GetLedgerTransaction(ctx context.Context, accountID uuid.UUID, transactionID uuid.UUID) (*LedgerTransaction, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -696,14 +735,17 @@ func GetLedgerTransaction(ctx context.Context, accountID uuid.UUID, transactionI
 // UpdateLedgerTransaction updates an existing transaction.
 func UpdateLedgerTransaction(ctx context.Context, input UpdateLedgerTransactionInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
+
 	if input.Merchant == "" {
-		return fmt.Errorf("merchant is required")
+		return ErrMerchantRequired
 	}
+
 	if input.Amount == 0 {
-		return fmt.Errorf("amount must be non-zero")
+		return ErrAmountMustBeNonZero
 	}
+
 	if input.Status == "" {
 		input.Status = LedgerTransactionCleared
 	}
@@ -729,8 +771,9 @@ func UpdateLedgerTransaction(ctx context.Context, input UpdateLedgerTransactionI
 	if err != nil {
 		return fmt.Errorf("failed to update ledger transaction: %w", err)
 	}
+
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("transaction not found")
+		return ErrTransactionNotFound
 	}
 
 	return nil
@@ -739,7 +782,7 @@ func UpdateLedgerTransaction(ctx context.Context, input UpdateLedgerTransactionI
 // DeleteLedgerTransaction removes a transaction.
 func DeleteLedgerTransaction(ctx context.Context, accountID uuid.UUID, transactionID uuid.UUID) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	result, err := pool.Exec(
@@ -751,8 +794,9 @@ func DeleteLedgerTransaction(ctx context.Context, accountID uuid.UUID, transacti
 	if err != nil {
 		return fmt.Errorf("failed to delete ledger transaction: %w", err)
 	}
+
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("transaction not found")
+		return ErrTransactionNotFound
 	}
 
 	return nil
@@ -761,14 +805,17 @@ func DeleteLedgerTransaction(ctx context.Context, accountID uuid.UUID, transacti
 // CreateLedgerTransaction creates a new transaction.
 func CreateLedgerTransaction(ctx context.Context, input CreateLedgerTransactionInput) (uuid.UUID, error) {
 	if pool == nil {
-		return uuid.UUID{}, fmt.Errorf("database connection not initialized")
+		return uuid.UUID{}, ErrDatabaseConnectionNotInitialized
 	}
+
 	if input.Merchant == "" {
-		return uuid.UUID{}, fmt.Errorf("merchant is required")
+		return uuid.UUID{}, ErrMerchantRequired
 	}
+
 	if input.Amount == 0 {
-		return uuid.UUID{}, fmt.Errorf("amount must be non-zero")
+		return uuid.UUID{}, ErrAmountMustBeNonZero
 	}
+
 	if input.Status == "" {
 		input.Status = LedgerTransactionCleared
 	}
@@ -800,7 +847,7 @@ func CreateLedgerTransaction(ctx context.Context, input CreateLedgerTransactionI
 // ListLedgerReconciliations returns reconciliations for an account.
 func ListLedgerReconciliations(ctx context.Context, accountID uuid.UUID) ([]LedgerReconciliation, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -817,6 +864,7 @@ func ListLedgerReconciliations(ctx context.Context, accountID uuid.UUID) ([]Ledg
 	defer rows.Close()
 
 	var reconciliations []LedgerReconciliation
+
 	for rows.Next() {
 		var rec LedgerReconciliation
 		if err := rows.Scan(
@@ -829,6 +877,7 @@ func ListLedgerReconciliations(ctx context.Context, accountID uuid.UUID) ([]Ledg
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan ledger reconciliation: %w", err)
 		}
+
 		reconciliations = append(reconciliations, rec)
 	}
 
@@ -842,7 +891,7 @@ func ListLedgerReconciliations(ctx context.Context, accountID uuid.UUID) ([]Ledg
 // GetLedgerReconciliation fetches a reconciliation by ID for an account.
 func GetLedgerReconciliation(ctx context.Context, accountID uuid.UUID, reconciliationID uuid.UUID) (*LedgerReconciliation, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -869,7 +918,7 @@ func GetLedgerReconciliation(ctx context.Context, accountID uuid.UUID, reconcili
 // UpdateLedgerReconciliation updates a reconciliation snapshot.
 func UpdateLedgerReconciliation(ctx context.Context, input UpdateLedgerReconciliationInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -882,8 +931,9 @@ func UpdateLedgerReconciliation(ctx context.Context, input UpdateLedgerReconcili
 	if err != nil {
 		return fmt.Errorf("failed to update ledger reconciliation: %w", err)
 	}
+
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("reconciliation not found")
+		return ErrReconciliationNotFound
 	}
 
 	return nil
@@ -892,7 +942,7 @@ func UpdateLedgerReconciliation(ctx context.Context, input UpdateLedgerReconcili
 // DeleteLedgerReconciliation removes a reconciliation snapshot.
 func DeleteLedgerReconciliation(ctx context.Context, accountID uuid.UUID, reconciliationID uuid.UUID) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	result, err := pool.Exec(
@@ -904,8 +954,9 @@ func DeleteLedgerReconciliation(ctx context.Context, accountID uuid.UUID, reconc
 	if err != nil {
 		return fmt.Errorf("failed to delete ledger reconciliation: %w", err)
 	}
+
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("reconciliation not found")
+		return ErrReconciliationNotFound
 	}
 
 	return nil
@@ -914,7 +965,7 @@ func DeleteLedgerReconciliation(ctx context.Context, accountID uuid.UUID, reconc
 // CreateLedgerReconciliation creates a new reconciliation.
 func CreateLedgerReconciliation(ctx context.Context, input CreateLedgerReconciliationInput) (uuid.UUID, error) {
 	if pool == nil {
-		return uuid.UUID{}, fmt.Errorf("database connection not initialized")
+		return uuid.UUID{}, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `

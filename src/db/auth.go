@@ -44,18 +44,19 @@ type FinalizeSetupRegistrationInput struct {
 // FinalizeSetupRegistration creates a user, saves the first passkey, and optionally consumes an invite.
 func FinalizeSetupRegistration(ctx context.Context, input FinalizeSetupRegistrationInput) (*User, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	displayName := strings.TrimSpace(input.DisplayName)
 	if displayName == "" {
-		return nil, fmt.Errorf("display name is required")
+		return nil, ErrDisplayNameRequired
 	}
 
 	if !input.IsAdmin {
 		if input.InviteID == nil || strings.TrimSpace(*input.InviteID) == "" {
 			return nil, ErrInviteInvalidOrUsed
 		}
+
 		if _, err := uuid.Parse(strings.TrimSpace(*input.InviteID)); err != nil {
 			return nil, ErrInviteInvalidOrUsed
 		}
@@ -70,6 +71,7 @@ func FinalizeSetupRegistration(ctx context.Context, input FinalizeSetupRegistrat
 	if err != nil {
 		return nil, fmt.Errorf("failed to start setup transaction: %w", err)
 	}
+
 	defer func() {
 		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil && !errors.Is(rollbackErr, pgx.ErrTxClosed) {
 			logger.Warn("Failed to rollback setup transaction", "error", rollbackErr)
@@ -85,6 +87,7 @@ func FinalizeSetupRegistration(ctx context.Context, input FinalizeSetupRegistrat
 		if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
 			return nil, fmt.Errorf("failed to count users: %w", err)
 		}
+
 		if count > 0 {
 			return nil, ErrSetupAlreadyCompleted
 		}
@@ -99,6 +102,7 @@ func FinalizeSetupRegistration(ctx context.Context, input FinalizeSetupRegistrat
 		if err != nil {
 			return nil, fmt.Errorf("failed to consume invite: %w", err)
 		}
+
 		if command.RowsAffected() == 0 {
 			return nil, ErrInviteInvalidOrUsed
 		}
@@ -136,26 +140,29 @@ func FinalizeSetupRegistration(ctx context.Context, input FinalizeSetupRegistrat
 // CountUsers returns the number of users.
 func CountUsers(ctx context.Context) (int, error) {
 	if pool == nil {
-		return 0, fmt.Errorf("database connection not initialized")
+		return 0, ErrDatabaseConnectionNotInitialized
 	}
 
 	var count int
 	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to count users: %w", err)
 	}
+
 	return count, nil
 }
 
 // CreateUser creates a user record.
 func CreateUser(ctx context.Context, input CreateUserInput) (*User, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
+
 	if input.DisplayName == "" {
-		return nil, fmt.Errorf("display name is required")
+		return nil, ErrDisplayNameRequired
 	}
 
 	var user User
+
 	query := `
 		INSERT INTO users (id, display_name, is_admin)
 		VALUES (COALESCE($1, gen_random_uuid()), $2, $3)
@@ -178,26 +185,29 @@ func CreateUser(ctx context.Context, input CreateUserInput) (*User, error) {
 // DeleteUser removes a user by ID.
 func DeleteUser(ctx context.Context, userID string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	command, err := pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID)
 	if err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
+
 	if command.RowsAffected() == 0 {
-		return fmt.Errorf("user not found")
+		return ErrUserNotFound
 	}
+
 	return nil
 }
 
 // GetFirstUser returns the first created user.
 func GetFirstUser(ctx context.Context) (*User, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	var user User
+
 	query := `
 		SELECT id, display_name, is_admin, created_at, updated_at
 		FROM users
@@ -211,9 +221,10 @@ func GetFirstUser(ctx context.Context) (*User, error) {
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	); err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil //nolint:nilnil // Returning (nil, nil) indicates no users exist yet.
 		}
+
 		return nil, fmt.Errorf("failed to get first user: %w", err)
 	}
 
@@ -223,10 +234,11 @@ func GetFirstUser(ctx context.Context) (*User, error) {
 // GetUserByID returns a user by ID.
 func GetUserByID(ctx context.Context, id string) (*User, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	var user User
+
 	query := `
 		SELECT id, display_name, is_admin, created_at, updated_at
 		FROM users
@@ -248,7 +260,7 @@ func GetUserByID(ctx context.Context, id string) (*User, error) {
 // ListUsers returns all users.
 func ListUsers(ctx context.Context) ([]User, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -256,6 +268,7 @@ func ListUsers(ctx context.Context) ([]User, error) {
 		FROM users
 		ORDER BY created_at ASC
 	`
+
 	rows, err := pool.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list users: %w", err)
@@ -263,6 +276,7 @@ func ListUsers(ctx context.Context) ([]User, error) {
 	defer rows.Close()
 
 	var users []User
+
 	for rows.Next() {
 		var user User
 		if err := rows.Scan(
@@ -274,6 +288,7 @@ func ListUsers(ctx context.Context) ([]User, error) {
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
 		}
+
 		users = append(users, user)
 	}
 
@@ -288,15 +303,16 @@ func ListUsers(ctx context.Context) ([]User, error) {
 func GetUserByWebAuthnID(ctx context.Context, userHandle []byte) (*User, error) {
 	userID, err := uuid.FromBytes(userHandle)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user handle")
+		return nil, ErrInvalidUserHandle
 	}
+
 	return GetUserByID(ctx, userID.String())
 }
 
 // ListUserPasskeys returns passkeys for a user.
 func ListUserPasskeys(ctx context.Context, userID string) ([]UserPasskey, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -305,6 +321,7 @@ func ListUserPasskeys(ctx context.Context, userID string) ([]UserPasskey, error)
 		WHERE user_id = $1
 		ORDER BY created_at ASC
 	`
+
 	rows, err := pool.Query(ctx, query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list passkeys: %w", err)
@@ -312,6 +329,7 @@ func ListUserPasskeys(ctx context.Context, userID string) ([]UserPasskey, error)
 	defer rows.Close()
 
 	var passkeys []UserPasskey
+
 	for rows.Next() {
 		var passkey UserPasskey
 		if err := rows.Scan(
@@ -325,6 +343,7 @@ func ListUserPasskeys(ctx context.Context, userID string) ([]UserPasskey, error)
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan passkey: %w", err)
 		}
+
 		passkeys = append(passkeys, passkey)
 	}
 
@@ -338,20 +357,21 @@ func ListUserPasskeys(ctx context.Context, userID string) ([]UserPasskey, error)
 // CountUserPasskeys returns the number of passkeys for a user.
 func CountUserPasskeys(ctx context.Context, userID string) (int, error) {
 	if pool == nil {
-		return 0, fmt.Errorf("database connection not initialized")
+		return 0, ErrDatabaseConnectionNotInitialized
 	}
 
 	var count int
 	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM user_passkeys WHERE user_id = $1`, userID).Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to count passkeys: %w", err)
 	}
+
 	return count, nil
 }
 
 // AddUserPasskey stores a new passkey for a user.
 func AddUserPasskey(ctx context.Context, userID string, credential webauthn.Credential, label *string) (*UserPasskey, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	credentialData, err := encodeCredential(credential)
@@ -360,6 +380,7 @@ func AddUserPasskey(ctx context.Context, userID string, credential webauthn.Cred
 	}
 
 	var passkey UserPasskey
+
 	query := `
 		INSERT INTO user_passkeys (user_id, credential_id, credential_data, label, last_used_at)
 		VALUES ($1, $2, $3, $4, NULL)
@@ -383,7 +404,7 @@ func AddUserPasskey(ctx context.Context, userID string, credential webauthn.Cred
 // UpdateUserPasskeyCredential updates stored credential data and last used timestamp.
 func UpdateUserPasskeyCredential(ctx context.Context, userID string, credential webauthn.Credential, lastUsed time.Time) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	credentialData, err := encodeCredential(credential)
@@ -399,8 +420,9 @@ func UpdateUserPasskeyCredential(ctx context.Context, userID string, credential 
 	if err != nil {
 		return fmt.Errorf("failed to update passkey: %w", err)
 	}
+
 	if command.RowsAffected() == 0 {
-		return fmt.Errorf("passkey not found")
+		return ErrPasskeyNotFound
 	}
 
 	return nil
@@ -409,15 +431,16 @@ func UpdateUserPasskeyCredential(ctx context.Context, userID string, credential 
 // DeleteUserPasskey removes a passkey by ID.
 func DeleteUserPasskey(ctx context.Context, userID string, passkeyID string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	command, err := pool.Exec(ctx, `DELETE FROM user_passkeys WHERE id = $1 AND user_id = $2`, passkeyID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to delete passkey: %w", err)
 	}
+
 	if command.RowsAffected() == 0 {
-		return fmt.Errorf("passkey not found")
+		return ErrPasskeyNotFound
 	}
 
 	return nil
@@ -436,6 +459,7 @@ func LoadUserCredentials(ctx context.Context, userID string) ([]webauthn.Credent
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode passkey credential: %w", err)
 		}
+
 		credentials = append(credentials, credential)
 	}
 
@@ -447,6 +471,7 @@ func encodeCredential(credential webauthn.Credential) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode credential: %w", err)
 	}
+
 	return data, nil
 }
 
@@ -455,5 +480,6 @@ func decodeCredential(data []byte) (webauthn.Credential, error) {
 	if err := json.Unmarshal(data, &credential); err != nil {
 		return webauthn.Credential{}, fmt.Errorf("failed to decode credential: %w", err)
 	}
+
 	return credential, nil
 }

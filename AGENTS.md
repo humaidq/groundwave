@@ -61,6 +61,8 @@ Use standard Go tools.
   - `cd src && gofmt -w $(rg --files -g "*.go")`
 - Basic static checks (optional):
   - `cd src && go vet ./...`
+- Static analysis
+  - `cd src && golangci-lint run ./...`
 
 ## Migrations
 
@@ -157,7 +159,11 @@ touch a specific table/column.
 
 - Use `testing` package and table tests where helpful.
 - Use `t.Fatalf` for fatal assertions.
-- Clean up any files created by tests.
+- Add unit tests for every new feature.
+- Add a regression test for every bug fix (reproduce the bug, then verify the fix).
+- Include security-focused tests by asking "what can go wrong?" and covering risky cases (invalid/malicious input, auth bypass, injection, permission issues).
+- Tests must clean up after themselves, especially database state (rollback transactions or delete inserted test rows/fixtures).
+- Tests should not create persistent files; if file creation is unavoidable, use temporary files/directories and remove them in cleanup.
 
 ## No External Editor Rules Detected
 

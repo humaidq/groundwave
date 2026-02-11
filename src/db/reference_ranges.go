@@ -1523,7 +1523,7 @@ func GetReferenceRangeDefinitions() []ReferenceRangeDefinition {
 // This is called on application startup to ensure database has latest ranges
 func SyncReferenceRanges(ctx context.Context) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	definitions := GetReferenceRangeDefinitions()
@@ -1543,6 +1543,7 @@ func SyncReferenceRanges(ctx context.Context) error {
 	`
 
 	syncCount := 0
+
 	for _, def := range definitions {
 		_, err := pool.Exec(ctx, query,
 			def.TestName, def.AgeRange, def.Gender,
@@ -1553,17 +1554,19 @@ func SyncReferenceRanges(ctx context.Context) error {
 			return fmt.Errorf("failed to sync reference range for %s/%s/%s: %w",
 				def.TestName, def.AgeRange, def.Gender, err)
 		}
+
 		syncCount++
 	}
 
 	logger.Infof("Successfully synced %d reference ranges", syncCount)
+
 	return nil
 }
 
 // GetReferenceRange retrieves the reference range for a given test, age, and gender
 func GetReferenceRange(ctx context.Context, testName string, ageRange AgeRange, gender Gender) (*ReferenceRange, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	var rr ReferenceRange
@@ -1581,7 +1584,6 @@ func GetReferenceRange(ctx context.Context, testName string, ageRange AgeRange, 
 		&rr.OptimalMin, &rr.OptimalMax,
 		&rr.CreatedAt, &rr.UpdatedAt,
 	)
-
 	if err == nil {
 		return &rr, nil
 	}
@@ -1593,11 +1595,10 @@ func GetReferenceRange(ctx context.Context, testName string, ageRange AgeRange, 
 		&rr.OptimalMin, &rr.OptimalMax,
 		&rr.CreatedAt, &rr.UpdatedAt,
 	)
-
 	if err == nil {
 		return &rr, nil
 	}
 
 	// No matching range found
-	return nil, nil
+	return nil, nil //nolint:nilnil // Missing reference ranges are expected for some tests.
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/pressly/goose/v3"
 
+	// Register pgx with database/sql for goose migrations.
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -27,13 +28,13 @@ func GetEmbeddedMigrations() embed.FS {
 // SyncSchema runs database migrations using goose
 func SyncSchema(ctx context.Context) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	// Get the original DATABASE_URL (preserves Unix sockets, complex connection strings)
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
-		return fmt.Errorf("DATABASE_URL environment variable is not set")
+		return ErrDatabaseURLEnvVarNotSet
 	}
 
 	// Open a database/sql connection for goose
@@ -41,6 +42,7 @@ func SyncSchema(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to open database for migrations: %w", err)
 	}
+
 	defer func() {
 		if err := db.Close(); err != nil {
 			logger.Warn("Failed to close migration connection", "error", err)

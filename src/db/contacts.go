@@ -35,6 +35,7 @@ type ContactListItem struct {
 // ContactFilter represents a filter type for contact queries
 type ContactFilter string
 
+// Contact filter values for contact list queries.
 const (
 	FilterNoPhone    ContactFilter = "no_phone"
 	FilterNoEmail    ContactFilter = "no_email"
@@ -61,7 +62,7 @@ type ContactListOptions struct {
 // ListContacts returns all contacts with their primary email and phone
 func ListContacts(ctx context.Context) ([]ContactListItem, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -102,9 +103,13 @@ func ListContacts(ctx context.Context) ([]ContactListItem, error) {
 	defer rows.Close()
 
 	var contacts []ContactListItem
+
 	for rows.Next() {
-		var contact ContactListItem
-		var tagsJSON []byte
+		var (
+			contact  ContactListItem
+			tagsJSON []byte
+		)
+
 		err := rows.Scan(
 			&contact.ID,
 			&contact.NameDisplay,
@@ -147,11 +152,14 @@ func ListContacts(ctx context.Context) ([]ContactListItem, error) {
 // ListContactsWithFilters returns contacts matching the specified filter options
 func ListContactsWithFilters(ctx context.Context, opts ContactListOptions) ([]ContactListItem, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
-	var whereClauses []string
-	var args []interface{}
+	var (
+		whereClauses []string
+		args         []interface{}
+	)
+
 	argNum := 1
 
 	// Base condition - filter by service status
@@ -235,9 +243,13 @@ func ListContactsWithFilters(ctx context.Context, opts ContactListOptions) ([]Co
 	defer rows.Close()
 
 	var contacts []ContactListItem
+
 	for rows.Next() {
-		var contact ContactListItem
-		var tagsJSON []byte
+		var (
+			contact  ContactListItem
+			tagsJSON []byte
+		)
+
 		err := rows.Scan(
 			&contact.ID,
 			&contact.NameDisplay,
@@ -294,7 +306,7 @@ type CreateContactInput struct {
 // CreateContact creates a new contact and optionally adds email and phone
 func CreateContact(ctx context.Context, input CreateContactInput) (string, error) {
 	if pool == nil {
-		return "", fmt.Errorf("database connection not initialized")
+		return "", ErrDatabaseConnectionNotInitialized
 	}
 
 	// Start a transaction
@@ -302,6 +314,7 @@ func CreateContact(ctx context.Context, input CreateContactInput) (string, error
 	if err != nil {
 		return "", fmt.Errorf("failed to start transaction: %w", err)
 	}
+
 	defer func() {
 		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
 			logger.Warn("Failed to rollback contact creation", "error", err)
@@ -316,6 +329,7 @@ func CreateContact(ctx context.Context, input CreateContactInput) (string, error
 
 	// Insert contact
 	var contactID string
+
 	query := `
 		INSERT INTO contacts (
 			name_display, name_given, name_family,
@@ -323,6 +337,7 @@ func CreateContact(ctx context.Context, input CreateContactInput) (string, error
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id
 	`
+
 	err = tx.QueryRow(ctx, query,
 		nameDisplay,
 		input.NameGiven,
@@ -344,6 +359,7 @@ func CreateContact(ctx context.Context, input CreateContactInput) (string, error
 			INSERT INTO contact_emails (contact_id, email, email_type, is_primary)
 			VALUES ($1, $2, 'personal', true)
 		`
+
 		_, err = tx.Exec(ctx, emailQuery, contactID, *input.Email)
 		if err != nil {
 			return "", fmt.Errorf("failed to insert email: %w", err)
@@ -356,6 +372,7 @@ func CreateContact(ctx context.Context, input CreateContactInput) (string, error
 			INSERT INTO contact_phones (contact_id, phone, phone_type, is_primary)
 			VALUES ($1, $2, 'cell', true)
 		`
+
 		_, err = tx.Exec(ctx, phoneQuery, contactID, *input.Phone)
 		if err != nil {
 			return "", fmt.Errorf("failed to insert phone: %w", err)
@@ -373,6 +390,7 @@ func CreateContact(ctx context.Context, input CreateContactInput) (string, error
 			UPDATE qsos SET contact_id = $1
 			WHERE UPPER(call) = UPPER($2) AND contact_id IS NULL
 		`
+
 		result, err := pool.Exec(ctx, linkedQuery, contactID, *input.CallSign)
 		if err != nil {
 			// Log error but don't fail the creation
@@ -404,11 +422,12 @@ type ContactDetail struct {
 // GetContact retrieves a contact by ID with all related data
 func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	// Get main contact record
 	var contact Contact
+
 	query := `
 		SELECT
 			id, name_given, name_additional, name_family,
@@ -419,6 +438,7 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 		FROM contacts
 		WHERE id = $1
 	`
+
 	err := pool.QueryRow(ctx, query, id).Scan(
 		&contact.ID,
 		&contact.NameGiven,
@@ -456,6 +476,7 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 	// Get emails
 	emailQuery := `SELECT id, contact_id, email, email_type, is_primary, source, created_at
 		FROM contact_emails WHERE contact_id = $1 ORDER BY is_primary DESC, created_at`
+
 	emailRows, err := pool.Query(ctx, emailQuery, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query emails: %w", err)
@@ -464,16 +485,19 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 
 	for emailRows.Next() {
 		var email ContactEmail
+
 		err := emailRows.Scan(&email.ID, &email.ContactID, &email.Email, &email.EmailType, &email.IsPrimary, &email.Source, &email.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan email: %w", err)
 		}
+
 		detail.Emails = append(detail.Emails, email)
 	}
 
 	// Get phones
 	phoneQuery := `SELECT id, contact_id, phone, phone_type, is_primary, source, created_at
 		FROM contact_phones WHERE contact_id = $1 ORDER BY is_primary DESC, created_at`
+
 	phoneRows, err := pool.Query(ctx, phoneQuery, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query phones: %w", err)
@@ -482,10 +506,12 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 
 	for phoneRows.Next() {
 		var phone ContactPhone
+
 		err := phoneRows.Scan(&phone.ID, &phone.ContactID, &phone.Phone, &phone.PhoneType, &phone.IsPrimary, &phone.Source, &phone.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan phone: %w", err)
 		}
+
 		detail.Phones = append(detail.Phones, phone)
 	}
 
@@ -493,6 +519,7 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 	addrQuery := `SELECT id, contact_id, street, locality, region, postal_code, country,
 		address_type, is_primary, po_box, extended, created_at
 		FROM contact_addresses WHERE contact_id = $1 ORDER BY is_primary DESC, created_at`
+
 	addrRows, err := pool.Query(ctx, addrQuery, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query addresses: %w", err)
@@ -501,18 +528,21 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 
 	for addrRows.Next() {
 		var addr ContactAddress
+
 		err := addrRows.Scan(&addr.ID, &addr.ContactID, &addr.Street, &addr.Locality, &addr.Region,
 			&addr.PostalCode, &addr.Country, &addr.AddressType, &addr.IsPrimary, &addr.POBox,
 			&addr.Extended, &addr.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan address: %w", err)
 		}
+
 		detail.Addresses = append(detail.Addresses, addr)
 	}
 
 	// Get URLs
 	urlQuery := `SELECT id, contact_id, url, url_type, description, created_at
 		FROM contact_urls WHERE contact_id = $1 ORDER BY created_at`
+
 	urlRows, err := pool.Query(ctx, urlQuery, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query urls: %w", err)
@@ -521,16 +551,19 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 
 	for urlRows.Next() {
 		var url ContactURL
+
 		err := urlRows.Scan(&url.ID, &url.ContactID, &url.URL, &url.URLType, &url.Description, &url.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan url: %w", err)
 		}
+
 		detail.URLs = append(detail.URLs, url)
 	}
 
 	// Get contact logs
 	logQuery := `SELECT id, contact_id, log_type, logged_at, subject, content, created_at
 		FROM contact_logs WHERE contact_id = $1 ORDER BY logged_at DESC, created_at DESC`
+
 	logRows, err := pool.Query(ctx, logQuery, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query logs: %w", err)
@@ -539,16 +572,19 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 
 	for logRows.Next() {
 		var log ContactLog
+
 		err := logRows.Scan(&log.ID, &log.ContactID, &log.LogType, &log.LoggedAt, &log.Subject, &log.Content, &log.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan log: %w", err)
 		}
+
 		detail.Logs = append(detail.Logs, log)
 	}
 
 	// Get contact notes
 	noteQuery := `SELECT id, contact_id, content, noted_at, created_at, updated_at
 		FROM contact_notes WHERE contact_id = $1 ORDER BY noted_at DESC, created_at DESC`
+
 	noteRows, err := pool.Query(ctx, noteQuery, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query notes: %w", err)
@@ -557,10 +593,12 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 
 	for noteRows.Next() {
 		var note ContactNote
+
 		err := noteRows.Scan(&note.ID, &note.ContactID, &note.Content, &note.NotedAt, &note.CreatedAt, &note.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan note: %w", err)
 		}
+
 		detail.Notes = append(detail.Notes, note)
 	}
 
@@ -599,7 +637,7 @@ type UpdateContactInput struct {
 // UpdateContact updates an existing contact
 func UpdateContact(ctx context.Context, input UpdateContactInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	// Build display name from first and last name
@@ -619,6 +657,7 @@ func UpdateContact(ctx context.Context, input UpdateContactInput) error {
 			tier = $7
 		WHERE id = $8
 	`
+
 	_, err := pool.Exec(ctx, query,
 		nameDisplay,
 		input.NameGiven,
@@ -639,6 +678,7 @@ func UpdateContact(ctx context.Context, input UpdateContactInput) error {
 			UPDATE qsos SET contact_id = $1
 			WHERE UPPER(call) = UPPER($2) AND contact_id IS NULL
 		`
+
 		result, err := pool.Exec(ctx, linkedQuery, input.ID, *input.CallSign)
 		if err != nil {
 			// Log error but don't fail the update
@@ -665,15 +705,17 @@ type AddEmailInput struct {
 // AddEmail adds a new email to a contact
 func AddEmail(ctx context.Context, input AddEmailInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	if !input.IsPrimary {
 		var hasPrimary bool
+
 		checkQuery := `SELECT EXISTS(SELECT 1 FROM contact_emails WHERE contact_id = $1 AND is_primary = true)`
 		if err := pool.QueryRow(ctx, checkQuery, input.ContactID).Scan(&hasPrimary); err != nil {
 			return fmt.Errorf("failed to check primary email: %w", err)
 		}
+
 		if !hasPrimary {
 			input.IsPrimary = true
 		}
@@ -691,6 +733,7 @@ func AddEmail(ctx context.Context, input AddEmailInput) error {
 		INSERT INTO contact_emails (contact_id, email, email_type, is_primary)
 		VALUES ($1, $2, $3, $4)
 	`
+
 	_, err := pool.Exec(ctx, query, input.ContactID, input.Email, input.EmailType, input.IsPrimary)
 	if err != nil {
 		return fmt.Errorf("failed to add email: %w", err)
@@ -710,15 +753,17 @@ type AddPhoneInput struct {
 // AddPhone adds a new phone to a contact
 func AddPhone(ctx context.Context, input AddPhoneInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	if !input.IsPrimary {
 		var hasPrimary bool
+
 		checkQuery := `SELECT EXISTS(SELECT 1 FROM contact_phones WHERE contact_id = $1 AND is_primary = true)`
 		if err := pool.QueryRow(ctx, checkQuery, input.ContactID).Scan(&hasPrimary); err != nil {
 			return fmt.Errorf("failed to check primary phone: %w", err)
 		}
+
 		if !hasPrimary {
 			input.IsPrimary = true
 		}
@@ -736,6 +781,7 @@ func AddPhone(ctx context.Context, input AddPhoneInput) error {
 		INSERT INTO contact_phones (contact_id, phone, phone_type, is_primary)
 		VALUES ($1, $2, $3, $4)
 	`
+
 	_, err := pool.Exec(ctx, query, input.ContactID, input.Phone, input.PhoneType, input.IsPrimary)
 	if err != nil {
 		return fmt.Errorf("failed to add phone: %w", err)
@@ -778,6 +824,7 @@ func NormalizeLinkedInURL(rawURL string) (string, bool) {
 	}
 
 	path := strings.TrimRight(parsed.Path, "/")
+
 	path = strings.ToLower(path)
 	if !strings.HasPrefix(path, "/in/") {
 		return "", false
@@ -795,7 +842,7 @@ func NormalizeLinkedInURL(rawURL string) (string, bool) {
 // AddURL adds a new URL to a contact
 func AddURL(ctx context.Context, input AddURLInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	// Normalize LinkedIn URLs to ensure consistent storage
@@ -810,6 +857,7 @@ func AddURL(ctx context.Context, input AddURLInput) error {
 		INSERT INTO contact_urls (contact_id, url, url_type, description)
 		VALUES ($1, $2, $3, $4)
 	`
+
 	_, err := pool.Exec(ctx, query, input.ContactID, urlToStore, input.URLType, input.Description)
 	if err != nil {
 		return fmt.Errorf("failed to add URL: %w", err)
@@ -821,10 +869,11 @@ func AddURL(ctx context.Context, input AddURLInput) error {
 // DeleteEmail removes an email from a contact
 func DeleteEmail(ctx context.Context, emailID, contactID string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `DELETE FROM contact_emails WHERE id = $1 AND contact_id = $2`
+
 	_, err := pool.Exec(ctx, query, emailID, contactID)
 	if err != nil {
 		return fmt.Errorf("failed to delete email: %w", err)
@@ -836,10 +885,11 @@ func DeleteEmail(ctx context.Context, emailID, contactID string) error {
 // DeletePhone removes a phone from a contact
 func DeletePhone(ctx context.Context, phoneID, contactID string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `DELETE FROM contact_phones WHERE id = $1 AND contact_id = $2`
+
 	_, err := pool.Exec(ctx, query, phoneID, contactID)
 	if err != nil {
 		return fmt.Errorf("failed to delete phone: %w", err)
@@ -860,15 +910,17 @@ type UpdateEmailInput struct {
 // UpdateEmail updates an existing email
 func UpdateEmail(ctx context.Context, input UpdateEmailInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	if !input.IsPrimary {
 		var hasOtherPrimary bool
+
 		checkQuery := `SELECT EXISTS(SELECT 1 FROM contact_emails WHERE contact_id = $1 AND is_primary = true AND id != $2)`
 		if err := pool.QueryRow(ctx, checkQuery, input.ContactID, input.ID).Scan(&hasOtherPrimary); err != nil {
 			return fmt.Errorf("failed to check other primary emails: %w", err)
 		}
+
 		if !hasOtherPrimary {
 			input.IsPrimary = true
 		}
@@ -887,6 +939,7 @@ func UpdateEmail(ctx context.Context, input UpdateEmailInput) error {
 		SET email = $1, email_type = $2, is_primary = $3
 		WHERE id = $4 AND contact_id = $5
 	`
+
 	_, err := pool.Exec(ctx, query, input.Email, input.EmailType, input.IsPrimary, input.ID, input.ContactID)
 	if err != nil {
 		return fmt.Errorf("failed to update email: %w", err)
@@ -907,15 +960,17 @@ type UpdatePhoneInput struct {
 // UpdatePhone updates an existing phone
 func UpdatePhone(ctx context.Context, input UpdatePhoneInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	if !input.IsPrimary {
 		var hasOtherPrimary bool
+
 		checkQuery := `SELECT EXISTS(SELECT 1 FROM contact_phones WHERE contact_id = $1 AND is_primary = true AND id != $2)`
 		if err := pool.QueryRow(ctx, checkQuery, input.ContactID, input.ID).Scan(&hasOtherPrimary); err != nil {
 			return fmt.Errorf("failed to check other primary phones: %w", err)
 		}
+
 		if !hasOtherPrimary {
 			input.IsPrimary = true
 		}
@@ -934,6 +989,7 @@ func UpdatePhone(ctx context.Context, input UpdatePhoneInput) error {
 		SET phone = $1, phone_type = $2, is_primary = $3
 		WHERE id = $4 AND contact_id = $5
 	`
+
 	_, err := pool.Exec(ctx, query, input.Phone, input.PhoneType, input.IsPrimary, input.ID, input.ContactID)
 	if err != nil {
 		return fmt.Errorf("failed to update phone: %w", err)
@@ -945,11 +1001,13 @@ func UpdatePhone(ctx context.Context, input UpdatePhoneInput) error {
 // GetContactIDByEmailID returns the contact ID for a given email ID
 func GetContactIDByEmailID(ctx context.Context, emailID string) (string, error) {
 	if pool == nil {
-		return "", fmt.Errorf("database connection not initialized")
+		return "", ErrDatabaseConnectionNotInitialized
 	}
 
 	var contactID string
+
 	query := `SELECT contact_id FROM contact_emails WHERE id = $1`
+
 	err := pool.QueryRow(ctx, query, emailID).Scan(&contactID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get contact ID for email: %w", err)
@@ -961,11 +1019,13 @@ func GetContactIDByEmailID(ctx context.Context, emailID string) (string, error) 
 // GetContactIDByPhoneID returns the contact ID for a given phone ID
 func GetContactIDByPhoneID(ctx context.Context, phoneID string) (string, error) {
 	if pool == nil {
-		return "", fmt.Errorf("database connection not initialized")
+		return "", ErrDatabaseConnectionNotInitialized
 	}
 
 	var contactID string
+
 	query := `SELECT contact_id FROM contact_phones WHERE id = $1`
+
 	err := pool.QueryRow(ctx, query, phoneID).Scan(&contactID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get contact ID for phone: %w", err)
@@ -977,10 +1037,11 @@ func GetContactIDByPhoneID(ctx context.Context, phoneID string) (string, error) 
 // DeleteURL removes a URL from a contact
 func DeleteURL(ctx context.Context, urlID string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `DELETE FROM contact_urls WHERE id = $1`
+
 	_, err := pool.Exec(ctx, query, urlID)
 	if err != nil {
 		return fmt.Errorf("failed to delete URL: %w", err)
@@ -992,12 +1053,13 @@ func DeleteURL(ctx context.Context, urlID string) error {
 // DeleteContact removes a contact and all associated data
 func DeleteContact(ctx context.Context, contactID string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	// The foreign key constraints with ON DELETE CASCADE will handle
 	// deleting related emails, phones, addresses, URLs, etc.
 	query := `DELETE FROM contacts WHERE id = $1`
+
 	_, err := pool.Exec(ctx, query, contactID)
 	if err != nil {
 		return fmt.Errorf("failed to delete contact: %w", err)
@@ -1018,13 +1080,14 @@ type AddLogInput struct {
 // AddLog adds a new interaction log to a contact
 func AddLog(ctx context.Context, input AddLogInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
 		INSERT INTO contact_logs (contact_id, log_type, logged_at, subject, content)
 		VALUES ($1, $2, COALESCE($3::timestamptz, now()), $4, $5)
 	`
+
 	_, err := pool.Exec(ctx, query, input.ContactID, input.LogType, input.LoggedAt, input.Subject, input.Content)
 	if err != nil {
 		return fmt.Errorf("failed to add log: %w", err)
@@ -1036,10 +1099,11 @@ func AddLog(ctx context.Context, input AddLogInput) error {
 // DeleteLog removes a contact log
 func DeleteLog(ctx context.Context, logID string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `DELETE FROM contact_logs WHERE id = $1`
+
 	_, err := pool.Exec(ctx, query, logID)
 	if err != nil {
 		return fmt.Errorf("failed to delete log: %w", err)
@@ -1061,7 +1125,7 @@ type UpdateLogInput struct {
 // UpdateLog updates an existing contact log
 func UpdateLog(ctx context.Context, input UpdateLogInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -1072,13 +1136,14 @@ func UpdateLog(ctx context.Context, input UpdateLogInput) error {
 			content = $4
 		WHERE id = $5 AND contact_id = $6
 	`
+
 	result, err := pool.Exec(ctx, query, input.LogType, input.LoggedAt, input.Subject, input.Content, input.ID, input.ContactID)
 	if err != nil {
 		return fmt.Errorf("failed to update log: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("log not found")
+		return ErrLogNotFound
 	}
 
 	return nil
@@ -1087,7 +1152,7 @@ func UpdateLog(ctx context.Context, input UpdateLogInput) error {
 // ListContactLogsTimeline returns all contact logs for the timeline feed.
 func ListContactLogsTimeline(ctx context.Context) ([]ContactLogTimelineEntry, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -1104,6 +1169,7 @@ func ListContactLogsTimeline(ctx context.Context) ([]ContactLogTimelineEntry, er
 	defer rows.Close()
 
 	entries := []ContactLogTimelineEntry{}
+
 	for rows.Next() {
 		var entry ContactLogTimelineEntry
 		if err := rows.Scan(
@@ -1118,6 +1184,7 @@ func ListContactLogsTimeline(ctx context.Context) ([]ContactLogTimelineEntry, er
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan contact log: %w", err)
 		}
+
 		entries = append(entries, entry)
 	}
 
@@ -1127,7 +1194,7 @@ func ListContactLogsTimeline(ctx context.Context) ([]ContactLogTimelineEntry, er
 // ListContactWeeklyActivityCounts returns weekly activity totals for a contact.
 func ListContactWeeklyActivityCounts(ctx context.Context, contactID string, start time.Time, end time.Time) (map[string]int, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -1162,14 +1229,20 @@ func ListContactWeeklyActivityCounts(ctx context.Context, contactID string, star
 	defer rows.Close()
 
 	counts := make(map[string]int)
+
 	for rows.Next() {
-		var weekStart time.Time
-		var count int
+		var (
+			weekStart time.Time
+			count     int
+		)
+
 		if err := rows.Scan(&weekStart, &count); err != nil {
 			return nil, fmt.Errorf("failed to scan contact activity: %w", err)
 		}
+
 		counts[weekStart.UTC().Format("2006-01-02")] = count
 	}
+
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("failed to iterate contact activity: %w", err)
 	}
@@ -1177,8 +1250,7 @@ func ListContactWeeklyActivityCounts(ctx context.Context, contactID string, star
 	return counts, nil
 }
 
-// AddChatInput represents input for adding a chat entry
-
+// AddChatInput represents input for adding a chat entry.
 type AddChatInput struct {
 	ContactID string
 	Platform  ChatPlatform
@@ -1190,17 +1262,18 @@ type AddChatInput struct {
 // AddChat adds a new chat entry to a contact
 func AddChat(ctx context.Context, input AddChatInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	if strings.TrimSpace(input.Message) == "" {
-		return fmt.Errorf("chat message is required")
+		return ErrChatMessageRequired
 	}
 
 	isService, err := IsServiceContact(ctx, input.ContactID)
 	if err != nil {
 		return err
 	}
+
 	if isService {
 		return nil
 	}
@@ -1219,6 +1292,7 @@ func AddChat(ctx context.Context, input AddChatInput) error {
 		INSERT INTO contact_chats (contact_id, platform, sender, message, sent_at)
 		VALUES ($1, $2, $3, $4, COALESCE($5::timestamptz, now()))
 	`
+
 	_, err = pool.Exec(ctx, query, input.ContactID, platform, sender, input.Message, input.SentAt)
 	if err != nil {
 		return fmt.Errorf("failed to add chat entry: %w", err)
@@ -1240,11 +1314,11 @@ type UpdateChatInput struct {
 // UpdateChat updates an existing chat entry
 func UpdateChat(ctx context.Context, input UpdateChatInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	if strings.TrimSpace(input.Message) == "" {
-		return fmt.Errorf("chat message is required")
+		return ErrChatMessageRequired
 	}
 
 	platform := input.Platform
@@ -1265,13 +1339,14 @@ func UpdateChat(ctx context.Context, input UpdateChatInput) error {
 			sent_at = COALESCE($4::timestamptz, sent_at)
 		WHERE id = $5 AND contact_id = $6
 	`
+
 	result, err := pool.Exec(ctx, query, platform, sender, input.Message, input.SentAt, input.ID, input.ContactID)
 	if err != nil {
 		return fmt.Errorf("failed to update chat entry: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("chat entry not found")
+		return ErrChatEntryNotFound
 	}
 
 	return nil
@@ -1280,7 +1355,7 @@ func UpdateChat(ctx context.Context, input UpdateChatInput) error {
 // GetContactChats returns chat history for a contact
 func GetContactChats(ctx context.Context, contactID string) ([]ContactChat, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -1289,6 +1364,7 @@ func GetContactChats(ctx context.Context, contactID string) ([]ContactChat, erro
 		WHERE contact_id = $1
 		ORDER BY sent_at DESC, created_at DESC
 	`
+
 	rows, err := pool.Query(ctx, query, contactID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query chats: %w", err)
@@ -1296,11 +1372,13 @@ func GetContactChats(ctx context.Context, contactID string) ([]ContactChat, erro
 	defer rows.Close()
 
 	var chats []ContactChat
+
 	for rows.Next() {
 		var chat ContactChat
 		if err := rows.Scan(&chat.ID, &chat.ContactID, &chat.Platform, &chat.Sender, &chat.Message, &chat.SentAt, &chat.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan chat: %w", err)
 		}
+
 		chats = append(chats, chat)
 	}
 
@@ -1314,7 +1392,7 @@ func GetContactChats(ctx context.Context, contactID string) ([]ContactChat, erro
 // GetContactChatsSince returns chat history for a contact after a timestamp.
 func GetContactChatsSince(ctx context.Context, contactID string, since time.Time) ([]ContactChat, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -1323,6 +1401,7 @@ func GetContactChatsSince(ctx context.Context, contactID string, since time.Time
 		WHERE contact_id = $1 AND sent_at >= $2
 		ORDER BY sent_at ASC, created_at ASC
 	`
+
 	rows, err := pool.Query(ctx, query, contactID, since)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query chats: %w", err)
@@ -1330,11 +1409,13 @@ func GetContactChatsSince(ctx context.Context, contactID string, since time.Time
 	defer rows.Close()
 
 	var chats []ContactChat
+
 	for rows.Next() {
 		var chat ContactChat
 		if err := rows.Scan(&chat.ID, &chat.ContactID, &chat.Platform, &chat.Sender, &chat.Message, &chat.SentAt, &chat.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan chat: %w", err)
 		}
+
 		chats = append(chats, chat)
 	}
 
@@ -1348,10 +1429,11 @@ func GetContactChatsSince(ctx context.Context, contactID string, since time.Time
 // IsServiceContact checks if a contact is marked as a service contact
 func IsServiceContact(ctx context.Context, contactID string) (bool, error) {
 	if pool == nil {
-		return false, fmt.Errorf("database connection not initialized")
+		return false, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `SELECT is_service FROM contacts WHERE id = $1`
+
 	var isService bool
 	if err := pool.QueryRow(ctx, query, contactID).Scan(&isService); err != nil {
 		return false, fmt.Errorf("failed to query contact service status: %w", err)
@@ -1363,10 +1445,11 @@ func IsServiceContact(ctx context.Context, contactID string) (bool, error) {
 // LinkCardDAV links a contact with a CardDAV contact UUID
 func LinkCardDAV(ctx context.Context, contactID string, cardDAVUUID string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `UPDATE contacts SET carddav_uuid = $1 WHERE id = $2`
+
 	_, err := pool.Exec(ctx, query, cardDAVUUID, contactID)
 	if err != nil {
 		return fmt.Errorf("failed to link CardDAV contact: %w", err)
@@ -1378,10 +1461,11 @@ func LinkCardDAV(ctx context.Context, contactID string, cardDAVUUID string) erro
 // UnlinkCardDAV removes the CardDAV link from a contact
 func UnlinkCardDAV(ctx context.Context, contactID string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `UPDATE contacts SET carddav_uuid = NULL WHERE id = $1`
+
 	_, err := pool.Exec(ctx, query, contactID)
 	if err != nil {
 		return fmt.Errorf("failed to unlink CardDAV contact: %w", err)
@@ -1393,10 +1477,11 @@ func UnlinkCardDAV(ctx context.Context, contactID string) error {
 // GetLinkedCardDAVUUIDs returns all CardDAV UUIDs that are currently linked to contacts
 func GetLinkedCardDAVUUIDs(ctx context.Context) ([]string, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `SELECT carddav_uuid FROM contacts WHERE carddav_uuid IS NOT NULL`
+
 	rows, err := pool.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query linked CardDAV UUIDs: %w", err)
@@ -1404,11 +1489,13 @@ func GetLinkedCardDAVUUIDs(ctx context.Context) ([]string, error) {
 	defer rows.Close()
 
 	var uuids []string
+
 	for rows.Next() {
 		var uuid string
 		if err := rows.Scan(&uuid); err != nil {
 			return nil, fmt.Errorf("failed to scan UUID: %w", err)
 		}
+
 		uuids = append(uuids, uuid)
 	}
 
@@ -1422,11 +1509,13 @@ func GetLinkedCardDAVUUIDs(ctx context.Context) ([]string, error) {
 // IsCardDAVUUIDLinked checks if a CardDAV UUID is already linked to a contact
 func IsCardDAVUUIDLinked(ctx context.Context, uuid string) (bool, error) {
 	if pool == nil {
-		return false, fmt.Errorf("database connection not initialized")
+		return false, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `SELECT EXISTS(SELECT 1 FROM contacts WHERE carddav_uuid = $1)`
+
 	var exists bool
+
 	err := pool.QueryRow(ctx, query, uuid).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if CardDAV UUID is linked: %w", err)
@@ -1438,7 +1527,7 @@ func IsCardDAVUUIDLinked(ctx context.Context, uuid string) (bool, error) {
 // MigrateContactToCardDAV creates a new CardDAV contact from local data and links it
 func MigrateContactToCardDAV(ctx context.Context, contactID string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	// Fetch full contact details
@@ -1446,11 +1535,12 @@ func MigrateContactToCardDAV(ctx context.Context, contactID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to fetch contact: %w", err)
 	}
+
 	fmt.Printf("MigrateContactToCardDAV: Fetched contact %s (%s)\n", contactID, contact.NameDisplay)
 
 	// Check if already linked to CardDAV
 	if contact.CardDAVUUID != nil && *contact.CardDAVUUID != "" {
-		return fmt.Errorf("contact is already linked to CardDAV")
+		return ErrContactAlreadyLinkedToCardDAV
 	}
 
 	// Create the CardDAV contact
@@ -1458,6 +1548,7 @@ func MigrateContactToCardDAV(ctx context.Context, contactID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create CardDAV contact: %w", err)
 	}
+
 	fmt.Printf("MigrateContactToCardDAV: Created CardDAV contact with UUID %s\n", newUUID)
 
 	// Start a transaction to update local data
@@ -1465,6 +1556,7 @@ func MigrateContactToCardDAV(ctx context.Context, contactID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to start transaction: %w", err)
 	}
+
 	defer func() {
 		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
 			logger.Warn("Failed to rollback CardDAV migration", "error", err)
@@ -1503,6 +1595,7 @@ func MigrateContactToCardDAV(ctx context.Context, contactID string) error {
 	}
 
 	fmt.Printf("MigrateContactToCardDAV: Successfully linked contact %s to CardDAV UUID %s\n", contactID, newUUID)
+
 	return nil
 }
 
@@ -1524,7 +1617,7 @@ type OverdueContactItem struct {
 // GetOverdueContacts returns contacts that are overdue for contact, sorted by most overdue first
 func GetOverdueContacts(ctx context.Context) ([]OverdueContactItem, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -1598,9 +1691,13 @@ func GetOverdueContacts(ctx context.Context) ([]OverdueContactItem, error) {
 	defer rows.Close()
 
 	var contacts []OverdueContactItem
+
 	for rows.Next() {
-		var contact OverdueContactItem
-		var daysSinceContact int
+		var (
+			contact          OverdueContactItem
+			daysSinceContact int
+		)
+
 		err := rows.Scan(
 			&contact.ID,
 			&contact.NameDisplay,
@@ -1639,13 +1736,14 @@ type AddNoteInput struct {
 // AddNote adds a new note to a contact
 func AddNote(ctx context.Context, input AddNoteInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
 		INSERT INTO contact_notes (contact_id, content, noted_at)
 		VALUES ($1, $2, COALESCE($3::timestamptz, now()))
 	`
+
 	_, err := pool.Exec(ctx, query, input.ContactID, input.Content, input.NotedAt)
 	if err != nil {
 		return fmt.Errorf("failed to add note: %w", err)
@@ -1665,11 +1763,11 @@ type UpdateNoteInput struct {
 // UpdateNote updates an existing contact note
 func UpdateNote(ctx context.Context, input UpdateNoteInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	if strings.TrimSpace(input.Content) == "" {
-		return fmt.Errorf("note content cannot be empty")
+		return ErrNoteContentEmpty
 	}
 
 	query := `
@@ -1678,13 +1776,14 @@ func UpdateNote(ctx context.Context, input UpdateNoteInput) error {
 			noted_at = COALESCE($2::timestamptz, noted_at)
 		WHERE id = $3 AND contact_id = $4
 	`
+
 	result, err := pool.Exec(ctx, query, input.Content, input.NotedAt, input.ID, input.ContactID)
 	if err != nil {
 		return fmt.Errorf("failed to update note: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("note not found")
+		return ErrNoteNotFound
 	}
 
 	return nil
@@ -1693,10 +1792,11 @@ func UpdateNote(ctx context.Context, input UpdateNoteInput) error {
 // DeleteNote removes a contact note
 func DeleteNote(ctx context.Context, noteID string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `DELETE FROM contact_notes WHERE id = $1`
+
 	_, err := pool.Exec(ctx, query, noteID)
 	if err != nil {
 		return fmt.Errorf("failed to delete note: %w", err)
@@ -1708,11 +1808,13 @@ func DeleteNote(ctx context.Context, noteID string) error {
 // GetContactsCount returns the total number of contacts
 func GetContactsCount(ctx context.Context) (int, error) {
 	if pool == nil {
-		return 0, fmt.Errorf("database connection not initialized")
+		return 0, ErrDatabaseConnectionNotInitialized
 	}
 
 	var count int
+
 	query := `SELECT COUNT(*) FROM contacts`
+
 	err := pool.QueryRow(ctx, query).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count contacts: %w", err)
@@ -1724,7 +1826,7 @@ func GetContactsCount(ctx context.Context) (int, error) {
 // GetRecentContacts returns the N most recently updated contacts
 func GetRecentContacts(ctx context.Context, limit int) ([]ContactListItem, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -1753,8 +1855,10 @@ func GetRecentContacts(ctx context.Context, limit int) ([]ContactListItem, error
 	defer rows.Close()
 
 	var contacts []ContactListItem
+
 	for rows.Next() {
 		var contact ContactListItem
+
 		err := rows.Scan(
 			&contact.ID,
 			&contact.NameDisplay,
@@ -1770,6 +1874,7 @@ func GetRecentContacts(ctx context.Context, limit int) ([]ContactListItem, error
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan contact: %w", err)
 		}
+
 		contact.TierLower = strings.ToLower(string(contact.Tier))
 		contacts = append(contacts, contact)
 	}
@@ -1784,7 +1889,7 @@ func GetRecentContacts(ctx context.Context, limit int) ([]ContactListItem, error
 // ListServiceContacts returns all service contacts ordered by organization
 func ListServiceContacts(ctx context.Context) ([]ContactListItem, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -1827,9 +1932,13 @@ func ListServiceContacts(ctx context.Context) ([]ContactListItem, error) {
 	defer rows.Close()
 
 	var contacts []ContactListItem
+
 	for rows.Next() {
-		var contact ContactListItem
-		var tagsJSON []byte
+		var (
+			contact  ContactListItem
+			tagsJSON []byte
+		)
+
 		err := rows.Scan(
 			&contact.ID,
 			&contact.NameDisplay,
@@ -1871,10 +1980,11 @@ func ListServiceContacts(ctx context.Context) ([]ContactListItem, error) {
 // ToggleServiceStatus converts a contact between service and personal
 func ToggleServiceStatus(ctx context.Context, contactID string, isService bool) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `UPDATE contacts SET is_service = $1 WHERE id = $2`
+
 	_, err := pool.Exec(ctx, query, isService, contactID)
 	if err != nil {
 		return fmt.Errorf("failed to toggle service status: %w", err)
@@ -1886,10 +1996,11 @@ func ToggleServiceStatus(ctx context.Context, contactID string, isService bool) 
 // GetLinkedCardDAVUUIDsWithServiceStatus returns CardDAV UUIDs with service flag
 func GetLinkedCardDAVUUIDsWithServiceStatus(ctx context.Context) (map[string]bool, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `SELECT carddav_uuid, is_service FROM contacts WHERE carddav_uuid IS NOT NULL`
+
 	rows, err := pool.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query linked CardDAV UUIDs: %w", err)
@@ -1897,12 +2008,17 @@ func GetLinkedCardDAVUUIDsWithServiceStatus(ctx context.Context) (map[string]boo
 	defer rows.Close()
 
 	result := make(map[string]bool)
+
 	for rows.Next() {
-		var uuid string
-		var isService bool
+		var (
+			uuid      string
+			isService bool
+		)
+
 		if err := rows.Scan(&uuid, &isService); err != nil {
 			return nil, fmt.Errorf("failed to scan UUID: %w", err)
 		}
+
 		result[strings.ToLower(uuid)] = isService
 	}
 

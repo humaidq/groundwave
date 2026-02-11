@@ -6,5 +6,7 @@ package static
 
 import "embed"
 
+// Static contains embedded files from the static directory.
+//
 //go:embed *
 var Static embed.FS

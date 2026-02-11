@@ -9,6 +9,7 @@ import (
 
 func TestWebDAVFilesAndInventory(t *testing.T) {
 	resetDatabase(t)
+
 	server := newWebDAVTestServer(t)
 	defer server.close()
 
@@ -26,6 +27,7 @@ func TestWebDAVFilesAndInventory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListInventoryFiles failed: %v", err)
 	}
+
 	if len(files) != 1 || files[0].Name != "manual.pdf" {
 		t.Fatalf("expected manual.pdf, got %v", files)
 	}
@@ -34,6 +36,7 @@ func TestWebDAVFilesAndInventory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchInventoryFile failed: %v", err)
 	}
+
 	if len(body) == 0 || contentType == "" {
 		t.Fatalf("expected file body and content type")
 	}
@@ -42,6 +45,7 @@ func TestWebDAVFilesAndInventory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListFilesEntries failed: %v", err)
 	}
+
 	if len(entries) == 0 {
 		t.Fatalf("expected entries")
 	}
@@ -50,6 +54,7 @@ func TestWebDAVFilesAndInventory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchFilesFile failed: %v", err)
 	}
+
 	if len(fileBody) == 0 || fileType == "" {
 		t.Fatalf("expected file body and type")
 	}
@@ -58,6 +63,7 @@ func TestWebDAVFilesAndInventory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("IsFilesPathRestricted failed: %v", err)
 	}
+
 	if !restricted {
 		t.Fatalf("expected private path to be restricted")
 	}
@@ -66,6 +72,7 @@ func TestWebDAVFilesAndInventory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("IsFilesPathAdminOnly failed: %v", err)
 	}
+
 	if !adminOnly {
 		t.Fatalf("expected admin path to be admin-only")
 	}
@@ -73,12 +80,15 @@ func TestWebDAVFilesAndInventory(t *testing.T) {
 	if extractFilename("/files/readme.txt") != "readme.txt" {
 		t.Fatalf("expected filename extraction")
 	}
+
 	if !isListingSelf("/files", "", filesBasePath(&WebDAVConfig{FilesPath: server.server.URL + "/files"})) {
 		t.Fatalf("expected listing self to be true for base path")
 	}
+
 	if normalizeFilesPathForCompare("/files/", filesBasePath(&WebDAVConfig{FilesPath: server.server.URL + "/files"})) == "" {
 		t.Fatalf("expected normalized path")
 	}
+
 	if inferContentType("test.pdf") == "" {
 		t.Fatalf("expected inferred content type")
 	}

@@ -20,7 +20,7 @@ type TagWithUsage struct {
 // ListAllTags returns all tags with their usage counts
 func ListAllTags(ctx context.Context) ([]TagWithUsage, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -43,8 +43,10 @@ func ListAllTags(ctx context.Context) ([]TagWithUsage, error) {
 	defer rows.Close()
 
 	var tags []TagWithUsage
+
 	for rows.Next() {
 		var tag TagWithUsage
+
 		err := rows.Scan(
 			&tag.ID,
 			&tag.Name,
@@ -55,6 +57,7 @@ func ListAllTags(ctx context.Context) ([]TagWithUsage, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan tag: %w", err)
 		}
+
 		tags = append(tags, tag)
 	}
 
@@ -68,7 +71,7 @@ func ListAllTags(ctx context.Context) ([]TagWithUsage, error) {
 // SearchTags searches tags by name (case-insensitive prefix match)
 func SearchTags(ctx context.Context, query string) ([]TagWithUsage, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	sqlQuery := `
@@ -92,8 +95,10 @@ func SearchTags(ctx context.Context, query string) ([]TagWithUsage, error) {
 	defer rows.Close()
 
 	var tags []TagWithUsage
+
 	for rows.Next() {
 		var tag TagWithUsage
+
 		err := rows.Scan(
 			&tag.ID,
 			&tag.Name,
@@ -104,6 +109,7 @@ func SearchTags(ctx context.Context, query string) ([]TagWithUsage, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan tag: %w", err)
 		}
+
 		tags = append(tags, tag)
 	}
 
@@ -117,7 +123,7 @@ func SearchTags(ctx context.Context, query string) ([]TagWithUsage, error) {
 // GetTag retrieves a single tag by ID
 func GetTag(ctx context.Context, tagID string) (*Tag, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -127,6 +133,7 @@ func GetTag(ctx context.Context, tagID string) (*Tag, error) {
 	`
 
 	var tag Tag
+
 	err := pool.QueryRow(ctx, query, tagID).Scan(
 		&tag.ID,
 		&tag.Name,
@@ -143,7 +150,7 @@ func GetTag(ctx context.Context, tagID string) (*Tag, error) {
 // RenameTag updates a tag's name and description
 func RenameTag(ctx context.Context, tagID string, newName string, description *string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	// Normalize tag name to lowercase
@@ -166,7 +173,7 @@ func RenameTag(ctx context.Context, tagID string, newName string, description *s
 // GetContactTags retrieves all tags for a contact
 func GetContactTags(ctx context.Context, contactID string) ([]Tag, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -184,12 +191,15 @@ func GetContactTags(ctx context.Context, contactID string) ([]Tag, error) {
 	defer rows.Close()
 
 	var tags []Tag
+
 	for rows.Next() {
 		var tag Tag
+
 		err := rows.Scan(&tag.ID, &tag.Name, &tag.Description, &tag.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan tag: %w", err)
 		}
+
 		tags = append(tags, tag)
 	}
 
@@ -203,7 +213,7 @@ func GetContactTags(ctx context.Context, contactID string) ([]Tag, error) {
 // AddTagToContact adds a tag to a contact (creates tag if it doesn't exist)
 func AddTagToContact(ctx context.Context, contactID string, tagName string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	// Use the PostgreSQL get_or_create_tag function to get or create the tag
@@ -224,10 +234,11 @@ func AddTagToContact(ctx context.Context, contactID string, tagName string) erro
 // RemoveTagFromContact removes a tag from a contact
 func RemoveTagFromContact(ctx context.Context, contactID string, tagID string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `DELETE FROM contact_tags WHERE contact_id = $1 AND tag_id = $2`
+
 	_, err := pool.Exec(ctx, query, contactID, tagID)
 	if err != nil {
 		return fmt.Errorf("failed to remove tag from contact: %w", err)
@@ -239,7 +250,7 @@ func RemoveTagFromContact(ctx context.Context, contactID string, tagID string) e
 // DeleteTag deletes a tag and all its associations with contacts
 func DeleteTag(ctx context.Context, tagID string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	// Delete tag associations first (due to foreign key constraints)
@@ -260,11 +271,11 @@ func DeleteTag(ctx context.Context, tagID string) error {
 // GetContactsByTags returns contacts matching ALL specified tags (AND logic)
 func GetContactsByTags(ctx context.Context, tagIDs []string) ([]ContactListItem, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	if len(tagIDs) == 0 {
-		return nil, fmt.Errorf("no tag IDs provided")
+		return nil, ErrNoTagIDsProvided
 	}
 
 	query := `
@@ -310,9 +321,13 @@ func GetContactsByTags(ctx context.Context, tagIDs []string) ([]ContactListItem,
 	defer rows.Close()
 
 	var contacts []ContactListItem
+
 	for rows.Next() {
-		var contact ContactListItem
-		var tagsJSON []byte
+		var (
+			contact  ContactListItem
+			tagsJSON []byte
+		)
+
 		err := rows.Scan(
 			&contact.ID,
 			&contact.NameDisplay,

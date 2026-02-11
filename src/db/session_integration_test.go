@@ -13,13 +13,16 @@ import (
 
 func TestPostgresSessionStoreLifecycle(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	initer := PostgresSessionIniter()
+
 	store, err := initer(ctx, PostgresSessionConfig{Lifetime: time.Hour})
 	if err != nil {
 		t.Fatalf("PostgresSessionIniter failed: %v", err)
 	}
+
 	pgStore := store.(*PostgresSessionStore)
 
 	noopWriter := func(_ http.ResponseWriter, _ *http.Request, _ string) {}
@@ -43,6 +46,7 @@ func TestPostgresSessionStoreLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
+
 	if readSess.Get("user_id") != "user-1" {
 		t.Fatalf("expected user_id to match")
 	}
@@ -54,6 +58,7 @@ func TestPostgresSessionStoreLifecycle(t *testing.T) {
 	sess2 := session.NewBaseSession("sess2", session.GobEncoder, noopWriter)
 	sess2.Set("authenticated", true)
 	sess2.Set("user_id", "user-1")
+
 	if err := pgStore.Save(ctx, sess2); err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}
@@ -62,6 +67,7 @@ func TestPostgresSessionStoreLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListValidSessions failed: %v", err)
 	}
+
 	if len(valid) != 2 {
 		t.Fatalf("expected 2 valid sessions, got %d", len(valid))
 	}
@@ -70,6 +76,7 @@ func TestPostgresSessionStoreLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InvalidateOtherSessions failed: %v", err)
 	}
+
 	if deleted != 1 {
 		t.Fatalf("expected 1 session deleted, got %d", deleted)
 	}
@@ -85,13 +92,16 @@ func TestPostgresSessionStoreLifecycle(t *testing.T) {
 
 func TestPostgresSessionStoreGCAndReadFallback(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	initer := PostgresSessionIniter()
+
 	store, err := initer(ctx, PostgresSessionConfig{Lifetime: time.Hour})
 	if err != nil {
 		t.Fatalf("PostgresSessionIniter failed: %v", err)
 	}
+
 	pgStore := store.(*PostgresSessionStore)
 
 	if _, err := pool.Exec(ctx, `INSERT INTO flamego_sessions (id, data, expires_at) VALUES ($1, $2, NOW() - interval '1 hour')`, "expired", []byte("bad")); err != nil {
@@ -101,6 +111,7 @@ func TestPostgresSessionStoreGCAndReadFallback(t *testing.T) {
 	if err := pgStore.GC(ctx); err != nil {
 		t.Fatalf("GC failed: %v", err)
 	}
+
 	if pgStore.Exist(ctx, "expired") {
 		t.Fatalf("expected expired session to be removed")
 	}
@@ -113,6 +124,7 @@ func TestPostgresSessionStoreGCAndReadFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
+
 	if sess.ID() != "corrupt" {
 		t.Fatalf("expected session id to match")
 	}

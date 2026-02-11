@@ -17,8 +17,10 @@ import (
 
 var requestLogger = logging.Logger(logging.SourceWebRequest)
 
+// RequestLogger logs request metadata and timing for each HTTP request.
 func RequestLogger(c flamego.Context, s session.Session) {
 	start := time.Now()
+
 	c.Next()
 
 	status := c.ResponseWriter().Status()
@@ -45,6 +47,7 @@ func logAccessDenied(c flamego.Context, s session.Session, reason string, status
 	if redirect != "" {
 		fields = append(fields, "redirect", redirect)
 	}
+
 	fields = append(fields, baseRequestFields(c, s)...)
 	fields = append(fields, extra...)
 
@@ -58,6 +61,7 @@ func logBreakGlassView(c flamego.Context, s session.Session, next string) {
 	if next != "" {
 		fields = append(fields, "next", next)
 	}
+
 	fields = append(fields, baseRequestFields(c, s)...)
 
 	requestLogger.Info("break glass view", fields...)
@@ -65,6 +69,7 @@ func logBreakGlassView(c flamego.Context, s session.Session, next string) {
 
 func baseRequestFields(c flamego.Context, s session.Session) []interface{} {
 	authenticated, userID := sessionAuthInfo(s)
+
 	fields := []interface{}{
 		"method", c.Request().Method,
 		"path", c.Request().URL.Path,
@@ -75,6 +80,7 @@ func baseRequestFields(c flamego.Context, s session.Session) []interface{} {
 	if userID != "" {
 		fields = append(fields, "user_id", userID)
 	}
+
 	return fields
 }
 
@@ -83,7 +89,9 @@ func sessionAuthInfo(s session.Session) (bool, string) {
 	if !ok || !authenticated {
 		return false, ""
 	}
+
 	userID, _ := getSessionUserID(s)
+
 	return true, userID
 }
 
@@ -93,9 +101,11 @@ func clientIP(c flamego.Context) string {
 		if idx := strings.Index(forwardedFor, ","); idx != -1 {
 			forwardedFor = forwardedFor[:idx]
 		}
+
 		if ip := strings.TrimSpace(forwardedFor); ip != "" {
 			return ip
 		}
 	}
+
 	return c.RemoteAddr()
 }

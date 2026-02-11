@@ -19,7 +19,7 @@ import (
 // ListHealthProfiles returns all health profiles with follow-up counts
 func ListHealthProfiles(ctx context.Context) ([]HealthProfileSummary, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -35,8 +35,10 @@ func ListHealthProfiles(ctx context.Context) ([]HealthProfileSummary, error) {
 	defer rows.Close()
 
 	var profiles []HealthProfileSummary
+
 	for rows.Next() {
 		var profile HealthProfileSummary
+
 		err := rows.Scan(
 			&profile.ID, &profile.Name, &profile.DateOfBirth, &profile.Gender, &profile.Description,
 			&profile.IsPrimary,
@@ -46,6 +48,7 @@ func ListHealthProfiles(ctx context.Context) ([]HealthProfileSummary, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan profile: %w", err)
 		}
+
 		profiles = append(profiles, profile)
 	}
 
@@ -59,10 +62,11 @@ func ListHealthProfiles(ctx context.Context) ([]HealthProfileSummary, error) {
 // GetHealthProfile returns a single health profile by ID
 func GetHealthProfile(ctx context.Context, id string) (*HealthProfile, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	var profile HealthProfile
+
 	query := `
 		SELECT id, name, date_of_birth, gender, description, is_primary, created_at, updated_at
 		FROM health_profiles
@@ -84,10 +88,11 @@ func GetHealthProfile(ctx context.Context, id string) (*HealthProfile, error) {
 // GetPrimaryHealthProfile returns the primary health profile, if any.
 func GetPrimaryHealthProfile(ctx context.Context) (*HealthProfile, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	var profile HealthProfile
+
 	query := `
 		SELECT id, name, date_of_birth, gender, description, is_primary, created_at, updated_at
 		FROM health_profiles
@@ -102,8 +107,9 @@ func GetPrimaryHealthProfile(ctx context.Context) (*HealthProfile, error) {
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
+			return nil, nil //nolint:nilnil // Missing primary profile is a valid state.
 		}
+
 		return nil, fmt.Errorf("failed to get primary health profile: %w", err)
 	}
 
@@ -113,13 +119,14 @@ func GetPrimaryHealthProfile(ctx context.Context) (*HealthProfile, error) {
 // CreateHealthProfile creates a new health profile
 func CreateHealthProfile(ctx context.Context, name string, dob *time.Time, gender *Gender, description *string, isPrimary bool) (string, error) {
 	if pool == nil {
-		return "", fmt.Errorf("database connection not initialized")
+		return "", ErrDatabaseConnectionNotInitialized
 	}
 
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to start transaction: %w", err)
 	}
+
 	defer func() {
 		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
 			logger.Warn("Failed to rollback health profile creation", "error", err)
@@ -134,6 +141,7 @@ func CreateHealthProfile(ctx context.Context, name string, dob *time.Time, gende
 	}
 
 	var id string
+
 	query := `
 		INSERT INTO health_profiles (name, date_of_birth, gender, description, is_primary)
 		VALUES ($1, $2, $3, $4, $5)
@@ -155,13 +163,14 @@ func CreateHealthProfile(ctx context.Context, name string, dob *time.Time, gende
 // UpdateHealthProfile updates a health profile
 func UpdateHealthProfile(ctx context.Context, id, name string, dob *time.Time, gender *Gender, description *string, isPrimary bool) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to start transaction: %w", err)
 	}
+
 	defer func() {
 		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
 			logger.Warn("Failed to rollback health profile update", "error", err)
@@ -196,10 +205,11 @@ func UpdateHealthProfile(ctx context.Context, id, name string, dob *time.Time, g
 // DeleteHealthProfile deletes a health profile (cascades to follow-ups and results)
 func DeleteHealthProfile(ctx context.Context, id string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `DELETE FROM health_profiles WHERE id = $1`
+
 	_, err := pool.Exec(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete health profile: %w", err)
@@ -228,7 +238,7 @@ type UpdateFollowupInput struct {
 // ListFollowups returns all follow-ups for a profile
 func ListFollowups(ctx context.Context, profileID string) ([]HealthFollowupSummary, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -246,8 +256,10 @@ func ListFollowups(ctx context.Context, profileID string) ([]HealthFollowupSumma
 	defer rows.Close()
 
 	var followups []HealthFollowupSummary
+
 	for rows.Next() {
 		var followup HealthFollowupSummary
+
 		err := rows.Scan(
 			&followup.ID, &followup.ProfileID, &followup.FollowupDate,
 			&followup.HospitalName, &followup.Notes, &followup.CreatedAt,
@@ -256,6 +268,7 @@ func ListFollowups(ctx context.Context, profileID string) ([]HealthFollowupSumma
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan follow-up: %w", err)
 		}
+
 		followups = append(followups, followup)
 	}
 
@@ -269,10 +282,11 @@ func ListFollowups(ctx context.Context, profileID string) ([]HealthFollowupSumma
 // GetFollowup returns a single follow-up by ID
 func GetFollowup(ctx context.Context, id string) (*HealthFollowup, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	var followup HealthFollowup
+
 	query := `
 		SELECT id, profile_id, followup_date, hospital_name, notes,
 		       created_at, updated_at
@@ -295,10 +309,11 @@ func GetFollowup(ctx context.Context, id string) (*HealthFollowup, error) {
 // CreateFollowup creates a new follow-up
 func CreateFollowup(ctx context.Context, input CreateFollowupInput) (string, error) {
 	if pool == nil {
-		return "", fmt.Errorf("database connection not initialized")
+		return "", ErrDatabaseConnectionNotInitialized
 	}
 
 	var id string
+
 	query := `
 		INSERT INTO health_followups (profile_id, followup_date, hospital_name, notes)
 		VALUES ($1, $2, $3, $4)
@@ -318,7 +333,7 @@ func CreateFollowup(ctx context.Context, input CreateFollowupInput) (string, err
 // UpdateFollowup updates a follow-up's details
 func UpdateFollowup(ctx context.Context, id string, input UpdateFollowupInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -340,10 +355,11 @@ func UpdateFollowup(ctx context.Context, id string, input UpdateFollowupInput) e
 // DeleteFollowup deletes a follow-up (cascades to lab results)
 func DeleteFollowup(ctx context.Context, id string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `DELETE FROM health_followups WHERE id = $1`
+
 	_, err := pool.Exec(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete follow-up: %w", err)
@@ -373,9 +389,11 @@ func calculateAbsoluteCounts(results []HealthLabResult) []HealthLabResultDisplay
 	calculated := make([]HealthLabResultDisplay, 0)
 
 	// Find values needed for calculations
-	var wbcValue, triglycerides, hdlCholesterol *float64
-	var triglyceridesCreatedAt, hdlCreatedAt time.Time
-	var triglyceridesFollowupID uuid.UUID
+	var (
+		wbcValue, triglycerides, hdlCholesterol *float64
+		triglyceridesCreatedAt, hdlCreatedAt    time.Time
+		triglyceridesFollowupID                 uuid.UUID
+	)
 
 	for _, r := range results {
 		switch r.TestName {
@@ -407,6 +425,7 @@ func calculateAbsoluteCounts(results []HealthLabResult) []HealthLabResultDisplay
 			if absoluteName, ok := percentageToAbsolute[r.TestName]; ok {
 				// Check if the absolute value was already entered manually
 				alreadyExists := false
+
 				for _, existing := range results {
 					if existing.TestName == absoluteName {
 						alreadyExists = true
@@ -443,6 +462,7 @@ func calculateAbsoluteCounts(results []HealthLabResult) []HealthLabResultDisplay
 		if hdlCreatedAt.After(triglyceridesCreatedAt) {
 			createdAt = hdlCreatedAt
 		}
+
 		calculated = append(calculated, HealthLabResultDisplay{
 			HealthLabResult: HealthLabResult{
 				FollowupID: triglyceridesFollowupID,
@@ -457,15 +477,18 @@ func calculateAbsoluteCounts(results []HealthLabResult) []HealthLabResultDisplay
 
 	// Calculate Atherogenic Coefficient - ALWAYS calculated, never use stored value
 	// Formula: (Total Cholesterol - HDL Cholesterol) / HDL Cholesterol
-	var totalCholesterol *float64
-	var totalCholCreatedAt time.Time
-	var totalCholFollowupID uuid.UUID
+	var (
+		totalCholesterol    *float64
+		totalCholCreatedAt  time.Time
+		totalCholFollowupID uuid.UUID
+	)
 
 	for _, r := range results {
 		if r.TestName == "Total Cholesterol" {
 			totalCholesterol = &r.TestValue
 			totalCholCreatedAt = r.CreatedAt
 			totalCholFollowupID = r.FollowupID
+
 			break
 		}
 	}
@@ -478,6 +501,7 @@ func calculateAbsoluteCounts(results []HealthLabResult) []HealthLabResultDisplay
 		if hdlCreatedAt.After(totalCholCreatedAt) {
 			createdAt = hdlCreatedAt
 		}
+
 		calculated = append(calculated, HealthLabResultDisplay{
 			HealthLabResult: HealthLabResult{
 				FollowupID: totalCholFollowupID,
@@ -496,7 +520,7 @@ func calculateAbsoluteCounts(results []HealthLabResult) []HealthLabResultDisplay
 // GetLabResultsByFollowup returns all lab results for a follow-up, grouped by category
 func GetLabResultsByFollowup(ctx context.Context, followupID string) (map[LabTestCategory][]HealthLabResult, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -513,8 +537,10 @@ func GetLabResultsByFollowup(ctx context.Context, followupID string) (map[LabTes
 	defer rows.Close()
 
 	var allResults []HealthLabResult
+
 	for rows.Next() {
 		var result HealthLabResult
+
 		err := rows.Scan(
 			&result.ID, &result.FollowupID, &result.TestName,
 			&result.TestUnit, &result.TestValue, &result.CreatedAt,
@@ -522,6 +548,7 @@ func GetLabResultsByFollowup(ctx context.Context, followupID string) (map[LabTes
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan lab result: %w", err)
 		}
+
 		allResults = append(allResults, result)
 	}
 
@@ -532,6 +559,7 @@ func GetLabResultsByFollowup(ctx context.Context, followupID string) (map[LabTes
 	// Group results by category
 	grouped := make(map[LabTestCategory][]HealthLabResult)
 	predefinedTests := GetPredefinedLabTests()
+
 	testCategoryMap := make(map[string]LabTestCategory)
 	for _, test := range predefinedTests {
 		testCategoryMap[test.Name] = test.Category
@@ -543,6 +571,7 @@ func GetLabResultsByFollowup(ctx context.Context, followupID string) (map[LabTes
 			// Unknown test, put in "Other" category
 			category = CategoryEndocrineOther
 		}
+
 		grouped[category] = append(grouped[category], result)
 	}
 
@@ -552,7 +581,7 @@ func GetLabResultsByFollowup(ctx context.Context, followupID string) (map[LabTes
 // GetLabResultsByFollowupWithCalculated returns all lab results including calculated absolute counts
 func GetLabResultsByFollowupWithCalculated(ctx context.Context, followupID string) (map[LabTestCategory][]HealthLabResultDisplay, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -569,8 +598,10 @@ func GetLabResultsByFollowupWithCalculated(ctx context.Context, followupID strin
 	defer rows.Close()
 
 	var allResults []HealthLabResult
+
 	for rows.Next() {
 		var result HealthLabResult
+
 		err := rows.Scan(
 			&result.ID, &result.FollowupID, &result.TestName,
 			&result.TestUnit, &result.TestValue, &result.CreatedAt,
@@ -578,6 +609,7 @@ func GetLabResultsByFollowupWithCalculated(ctx context.Context, followupID strin
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan lab result: %w", err)
 		}
+
 		allResults = append(allResults, result)
 	}
 
@@ -605,11 +637,13 @@ func GetLabResultsByFollowupWithCalculated(ctx context.Context, followupID strin
 			IsCalculated:    false,
 		})
 	}
+
 	allDisplayResults = append(allDisplayResults, calculatedResults...)
 
 	// Group results by category
 	grouped := make(map[LabTestCategory][]HealthLabResultDisplay)
 	predefinedTests := GetPredefinedLabTests()
+
 	testCategoryMap := make(map[string]LabTestCategory)
 	for _, test := range predefinedTests {
 		testCategoryMap[test.Name] = test.Category
@@ -621,6 +655,7 @@ func GetLabResultsByFollowupWithCalculated(ctx context.Context, followupID strin
 			// Unknown test, put in "Other" category
 			category = CategoryEndocrineOther
 		}
+
 		grouped[category] = append(grouped[category], result)
 	}
 
@@ -630,10 +665,11 @@ func GetLabResultsByFollowupWithCalculated(ctx context.Context, followupID strin
 // CreateLabResult creates a new lab result
 func CreateLabResult(ctx context.Context, input CreateLabResultInput) (string, error) {
 	if pool == nil {
-		return "", fmt.Errorf("database connection not initialized")
+		return "", ErrDatabaseConnectionNotInitialized
 	}
 
 	var id string
+
 	query := `
 		INSERT INTO health_lab_results (followup_id, test_name, test_unit, test_value)
 		VALUES ($1, $2, $3, $4)
@@ -653,7 +689,7 @@ func CreateLabResult(ctx context.Context, input CreateLabResultInput) (string, e
 // UpdateLabResult updates a lab result's value
 func UpdateLabResult(ctx context.Context, id string, input UpdateLabResultInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -673,10 +709,11 @@ func UpdateLabResult(ctx context.Context, id string, input UpdateLabResultInput)
 // DeleteLabResult deletes a lab result
 func DeleteLabResult(ctx context.Context, id string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `DELETE FROM health_lab_results WHERE id = $1`
+
 	_, err := pool.Exec(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete lab result: %w", err)
@@ -688,10 +725,11 @@ func DeleteLabResult(ctx context.Context, id string) error {
 // GetLabResult returns a single lab result by ID
 func GetLabResult(ctx context.Context, id string) (*HealthLabResult, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	var result HealthLabResult
+
 	query := `
 		SELECT id, followup_id, test_name, test_unit, test_value, created_at
 		FROM health_lab_results
@@ -724,7 +762,7 @@ type HealthLabResultDisplay struct {
 // GetLabResultsByTestName returns all results for a specific test across all follow-ups for a profile
 func GetLabResultsByTestName(ctx context.Context, profileID, testName string) ([]LabResultWithDate, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -743,8 +781,10 @@ func GetLabResultsByTestName(ctx context.Context, profileID, testName string) ([
 	defer rows.Close()
 
 	var results []LabResultWithDate
+
 	for rows.Next() {
 		var result LabResultWithDate
+
 		err := rows.Scan(
 			&result.ID, &result.FollowupID, &result.TestName,
 			&result.TestUnit, &result.TestValue, &result.CreatedAt,
@@ -753,6 +793,7 @@ func GetLabResultsByTestName(ctx context.Context, profileID, testName string) ([
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan lab result: %w", err)
 		}
+
 		results = append(results, result)
 	}
 
@@ -766,7 +807,7 @@ func GetLabResultsByTestName(ctx context.Context, profileID, testName string) ([
 // GetLabResultsByTestNameWithCalculated returns results for a specific test including calculated values
 func GetLabResultsByTestNameWithCalculated(ctx context.Context, profileID, testName string) ([]LabResultWithDate, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	// Check if this is TG/HDL ratio (always calculated, never stored)
@@ -809,14 +850,21 @@ func GetLabResultsByTestNameWithCalculated(ctx context.Context, profileID, testN
 	}
 	defer rows.Close()
 
-	var followupIDs []string
-	var followupDates []time.Time
+	var (
+		followupIDs   []string
+		followupDates []time.Time
+	)
+
 	for rows.Next() {
-		var id string
-		var date time.Time
+		var (
+			id   string
+			date time.Time
+		)
+
 		if err := rows.Scan(&id, &date); err != nil {
 			return nil, fmt.Errorf("failed to scan follow-up: %w", err)
 		}
+
 		followupIDs = append(followupIDs, id)
 		followupDates = append(followupDates, date)
 	}
@@ -827,6 +875,7 @@ func GetLabResultsByTestNameWithCalculated(ctx context.Context, profileID, testN
 
 	// For each follow-up, calculate or get the absolute value
 	var results []LabResultWithDate
+
 	for i, followupID := range followupIDs {
 		// First check if there's a manually entered value
 		manualQuery := `
@@ -834,12 +883,13 @@ func GetLabResultsByTestNameWithCalculated(ctx context.Context, profileID, testN
 			FROM health_lab_results
 			WHERE followup_id = $1 AND test_name = $2
 		`
+
 		var manualResult LabResultWithDate
+
 		err := pool.QueryRow(ctx, manualQuery, followupID, testName).Scan(
 			&manualResult.ID, &manualResult.FollowupID, &manualResult.TestName,
 			&manualResult.TestUnit, &manualResult.TestValue, &manualResult.CreatedAt,
 		)
-
 		if err == nil {
 			// Manual value exists, use it
 			manualResult.FollowupDate = followupDates[i]
@@ -847,16 +897,20 @@ func GetLabResultsByTestNameWithCalculated(ctx context.Context, profileID, testN
 		} else {
 			// No manual value, try to calculate it
 			// Get WBC and percentage values
-			var wbc, percentage *float64
-			var percentageCreatedAt time.Time
+			var (
+				wbc, percentage     *float64
+				percentageCreatedAt time.Time
+			)
 
 			wbcQuery := `SELECT test_value FROM health_lab_results WHERE followup_id = $1 AND test_name = 'White blood cells'`
+
 			var wbcVal float64
 			if err := pool.QueryRow(ctx, wbcQuery, followupID).Scan(&wbcVal); err == nil {
 				wbc = &wbcVal
 			}
 
 			percentageQuery := `SELECT test_value, created_at FROM health_lab_results WHERE followup_id = $1 AND test_name = $2`
+
 			var percentageVal float64
 			if err := pool.QueryRow(ctx, percentageQuery, followupID, percentageTestName).Scan(&percentageVal, &percentageCreatedAt); err == nil {
 				percentage = &percentageVal
@@ -893,7 +947,7 @@ func GetLabResultsByTestNameWithCalculated(ctx context.Context, profileID, testN
 // calculateTGHDLRatioTimeSeries calculates TG/HDL ratio for all followups in a profile
 func calculateTGHDLRatioTimeSeries(ctx context.Context, profileID string) ([]LabResultWithDate, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	// Get all follow-ups for this profile
@@ -910,14 +964,21 @@ func calculateTGHDLRatioTimeSeries(ctx context.Context, profileID string) ([]Lab
 	}
 	defer rows.Close()
 
-	var followupIDs []string
-	var followupDates []time.Time
+	var (
+		followupIDs   []string
+		followupDates []time.Time
+	)
+
 	for rows.Next() {
-		var id string
-		var date time.Time
+		var (
+			id   string
+			date time.Time
+		)
+
 		if err := rows.Scan(&id, &date); err != nil {
 			return nil, fmt.Errorf("failed to scan follow-up: %w", err)
 		}
+
 		followupIDs = append(followupIDs, id)
 		followupDates = append(followupDates, date)
 	}
@@ -928,18 +989,23 @@ func calculateTGHDLRatioTimeSeries(ctx context.Context, profileID string) ([]Lab
 
 	// For each follow-up, calculate TG/HDL ratio if both values exist
 	var results []LabResultWithDate
+
 	for i, followupID := range followupIDs {
 		// Get Triglycerides and HDL Cholesterol values
-		var tg, hdl *float64
-		var tgCreatedAt, hdlCreatedAt time.Time
+		var (
+			tg, hdl                   *float64
+			tgCreatedAt, hdlCreatedAt time.Time
+		)
 
 		tgQuery := `SELECT test_value, created_at FROM health_lab_results WHERE followup_id = $1 AND test_name = 'Triglycerides'`
+
 		var tgVal float64
 		if err := pool.QueryRow(ctx, tgQuery, followupID).Scan(&tgVal, &tgCreatedAt); err == nil {
 			tg = &tgVal
 		}
 
 		hdlQuery := `SELECT test_value, created_at FROM health_lab_results WHERE followup_id = $1 AND test_name = 'HDL Cholesterol'`
+
 		var hdlVal float64
 		if err := pool.QueryRow(ctx, hdlQuery, followupID).Scan(&hdlVal, &hdlCreatedAt); err == nil {
 			hdl = &hdlVal
@@ -982,7 +1048,7 @@ func calculateTGHDLRatioTimeSeries(ctx context.Context, profileID string) ([]Lab
 // Formula: (Total Cholesterol - HDL Cholesterol) / HDL Cholesterol
 func calculateAtherogenicCoefficientTimeSeries(ctx context.Context, profileID string) ([]LabResultWithDate, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	// Get all follow-ups for this profile
@@ -999,14 +1065,21 @@ func calculateAtherogenicCoefficientTimeSeries(ctx context.Context, profileID st
 	}
 	defer rows.Close()
 
-	var followupIDs []string
-	var followupDates []time.Time
+	var (
+		followupIDs   []string
+		followupDates []time.Time
+	)
+
 	for rows.Next() {
-		var id string
-		var date time.Time
+		var (
+			id   string
+			date time.Time
+		)
+
 		if err := rows.Scan(&id, &date); err != nil {
 			return nil, fmt.Errorf("failed to scan follow-up: %w", err)
 		}
+
 		followupIDs = append(followupIDs, id)
 		followupDates = append(followupDates, date)
 	}
@@ -1017,18 +1090,23 @@ func calculateAtherogenicCoefficientTimeSeries(ctx context.Context, profileID st
 
 	// For each follow-up, calculate Atherogenic Coefficient if both values exist
 	var results []LabResultWithDate
+
 	for i, followupID := range followupIDs {
 		// Get Total Cholesterol and HDL Cholesterol values
-		var totalChol, hdl *float64
-		var totalCholCreatedAt, hdlCreatedAt time.Time
+		var (
+			totalChol, hdl                   *float64
+			totalCholCreatedAt, hdlCreatedAt time.Time
+		)
 
 		totalCholQuery := `SELECT test_value, created_at FROM health_lab_results WHERE followup_id = $1 AND test_name = 'Total Cholesterol'`
+
 		var totalCholVal float64
 		if err := pool.QueryRow(ctx, totalCholQuery, followupID).Scan(&totalCholVal, &totalCholCreatedAt); err == nil {
 			totalChol = &totalCholVal
 		}
 
 		hdlQuery := `SELECT test_value, created_at FROM health_lab_results WHERE followup_id = $1 AND test_name = 'HDL Cholesterol'`
+
 		var hdlVal float64
 		if err := pool.QueryRow(ctx, hdlQuery, followupID).Scan(&hdlVal, &hdlCreatedAt); err == nil {
 			hdl = &hdlVal
@@ -1076,7 +1154,7 @@ type TestNameCount struct {
 // GetTestNamesWithCounts returns all unique test names for a profile with their result counts
 func GetTestNamesWithCounts(ctx context.Context, profileID string) ([]TestNameCount, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -1095,12 +1173,15 @@ func GetTestNamesWithCounts(ctx context.Context, profileID string) ([]TestNameCo
 	defer rows.Close()
 
 	var tests []TestNameCount
+
 	for rows.Next() {
 		var test TestNameCount
+
 		err := rows.Scan(&test.TestName, &test.Count)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan test name count: %w", err)
 		}
+
 		tests = append(tests, test)
 	}
 
@@ -1126,6 +1207,7 @@ func GetTestNamesWithCountsIncludingCalculated(ctx context.Context, profileID st
 			filteredTests = append(filteredTests, test)
 		}
 	}
+
 	tests = filteredTests
 
 	// Build a map for quick lookup
@@ -1162,6 +1244,7 @@ func GetTestNamesWithCountsIncludingCalculated(ctx context.Context, profileID st
 
 	// Check if we have Triglycerides and HDL Cholesterol to calculate TG/HDL ratio
 	tgCount, hasTG := testMap["Triglycerides"]
+
 	hdlCount, hasHDL := testMap["HDL Cholesterol"]
 	if hasTG && hasHDL && tgCount > 0 && hdlCount > 0 {
 		// Add TG/HDL ratio - use minimum of the two counts
@@ -1169,6 +1252,7 @@ func GetTestNamesWithCountsIncludingCalculated(ctx context.Context, profileID st
 		if hdlCount < tgCount {
 			ratioCount = hdlCount
 		}
+
 		tests = append(tests, TestNameCount{
 			TestName: "TG/HDL (Calc)",
 			Count:    ratioCount,
@@ -1183,6 +1267,7 @@ func GetTestNamesWithCountsIncludingCalculated(ctx context.Context, profileID st
 		if hdlCount < totalCholCount {
 			coefficientCount = hdlCount
 		}
+
 		tests = append(tests, TestNameCount{
 			TestName: "Atherogenic Coefficient",
 			Count:    coefficientCount,

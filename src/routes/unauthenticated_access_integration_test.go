@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025 Humaid Alqasimi
+// SPDX-License-Identifier: Apache-2.0
+
 package routes
 
 import (
@@ -7,6 +10,7 @@ import (
 
 	"github.com/flamego/flamego"
 	"github.com/flamego/session"
+	"github.com/flamego/template"
 )
 
 type unauthenticatedSession struct {
@@ -55,6 +59,7 @@ func newUnauthenticatedAccessTestApp() *flamego.Flame {
 	f := flamego.New()
 	f.Use(func(c flamego.Context) {
 		c.MapTo(newUnauthenticatedSession(), (*session.Session)(nil))
+		c.Map(template.Data{})
 		c.Next()
 	})
 
@@ -165,8 +170,9 @@ func TestUnauthenticatedAccessRedirectsToLogin(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			req := httptest.NewRequest(tc.method, tc.path, nil)
 			rec := httptest.NewRecorder()
 
@@ -175,6 +181,7 @@ func TestUnauthenticatedAccessRedirectsToLogin(t *testing.T) {
 			if rec.Code != http.StatusFound {
 				t.Fatalf("expected status %d, got %d", http.StatusFound, rec.Code)
 			}
+
 			if got := rec.Header().Get("Location"); got != "/login" {
 				t.Fatalf("expected redirect to /login, got %q", got)
 			}

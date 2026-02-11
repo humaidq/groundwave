@@ -10,7 +10,9 @@ import (
 	"html/template"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -27,6 +29,7 @@ import (
 	"github.com/humaidq/groundwave/whatsapp"
 )
 
+// CmdStart defines the command that starts the web server.
 var CmdStart = &cli.Command{
 	Name:    "start",
 	Aliases: []string{"run"},
@@ -53,6 +56,33 @@ var CmdStart = &cli.Command{
 
 const runtimeEnvVar = "GROUNDWAVE_ENV"
 
+var safeImageDataURLPattern = regexp.MustCompile(`(?i)^data:image/(?:png|jpe?g|gif|webp|bmp);base64,[a-z0-9+/=]+$`)
+
+func safeImageURL(raw *string) template.URL {
+	if raw == nil {
+		return ""
+	}
+
+	value := strings.TrimSpace(*raw)
+	if value == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(value)
+	if err == nil {
+		scheme := strings.ToLower(parsed.Scheme)
+		if (scheme == "http" || scheme == "https") && parsed.Host != "" {
+			return template.URL(value)
+		}
+	}
+
+	if safeImageDataURLPattern.MatchString(value) {
+		return template.URL(value)
+	}
+
+	return ""
+}
+
 func resolveRuntimeEnv(cmd *cli.Command) (flamego.EnvType, error) {
 	if cmd.Bool("dev") {
 		return flamego.EnvTypeDev, nil
@@ -65,7 +95,7 @@ func resolveRuntimeEnv(cmd *cli.Command) (flamego.EnvType, error) {
 	case "production", "prod":
 		return flamego.EnvTypeProd, nil
 	default:
-		return "", fmt.Errorf("%s must be one of: development, dev, production, prod", runtimeEnvVar)
+		return "", errInvalidRuntimeEnv
 	}
 }
 
@@ -73,18 +103,19 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	// Get database URL
 	databaseURL := cmd.String("database-url")
 	if databaseURL == "" {
-		return fmt.Errorf("database-url is required (set via --database-url or DATABASE_URL env var)")
+		return errDatabaseURLRequired
 	}
 
 	csrfSecret := os.Getenv("CSRF_SECRET")
 	if csrfSecret == "" {
-		return fmt.Errorf("CSRF_SECRET is required")
+		return errCSRFSecretRequired
 	}
 
 	runtimeEnv, err := resolveRuntimeEnv(cmd)
 	if err != nil {
 		return err
 	}
+
 	flamego.SetEnv(runtimeEnv)
 	isProduction := runtimeEnv == flamego.EnvTypeProd
 
@@ -100,23 +131,28 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 
 	// Initialize database connection
 	appLogger.Info("Connecting to database")
+
 	if err := db.Init(ctx); err != nil {
 		return fmt.Errorf("failed to initialize database: %w", err)
 	}
+
 	defer db.Close()
 
 	// Sync schema
 	appLogger.Info("Syncing database schema")
+
 	if err := db.SyncSchema(ctx); err != nil {
 		return fmt.Errorf("failed to sync schema: %w", err)
 	}
+
 	appLogger.Info("Database schema synced successfully")
 
 	// Start cache rebuild worker
-	db.StartRebuildCacheWorker(context.Background())
+	db.StartRebuildCacheWorker(ctx)
 
 	// Sync CardDAV contacts
 	appLogger.Info("Syncing contacts from CardDAV")
+
 	if err := db.SyncAllCardDAVContacts(ctx); err != nil {
 		appLogger.Warn("CardDAV sync failed", "error", err)
 		// Don't fail startup, just log the error
@@ -124,6 +160,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 
 	// Initialize WhatsApp client (optional feature)
 	whatsappLogger.Info("Initializing WhatsApp client")
+
 	if err := whatsapp.Initialize(ctx, databaseURL, handleWhatsAppMessage); err != nil {
 		whatsappLogger.Warn("WhatsApp initialization failed", "error", err)
 		// Don't fail startup, WhatsApp is optional
@@ -132,7 +169,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	}
 
 	// Create maps directory if it doesn't exist
-	if err := os.MkdirAll("maps", 0755); err != nil {
+	if err := os.MkdirAll("maps", 0o750); err != nil {
 		return fmt.Errorf("failed to create maps directory: %w", err)
 	}
 
@@ -156,6 +193,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 					return true
 				}
 			}
+
 			return false
 		},
 		"filterLabel": func(filter string) string {
@@ -168,6 +206,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 			if label, ok := labels[filter]; ok {
 				return label
 			}
+
 			return filter
 		},
 		"inventoryStatusLabel": func(status db.InventoryStatus) string {
@@ -177,56 +216,58 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 			if size < 1000 {
 				return fmt.Sprintf("%d bytes", size)
 			}
+
 			units := []string{"kB", "MB", "GB", "TB", "PB"}
-			value := float64(size)
-			unitIndex := -1
+			value := float64(size) / 1000
+			unitIndex := 0
+
 			for value >= 1000 && unitIndex < len(units)-1 {
 				value /= 1000
 				unitIndex++
 			}
+
 			formatted := strings.TrimSuffix(fmt.Sprintf("%.1f", value), ".0")
-			return fmt.Sprintf("%s %s", formatted, units[unitIndex])
+
+			unit := "kB"
+			if unitIndex >= 0 && unitIndex < len(units) {
+				unit = units[unitIndex]
+			}
+
+			return fmt.Sprintf("%s %s", formatted, unit)
 		},
 		"truncateBreadcrumb": func(title string) string {
 			const maxLength = 40
+
 			if title == "" {
 				return title
 			}
+
 			runes := []rune(title)
 			if len(runes) <= maxLength {
 				return title
 			}
+
 			return string(runes[:maxLength]) + "..."
 		},
-		"safeImageURL": func(raw *string) template.URL {
-			if raw == nil {
-				return ""
-			}
-			value := strings.TrimSpace(*raw)
-			if value == "" {
-				return ""
-			}
-			lower := strings.ToLower(value)
-			if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") || strings.HasPrefix(lower, "data:image/") {
-				return template.URL(value)
-			}
-			return ""
-		},
+		"safeImageURL": safeImageURL,
 		"phoneDialValue": func(phone string) string {
 			trimmed := strings.TrimSpace(phone)
 			if trimmed == "" {
 				return ""
 			}
+
 			if strings.HasPrefix(strings.ToLower(trimmed), "tel:") {
 				trimmed = strings.TrimSpace(trimmed[len("tel:"):])
 			}
 
 			var b strings.Builder
+
 			for i, r := range trimmed {
 				if r >= '0' && r <= '9' {
 					b.WriteRune(r)
 					continue
 				}
+
 				if r == '+' && i == 0 {
 					b.WriteRune(r)
 				}
@@ -344,16 +385,20 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 				sign = "-"
 				value = math.Abs(value)
 			}
+
 			formatted := fmt.Sprintf("%.2f", value)
 			parts := strings.SplitN(formatted, ".", 2)
 			integer := parts[0]
+
 			fraction := "00"
 			if len(parts) == 2 {
 				fraction = parts[1]
 			}
+
 			for i := len(integer) - 3; i > 0; i -= 3 {
 				integer = integer[:i] + "," + integer[i:]
 			}
+
 			return sign + integer + "." + fraction
 		},
 	}
@@ -628,7 +673,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 
 	appLogger.Info("Starting web server", "port", port)
 	srv := &http.Server{
-		Addr:         fmt.Sprintf("0.0.0.0:%s", port),
+		Addr:         "0.0.0.0:" + port,
 		Handler:      f,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 5 * time.Minute, // Extended for SSE streaming (AI summary)
@@ -671,6 +716,7 @@ func handleWhatsAppMessage(jid string, timestamp time.Time, isOutgoing bool, mes
 	cleanMessage := strings.TrimSpace(message)
 	if cleanMessage != "" {
 		sentAt := timestamp.Format(time.RFC3339Nano)
+
 		sender := db.ChatSenderThem
 		if isOutgoing {
 			sender = db.ChatSenderMe
@@ -692,5 +738,6 @@ func handleWhatsAppMessage(jid string, timestamp time.Time, isOutgoing bool, mes
 	if isOutgoing {
 		direction = "sent"
 	}
+
 	whatsappLogger.Info("Updated last_auto_contact", "contact_id", *contactID, "direction", direction)
 }

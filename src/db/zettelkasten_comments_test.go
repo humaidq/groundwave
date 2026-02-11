@@ -11,6 +11,7 @@ import (
 
 func TestZettelkastenComments(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	if err := CreateZettelComment(ctx, "", "note"); err == nil {
@@ -26,11 +27,12 @@ func TestZettelkastenComments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCommentsForZettel failed: %v", err)
 	}
+
 	if len(comments) != 1 {
 		t.Fatalf("expected 1 comment, got %d", len(comments))
 	}
 
-	if err := UpdateZettelComment(ctx, comments[0].ID, "Updated"); err != nil {
+	if err := UpdateZettelComment(ctx, zettelID, comments[0].ID, "Updated"); err != nil {
 		t.Fatalf("UpdateZettelComment failed: %v", err)
 	}
 
@@ -38,6 +40,7 @@ func TestZettelkastenComments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCommentsForZettel failed: %v", err)
 	}
+
 	if comments[0].Content != "Updated" {
 		t.Fatalf("expected updated content, got %q", comments[0].Content)
 	}
@@ -46,6 +49,7 @@ func TestZettelkastenComments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetZettelCommentCount failed: %v", err)
 	}
+
 	if count != 1 {
 		t.Fatalf("expected 1 comment, got %d", count)
 	}
@@ -54,9 +58,11 @@ func TestZettelkastenComments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAllZettelComments failed: %v", err)
 	}
+
 	if len(all) != 1 {
 		t.Fatalf("expected 1 enriched comment, got %d", len(all))
 	}
+
 	if !all[0].OrphanedNote {
 		t.Fatalf("expected orphaned note without WebDAV config")
 	}
@@ -68,6 +74,7 @@ func TestZettelkastenComments(t *testing.T) {
 	if err := CreateZettelComment(ctx, zettelID, "Second"); err != nil {
 		t.Fatalf("CreateZettelComment failed: %v", err)
 	}
+
 	if err := CreateZettelComment(ctx, zettelID, "Third"); err != nil {
 		t.Fatalf("CreateZettelComment failed: %v", err)
 	}
@@ -80,7 +87,43 @@ func TestZettelkastenComments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCommentsForZettel failed: %v", err)
 	}
+
 	if len(comments) != 0 {
 		t.Fatalf("expected 0 comments, got %d", len(comments))
+	}
+}
+
+func TestUpdateZettelCommentRejectsCrossZettelUpdate(t *testing.T) {
+	resetDatabase(t)
+
+	ctx := testContext()
+
+	zettelA := uuid.New().String()
+	zettelB := uuid.New().String()
+
+	if err := CreateZettelComment(ctx, zettelA, "Original"); err != nil {
+		t.Fatalf("CreateZettelComment failed: %v", err)
+	}
+
+	comments, err := GetCommentsForZettel(ctx, zettelA)
+	if err != nil {
+		t.Fatalf("GetCommentsForZettel failed: %v", err)
+	}
+
+	if len(comments) != 1 {
+		t.Fatalf("expected 1 comment, got %d", len(comments))
+	}
+
+	if err := UpdateZettelComment(ctx, zettelB, comments[0].ID, "Tampered"); err == nil {
+		t.Fatalf("expected cross-zettel update to fail")
+	}
+
+	comments, err = GetCommentsForZettel(ctx, zettelA)
+	if err != nil {
+		t.Fatalf("GetCommentsForZettel failed: %v", err)
+	}
+
+	if comments[0].Content != "Original" {
+		t.Fatalf("expected original content to remain unchanged, got %q", comments[0].Content)
 	}
 }

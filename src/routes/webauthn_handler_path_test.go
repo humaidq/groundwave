@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025 Humaid Alqasimi
+// SPDX-License-Identifier: Apache-2.0
+
 package routes
 
 import (
@@ -9,6 +12,7 @@ import (
 
 	"github.com/flamego/flamego"
 	"github.com/flamego/session"
+	"github.com/flamego/template"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
 )
@@ -17,6 +21,7 @@ func newWebAuthnHandlerPathTestApp(s session.Session) *flamego.Flame {
 	f := flamego.New()
 	f.Use(func(c flamego.Context) {
 		c.MapTo(s, (*session.Session)(nil))
+		c.Map(template.Data{})
 		c.Next()
 	})
 
@@ -75,8 +80,9 @@ func TestWebAuthnSetupStartAuthorization(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			s := newTestSession()
 			tc.seed(s)
 
@@ -169,8 +175,9 @@ func TestWebAuthnSetupFinishAuthorizationAndTamper(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			s := newTestSession()
 			tc.seed(s)
 
@@ -178,6 +185,7 @@ func TestWebAuthnSetupFinishAuthorizationAndTamper(t *testing.T) {
 			rec := performWebAuthnPOST(f, "/webauthn/setup/finish")
 
 			assertJSONErrorResponse(t, rec, tc.wantStatus, tc.wantError)
+
 			if tc.clearStateKey && s.Get(webauthnSetupSessionKey) != nil {
 				t.Fatal("expected tampered setup session data to be removed")
 			}
@@ -221,8 +229,9 @@ func TestWebAuthnLoginFinishSessionStateValidation(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			s := newTestSession()
 			tc.seed(s)
 
@@ -230,6 +239,7 @@ func TestWebAuthnLoginFinishSessionStateValidation(t *testing.T) {
 			rec := performWebAuthnPOST(f, "/webauthn/login/finish")
 
 			assertJSONErrorResponse(t, rec, http.StatusBadRequest, tc.wantError)
+
 			if tc.expectStatePruned && s.Get(webauthnLoginSessionKey) != nil {
 				t.Fatal("expected invalid login session data to be removed")
 			}
@@ -248,8 +258,9 @@ func TestBreakGlassRoutesRequireAuthentication(t *testing.T) {
 	}
 
 	for _, path := range paths {
-		path := path
 		t.Run(path, func(t *testing.T) {
+			t.Parallel()
+
 			s := newTestSession()
 			f := newWebAuthnHandlerPathTestApp(s)
 
@@ -268,8 +279,9 @@ func TestBreakGlassStartRequiresSessionUserID(t *testing.T) {
 	}
 
 	for _, path := range paths {
-		path := path
 		t.Run(path, func(t *testing.T) {
+			t.Parallel()
+
 			s := newTestSession()
 			s.Set("authenticated", true)
 
@@ -290,8 +302,9 @@ func TestBreakGlassFinishSessionStateTamper(t *testing.T) {
 	}
 
 	for _, path := range paths {
-		path := path
 		t.Run(path, func(t *testing.T) {
+			t.Parallel()
+
 			s := newTestSession()
 			s.Set("authenticated", true)
 			s.Set("user_id", uuid.NewString())
@@ -301,6 +314,7 @@ func TestBreakGlassFinishSessionStateTamper(t *testing.T) {
 			rec := performWebAuthnPOST(f, path)
 
 			assertJSONErrorResponse(t, rec, http.StatusBadRequest, "verification session missing")
+
 			if s.Get(webauthnBreakGlassSessionKey) != nil {
 				t.Fatal("expected tampered break-glass session data to be removed")
 			}
@@ -312,6 +326,7 @@ func performWebAuthnPOST(f *flamego.Flame, path string) *httptest.ResponseRecord
 	req := httptest.NewRequest(http.MethodPost, path, nil)
 	rec := httptest.NewRecorder()
 	f.ServeHTTP(rec, req)
+
 	return rec
 }
 
@@ -321,6 +336,7 @@ func assertJSONErrorResponse(t *testing.T, rec *httptest.ResponseRecorder, wantS
 	if rec.Code != wantStatus {
 		t.Fatalf("expected status %d, got %d", wantStatus, rec.Code)
 	}
+
 	if got := rec.Header().Get("Content-Type"); got != "application/json" {
 		t.Fatalf("expected JSON content type, got %q", got)
 	}
@@ -329,6 +345,7 @@ func assertJSONErrorResponse(t *testing.T, rec *httptest.ResponseRecorder, wantS
 	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
 		t.Fatalf("failed to decode JSON error body: %v", err)
 	}
+
 	if got := payload["error"]; got != wantError {
 		t.Fatalf("expected error %q, got %q", wantError, got)
 	}
@@ -340,6 +357,7 @@ func assertRedirectResponse(t *testing.T, rec *httptest.ResponseRecorder, wantSt
 	if rec.Code != wantStatus {
 		t.Fatalf("expected status %d, got %d", wantStatus, rec.Code)
 	}
+
 	if got := rec.Header().Get("Location"); got != wantLocation {
 		t.Fatalf("expected redirect to %q, got %q", wantLocation, got)
 	}

@@ -16,18 +16,23 @@ func floatPtr(value float64) *float64 {
 
 func assertFloatPtrEqual(t *testing.T, got, want *float64) {
 	t.Helper()
+
 	if got == nil && want == nil {
 		return
 	}
+
 	if got == nil || want == nil {
 		t.Fatalf("expected %v, got %v", want, got)
 	}
+
 	if *got != *want {
 		t.Fatalf("expected %v, got %v", *want, *got)
 	}
 }
 
 func TestInventoryStatusLabel(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		status InventoryStatus
 		want   string
@@ -50,16 +55,20 @@ func TestInventoryStatusLabel(t *testing.T) {
 }
 
 func TestHealthProfileGetAge(t *testing.T) {
+	t.Parallel()
+
 	dob := time.Date(2000, time.February, 10, 0, 0, 0, 0, time.UTC)
 	profile := HealthProfile{DateOfBirth: &dob}
 
 	beforeBirthday := time.Date(2024, time.February, 9, 0, 0, 0, 0, time.UTC)
+
 	got := profile.GetAge(beforeBirthday)
 	if got == nil || *got != 23 {
 		t.Fatalf("expected age 23, got %v", got)
 	}
 
 	onBirthday := time.Date(2024, time.February, 10, 0, 0, 0, 0, time.UTC)
+
 	got = profile.GetAge(onBirthday)
 	if got == nil || *got != 24 {
 		t.Fatalf("expected age 24, got %v", got)
@@ -72,6 +81,8 @@ func TestHealthProfileGetAge(t *testing.T) {
 }
 
 func TestHealthProfileGetAgeRange(t *testing.T) {
+	t.Parallel()
+
 	atDate := time.Date(2024, time.June, 1, 0, 0, 0, 0, time.UTC)
 
 	cases := []struct {
@@ -90,6 +101,8 @@ func TestHealthProfileGetAgeRange(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			profile := HealthProfile{DateOfBirth: tc.dob}
 			if got := profile.GetAgeRange(atDate); got != tc.want {
 				t.Fatalf("expected %q, got %q", tc.want, got)
@@ -103,6 +116,8 @@ func floatPtrTime(value time.Time) *time.Time {
 }
 
 func TestReferenceRangeGetDisplayRange(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name       string
 		refMin     *float64
@@ -157,6 +172,8 @@ func TestReferenceRangeGetDisplayRange(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			rr := ReferenceRange{
 				ReferenceMin: tc.refMin,
 				ReferenceMax: tc.refMax,
@@ -166,9 +183,11 @@ func TestReferenceRangeGetDisplayRange(t *testing.T) {
 			refMin, refMax, optMin, optMax, hasOptimal := rr.GetDisplayRange()
 			assertFloatPtrEqual(t, refMin, tc.refMin)
 			assertFloatPtrEqual(t, refMax, tc.refMax)
+
 			if hasOptimal != tc.hasOptimal {
 				t.Fatalf("expected hasOptimal=%v, got %v", tc.hasOptimal, hasOptimal)
 			}
+
 			assertFloatPtrEqual(t, optMin, tc.wantOptMin)
 			assertFloatPtrEqual(t, optMax, tc.wantOptMax)
 		})
@@ -176,6 +195,8 @@ func TestReferenceRangeGetDisplayRange(t *testing.T) {
 }
 
 func TestQSOStatusHelpers(t *testing.T) {
+	t.Parallel()
+
 	qslSent := QSLSentYes
 	qslQueued := QSLSentQueued
 	qslRcvd := QSLYes
@@ -194,27 +215,35 @@ func TestQSOStatusHelpers(t *testing.T) {
 	if !qso.IsPaperQSLSent() {
 		t.Fatalf("expected paper QSL sent to be true")
 	}
+
 	if qso.IsPaperQSLQueued() {
 		t.Fatalf("expected paper QSL queued to be false")
 	}
+
 	if !qso.IsPaperQSLReceived() {
 		t.Fatalf("expected paper QSL received to be true")
 	}
+
 	if !qso.IsLoTWQSLSent() {
 		t.Fatalf("expected LoTW QSL sent to be true")
 	}
+
 	if !qso.IsLoTWQSLReceived() {
 		t.Fatalf("expected LoTW QSL received to be true")
 	}
+
 	if !qso.IsEQSLQSLSent() {
 		t.Fatalf("expected eQSL sent to be true")
 	}
+
 	if !qso.IsEQSLQSLReceived() {
 		t.Fatalf("expected eQSL received to be true")
 	}
+
 	if !qso.HasContact() {
 		t.Fatalf("expected contact to be linked")
 	}
+
 	if qso.GetContactID() != contactID.String() {
 		t.Fatalf("expected contact ID to match")
 	}
@@ -223,6 +252,7 @@ func TestQSOStatusHelpers(t *testing.T) {
 	if empty.IsPaperQSLSent() {
 		t.Fatalf("expected paper QSL sent to be false")
 	}
+
 	if empty.IsPaperQSLQueued() {
 		t.Fatalf("expected paper QSL queued to be false")
 	}
@@ -231,12 +261,15 @@ func TestQSOStatusHelpers(t *testing.T) {
 	if !queued.IsPaperQSLQueued() {
 		t.Fatalf("expected paper QSL queued to be true")
 	}
+
 	if queued.IsPaperQSLSent() {
 		t.Fatalf("expected queued paper QSL not to be marked sent")
 	}
+
 	if empty.HasContact() {
 		t.Fatalf("expected no contact to be linked")
 	}
+
 	if empty.GetContactID() != "" {
 		t.Fatalf("expected empty contact ID")
 	}

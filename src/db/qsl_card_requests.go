@@ -40,17 +40,17 @@ type QSLCardRequestListItem struct {
 // CreateQSLCardRequest stores a new physical QSL card request.
 func CreateQSLCardRequest(ctx context.Context, input CreateQSLCardRequestInput) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	qsoID := strings.TrimSpace(input.QSOID)
 	if qsoID == "" {
-		return fmt.Errorf("qso id is required")
+		return ErrQSOIDRequired
 	}
 
 	mailingAddress := strings.TrimSpace(input.MailingAddress)
 	if mailingAddress == "" {
-		return fmt.Errorf("mailing address is required")
+		return ErrMailingAddressRequired
 	}
 
 	var requesterName *string
@@ -79,7 +79,7 @@ func CreateQSLCardRequest(ctx context.Context, input CreateQSLCardRequestInput) 
 // ListOpenQSLCardRequests returns pending (not dismissed) physical QSL card requests.
 func ListOpenQSLCardRequests(ctx context.Context) ([]QSLCardRequestListItem, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -109,6 +109,7 @@ func ListOpenQSLCardRequests(ctx context.Context) ([]QSLCardRequestListItem, err
 	defer rows.Close()
 
 	var requests []QSLCardRequestListItem
+
 	for rows.Next() {
 		var request QSLCardRequestListItem
 		if err := rows.Scan(
@@ -127,6 +128,7 @@ func ListOpenQSLCardRequests(ctx context.Context) ([]QSLCardRequestListItem, err
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan qsl card request: %w", err)
 		}
+
 		requests = append(requests, request)
 	}
 
@@ -140,12 +142,12 @@ func ListOpenQSLCardRequests(ctx context.Context) ([]QSLCardRequestListItem, err
 // HasOpenQSLCardRequestForQSO returns true if the QSO has at least one open request.
 func HasOpenQSLCardRequestForQSO(ctx context.Context, qsoID string) (bool, error) {
 	if pool == nil {
-		return false, fmt.Errorf("database connection not initialized")
+		return false, ErrDatabaseConnectionNotInitialized
 	}
 
 	id := strings.TrimSpace(qsoID)
 	if id == "" {
-		return false, fmt.Errorf("qso id is required")
+		return false, ErrQSOIDRequired
 	}
 
 	query := `
@@ -168,12 +170,12 @@ func HasOpenQSLCardRequestForQSO(ctx context.Context, qsoID string) (bool, error
 // DismissQSLCardRequest hides a request from the pending queue.
 func DismissQSLCardRequest(ctx context.Context, requestID string) error {
 	if pool == nil {
-		return fmt.Errorf("database connection not initialized")
+		return ErrDatabaseConnectionNotInitialized
 	}
 
 	id := strings.TrimSpace(requestID)
 	if id == "" {
-		return fmt.Errorf("request id is required")
+		return ErrRequestIDRequired
 	}
 
 	query := `
@@ -188,7 +190,7 @@ func DismissQSLCardRequest(ctx context.Context, requestID string) error {
 	}
 
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("qsl card request not found")
+		return ErrQSLCardRequestNotFound
 	}
 
 	return nil

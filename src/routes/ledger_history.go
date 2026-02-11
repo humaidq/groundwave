@@ -55,7 +55,7 @@ var ledgerHistoryRangePresets = []ledgerHistoryRangePreset{
 const defaultLedgerHistoryRange = "all"
 
 // LedgerHistoryView renders end-of-month balance history charts.
-func LedgerHistoryView(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+func LedgerHistoryView(c flamego.Context, _ session.Session, t template.Template, data template.Data) {
 	ctx := c.Request().Context()
 	now := time.Now()
 	selectedRange := resolveLedgerHistoryRange(c.Query("range"))
@@ -65,6 +65,7 @@ func LedgerHistoryView(c flamego.Context, s session.Session, t template.Template
 	accounts, err := db.ListLedgerAccountsWithBalances(ctx)
 	if err != nil {
 		logger.Error("Error fetching ledger accounts", "error", err)
+
 		data["Error"] = "Failed to load ledger history"
 		accounts = []db.LedgerAccountSummary{}
 	}
@@ -76,14 +77,18 @@ func LedgerHistoryView(c flamego.Context, s session.Session, t template.Template
 		transactions, err := db.ListLedgerAccountTransactions(ctx, account.ID)
 		if err != nil {
 			logger.Error("Error fetching ledger transactions for history", "account_id", account.ID, "error", err)
+
 			hasHistoryLoadError = true
+
 			continue
 		}
 
 		reconciliations, err := db.ListLedgerReconciliations(ctx, account.ID)
 		if err != nil {
 			logger.Error("Error fetching ledger reconciliations for history", "account_id", account.ID, "error", err)
+
 			hasHistoryLoadError = true
+
 			continue
 		}
 
@@ -113,16 +118,19 @@ func LedgerHistoryView(c flamego.Context, s session.Session, t template.Template
 		)
 		if err != nil {
 			logger.Error("Error rendering net worth history chart", "error", err)
+
 			if data["Error"] == nil {
 				data["Error"] = "Failed to render net worth chart"
 			}
 		} else {
-			data["NetWorthChart"] = htmltemplate.HTML(netWorthChart)
+			data["NetWorthChart"] = htmltemplate.HTML(netWorthChart) //nolint:gosec // Chart markup is generated server-side.
 		}
 	}
 
-	var regularCharts []map[string]interface{}
-	var trackingCharts []map[string]interface{}
+	var (
+		regularCharts  []map[string]interface{}
+		trackingCharts []map[string]interface{}
+	)
 
 	for _, accountSeries := range series {
 		switch accountSeries.Account.AccountType {
@@ -140,12 +148,13 @@ func LedgerHistoryView(c flamego.Context, s session.Session, t template.Template
 					"account_id", accountSeries.Account.ID,
 					"error", err,
 				)
+
 				continue
 			}
 
 			chartData := map[string]interface{}{
 				"AccountName": accountSeries.Account.Name,
-				"HTML":        htmltemplate.HTML(chart),
+				"HTML":        htmltemplate.HTML(chart), //nolint:gosec // Chart markup is generated server-side.
 			}
 
 			if accountSeries.Account.AccountType == db.LedgerAccountRegular {
@@ -163,12 +172,14 @@ func LedgerHistoryView(c flamego.Context, s session.Session, t template.Template
 			"Charts":       regularCharts,
 		})
 	}
+
 	if len(trackingCharts) > 0 {
 		chartCategories = append(chartCategories, map[string]interface{}{
 			"CategoryName": "Tracking Accounts",
 			"Charts":       trackingCharts,
 		})
 	}
+
 	if len(chartCategories) > 0 {
 		data["AccountChartCategories"] = chartCategories
 	}
@@ -195,12 +206,14 @@ func buildLedgerMonthlySeries(
 	}
 
 	firstMonth := ledgerMonthStart(account.CreatedAt)
+
 	lastMonth := ledgerMonthStart(now)
 	if firstMonth.After(lastMonth) {
 		return nil
 	}
 
 	var points []ledgerHistoryPoint
+
 	for month := firstMonth; !month.After(lastMonth); month = month.AddDate(0, 1, 0) {
 		monthEndExclusive := month.AddDate(0, 1, 0)
 		balance := ledgerHistoryBalanceAt(account, transactions, reconciliations, monthEndExclusive)
@@ -224,11 +237,13 @@ func ledgerHistoryBalanceAt(
 	balance := account.OpeningBalance
 
 	var latestReconciliation *db.LedgerReconciliation
+
 	for i := range reconciliations {
 		rec := reconciliations[i]
 		if rec.ReconciledAt.Before(account.CreatedAt) {
 			continue
 		}
+
 		if !rec.ReconciledAt.Before(monthEndExclusive) {
 			continue
 		}
@@ -242,6 +257,7 @@ func ledgerHistoryBalanceAt(
 	}
 
 	cutoff := account.CreatedAt
+
 	if latestReconciliation != nil {
 		balance = latestReconciliation.Balance
 		cutoff = latestReconciliation.ReconciledAt
@@ -251,6 +267,7 @@ func ledgerHistoryBalanceAt(
 		if tx.Status != db.LedgerTransactionCleared && tx.Status != db.LedgerTransactionRefunded {
 			continue
 		}
+
 		if !tx.OccurredAt.Before(monthEndExclusive) {
 			continue
 		}
@@ -313,6 +330,7 @@ func renderLedgerHistoryChart(title, chartID string, points []ledgerHistoryPoint
 	}
 
 	xAxis := make([]string, 0, len(points))
+
 	yData := make([]opts.LineData, 0, len(points))
 	for _, point := range points {
 		xAxis = append(xAxis, point.Label)
@@ -359,7 +377,7 @@ func renderLedgerHistoryChart(title, chartID string, points []ledgerHistoryPoint
 
 	var buf bytes.Buffer
 	if err := line.Render(&buf); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to render ledger history chart: %w", err)
 	}
 
 	return buf.String(), nil
@@ -367,7 +385,7 @@ func renderLedgerHistoryChart(title, chartID string, points []ledgerHistoryPoint
 
 func ledgerHistoryChartID(accountID string) string {
 	sanitized := strings.ReplaceAll(accountID, "-", "")
-	return fmt.Sprintf("ledger_account_history_%s", sanitized)
+	return "ledger_account_history_" + sanitized
 }
 
 func resolveLedgerHistoryRange(rawRange string) ledgerHistoryRangePreset {
@@ -394,6 +412,7 @@ func ledgerHistoryCutoffMonth(selectedRange ledgerHistoryRangePreset, now time.T
 
 	lastMonth := ledgerMonthStart(now)
 	cutoff := lastMonth.AddDate(0, -(selectedRange.Months - 1), 0)
+
 	return &cutoff
 }
 
@@ -422,6 +441,7 @@ func filterLedgerHistoryPointsByCutoff(points []ledgerHistoryPoint, cutoff *time
 	if cutoff == nil {
 		copied := make([]ledgerHistoryPoint, len(points))
 		copy(copied, points)
+
 		return copied
 	}
 
@@ -430,6 +450,7 @@ func filterLedgerHistoryPointsByCutoff(points []ledgerHistoryPoint, cutoff *time
 		if point.MonthStart.Before(*cutoff) {
 			continue
 		}
+
 		filtered = append(filtered, point)
 	}
 

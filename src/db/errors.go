@@ -1,0 +1,88 @@
+/*
+ * Copyright 2025 Humaid Alqasimi
+ * SPDX-License-Identifier: Apache-2.0
+ */
+package db
+
+import "errors"
+
+var (
+	ErrDatabaseConnectionNotInitialized = errors.New("database connection not initialized")
+	ErrDatabaseURLEnvVarNotSet          = errors.New("DATABASE_URL environment variable is not set")
+	ErrDatabaseNameNotSpecified         = errors.New("no database name specified in DATABASE_URL")
+
+	ErrDisplayNameRequired = errors.New("display name is required")
+	ErrUserNotFound        = errors.New("user not found")
+	ErrInvalidUserHandle   = errors.New("invalid user handle")
+	ErrPasskeyNotFound     = errors.New("passkey not found")
+
+	ErrCardDAVConfigIncomplete       = errors.New("CardDAV configuration incomplete: CARDDAV_URL, CARDDAV_USERNAME, and CARDDAV_PASSWORD must all be set")
+	ErrContactNotLinkedToCardDAV     = errors.New("contact is not linked to CardDAV")
+	ErrContactAlreadyLinkedToCardDAV = errors.New("contact is already linked to CardDAV")
+	ErrCardDAVContactByUUIDNotFound  = errors.New("contact with UUID not found")
+	ErrCardDAVContactByUIDNotFound   = errors.New("contact with UID not found")
+	ErrFetchVCFFileFailed            = errors.New("failed to fetch VCF file")
+
+	ErrLogNotFound         = errors.New("log not found")
+	ErrChatMessageRequired = errors.New("chat message is required")
+	ErrChatEntryNotFound   = errors.New("chat entry not found")
+	ErrNoteContentEmpty    = errors.New("note content cannot be empty")
+	ErrNoteNotFound        = errors.New("note not found")
+
+	ErrInvalidUserID    = errors.New("invalid user ID")
+	ErrInvalidCreatorID = errors.New("invalid creator ID")
+	ErrInvalidProfileID = errors.New("invalid profile ID")
+
+	ErrNameRequired                = errors.New("name is required")
+	ErrCommentContentEmpty         = errors.New("comment content cannot be empty")
+	ErrInventoryItemNotFound       = errors.New("inventory item not found")
+	ErrCommentNotFound             = errors.New("comment not found")
+	ErrLocationNotFound            = errors.New("location not found")
+	ErrCategoryNameRequired        = errors.New("category name is required")
+	ErrAmountMustBeGreaterThanZero = errors.New("amount must be greater than zero")
+	ErrBudgetNotFound              = errors.New("budget not found")
+	ErrAccountNameRequired         = errors.New("account name is required")
+	ErrAccountTypeRequired         = errors.New("account type is required")
+	ErrAccountNotFound             = errors.New("account not found")
+	ErrMerchantRequired            = errors.New("merchant is required")
+	ErrAmountMustBeNonZero         = errors.New("amount must be non-zero")
+	ErrTransactionNotFound         = errors.New("transaction not found")
+	ErrReconciliationNotFound      = errors.New("reconciliation not found")
+
+	ErrOllamaConfigIncomplete      = errors.New("ollama configuration incomplete: OLLAMA_URL and OLLAMA_MODEL must be set")
+	ErrOllamaReturnedStatus        = errors.New("ollama returned status")
+	ErrOllamaError                 = errors.New("ollama error")
+	ErrNoQRZAPIKeysProvided        = errors.New("no QRZ API keys provided")
+	ErrSyncAllQRZLogbooksFailed    = errors.New("failed to sync all QRZ logbooks")
+	ErrQRZPaginationMissingLogID   = errors.New("unable to continue QRZ pagination (missing APP_QRZLOG_LOGID)")
+	ErrQRZPaginationLimitReached   = errors.New("QRZ pagination limit reached")
+	ErrQRZLogbookAPIReturnedStatus = errors.New("QRZ logbook API returned status")
+	ErrQRZLogbookAPIError          = errors.New("QRZ logbook API error")
+	ErrQRZLogbookResponseMissing   = errors.New("QRZ logbook response missing RESULT")
+
+	ErrQSOIDRequired          = errors.New("qso id is required")
+	ErrMailingAddressRequired = errors.New("mailing address is required")
+	ErrRequestIDRequired      = errors.New("request id is required")
+	ErrQSLCardRequestNotFound = errors.New("qsl card request not found")
+
+	ErrInvalidDateFormat = errors.New("invalid date format")
+	ErrInvalidTimeFormat = errors.New("invalid time format")
+	ErrUnableToParseDate = errors.New("unable to parse date")
+
+	ErrInvalidPostgresSessionIniterArgument = errors.New("invalid PostgresSessionIniter argument")
+	ErrNoTagIDsProvided                     = errors.New("no tag IDs provided")
+
+	ErrWebDAVTodoPathNotConfigured      = errors.New("WEBDAV_TODO_PATH not configured")
+	ErrWebDAVTodoPathMustBeOrgFile      = errors.New("WEBDAV_TODO_PATH must point to a .org file")
+	ErrNoWebDAVPathsConfigured          = errors.New("no WebDAV paths configured")
+	ErrWebDAVInventoryPathNotConfigured = errors.New("WEBDAV_INV_PATH not configured")
+	ErrWebDAVFilesPathNotConfigured     = errors.New("WEBDAV_FILES_PATH not configured")
+	ErrWebDAVZKPathNotConfigured        = errors.New("WEBDAV_ZK_PATH not configured")
+	ErrWebDAVZKPathMustIncludeFilename  = errors.New("WEBDAV_ZK_PATH must include a filename")
+	ErrWebDAVZKPathMustBeOrgFile        = errors.New("WEBDAV_ZK_PATH must point to a .org file")
+	ErrFetchTodoFileFailed              = errors.New("failed to fetch todo file")
+	ErrFetchFileFailed                  = errors.New("failed to fetch file")
+	ErrZKNoteNotFound                   = errors.New("note with ID not found")
+
+	ErrInviteNotFound = errors.New("invite not found")
+)

@@ -14,8 +14,10 @@ import (
 	"time"
 )
 
+// QslStatus represents ADIF QSL status values.
 type QslStatus string
 
+// QslStatus values represent QSL confirmation states.
 const (
 	QslYes       QslStatus = "Y" // Yes
 	QslNo        QslStatus = "N" // No
@@ -24,6 +26,7 @@ const (
 	QslEmpty     QslStatus = ""  // Empty/Unknown
 )
 
+// QSO represents one ADIF contact record.
 type QSO struct {
 	Call         string
 	QSODate      string // YYYYMMDD format
@@ -55,16 +58,19 @@ type QSO struct {
 	Timestamp    time.Time // Parsed datetime for easier searching
 }
 
+// ADIFParser parses ADIF content and stores parsed QSOs.
 type ADIFParser struct {
 	QSOs []QSO
 }
 
+// NewADIFParser creates an empty ADIF parser.
 func NewADIFParser() *ADIFParser {
 	return &ADIFParser{
 		QSOs: make([]QSO, 0),
 	}
 }
 
+// ParseFile reads and parses ADIF data from the provided reader.
 func (p *ADIFParser) ParseFile(reader io.Reader) error {
 	content, err := io.ReadAll(reader)
 	if err != nil {
@@ -195,7 +201,7 @@ func (p *ADIFParser) parseRecord(record string) (QSO, error) {
 
 	// Validate required fields
 	if qso.Call == "" || qso.QSODate == "" {
-		return qso, fmt.Errorf("missing required fields (CALL or QSO_DATE)")
+		return qso, errMissingRequiredADIFFields
 	}
 
 	return qso, nil
@@ -204,35 +210,39 @@ func (p *ADIFParser) parseRecord(record string) (QSO, error) {
 func (p *ADIFParser) parseTimestamp(date, timeOn string) (time.Time, error) {
 	// ADIF date format: YYYYMMDD
 	// ADIF time format: HHMMSS
-
 	if len(date) != 8 || len(timeOn) != 6 {
-		return time.Time{}, fmt.Errorf("invalid date/time format")
+		return time.Time{}, errInvalidDateTimeFormat
 	}
 
 	// Parse components
 	year, err := strconv.Atoi(date[0:4])
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, fmt.Errorf("invalid adif year %q: %w", date[0:4], err)
 	}
+
 	month, err := strconv.Atoi(date[4:6])
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, fmt.Errorf("invalid adif month %q: %w", date[4:6], err)
 	}
+
 	day, err := strconv.Atoi(date[6:8])
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, fmt.Errorf("invalid adif day %q: %w", date[6:8], err)
 	}
+
 	hour, err := strconv.Atoi(timeOn[0:2])
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, fmt.Errorf("invalid adif hour %q: %w", timeOn[0:2], err)
 	}
+
 	minute, err := strconv.Atoi(timeOn[2:4])
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, fmt.Errorf("invalid adif minute %q: %w", timeOn[2:4], err)
 	}
+
 	second, err := strconv.Atoi(timeOn[4:6])
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, fmt.Errorf("invalid adif second %q: %w", timeOn[4:6], err)
 	}
 
 	return time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC), nil
@@ -243,8 +253,12 @@ func (p *ADIFParser) SearchQSO(callSign string, searchTime time.Time, toleranceM
 	callSign = strings.ToUpper(strings.TrimSpace(callSign))
 
 	tolerance := time.Duration(toleranceMinutes) * time.Minute
-	var bestMatch QSO
-	var bestTimeDiff time.Duration
+
+	var (
+		bestMatch    QSO
+		bestTimeDiff time.Duration
+	)
+
 	found := false
 
 	for _, qso := range p.QSOs {
@@ -274,12 +288,14 @@ func (p *ADIFParser) SearchQSO(callSign string, searchTime time.Time, toleranceM
 	if found {
 		return []QSO{bestMatch}
 	}
+
 	return []QSO{}
 }
 
 // GetQSOsByCallsign returns all QSOs for a specific call sign
 func (p *ADIFParser) GetQSOsByCallsign(callSign string) []QSO {
 	callSign = strings.ToUpper(strings.TrimSpace(callSign))
+
 	var results []QSO
 
 	for _, qso := range p.QSOs {
@@ -299,11 +315,13 @@ func (p *ADIFParser) GetTotalQSOCount() int {
 // GetUniqueCountriesCount returns the number of unique countries worked
 func (p *ADIFParser) GetUniqueCountriesCount() int {
 	countries := make(map[string]bool)
+
 	for _, qso := range p.QSOs {
 		if qso.Country != "" {
 			countries[qso.Country] = true
 		}
 	}
+
 	return len(countries)
 }
 
@@ -318,8 +336,8 @@ func (p *ADIFParser) GetLatestQSOs(limit int) []QSO {
 	copy(qsos, p.QSOs)
 
 	// Simple bubble sort by timestamp (newest first)
-	for i := 0; i < len(qsos)-1; i++ {
-		for j := 0; j < len(qsos)-i-1; j++ {
+	for i := range len(qsos) - 1 {
+		for j := range len(qsos) - i - 1 {
 			if qsos[j].Timestamp.Before(qsos[j+1].Timestamp) {
 				qsos[j], qsos[j+1] = qsos[j+1], qsos[j]
 			}
@@ -329,6 +347,7 @@ func (p *ADIFParser) GetLatestQSOs(limit int) []QSO {
 	if len(qsos) < limit {
 		return qsos
 	}
+
 	return qsos[:limit]
 }
 
@@ -344,10 +363,12 @@ func (p *ADIFParser) GetLatestQSO() *QSO {
 	}
 
 	var latest *QSO
+
 	for i := range p.QSOs {
 		if p.QSOs[i].Timestamp.IsZero() {
 			continue
 		}
+
 		if latest == nil || p.QSOs[i].Timestamp.After(latest.Timestamp) {
 			latest = &p.QSOs[i]
 		}
@@ -376,7 +397,7 @@ func (p *ADIFParser) GetPaperQSLHallOfFame() []QSO {
 	}
 
 	// Convert map to slice and sort by callsign
-	var result []QSO
+	result := make([]QSO, 0, len(seen))
 	for _, qso := range seen {
 		result = append(result, qso)
 	}
@@ -394,6 +415,7 @@ func (qso QSO) FormatQSOTime() string {
 	if !qso.Timestamp.IsZero() {
 		return qso.Timestamp.UTC().Format("2006-01-02 15:04:05 UTC")
 	}
+
 	return fmt.Sprintf("%s %s UTC", qso.QSODate, qso.TimeOn)
 }
 
@@ -402,6 +424,7 @@ func (qso QSO) FormatDate() string {
 	if len(qso.QSODate) == 8 {
 		return fmt.Sprintf("%s-%s-%s", qso.QSODate[0:4], qso.QSODate[4:6], qso.QSODate[6:8])
 	}
+
 	return qso.QSODate
 }
 
@@ -410,6 +433,7 @@ func (qso QSO) FormatTime() string {
 	if len(qso.TimeOn) >= 4 {
 		return fmt.Sprintf("%s:%s", qso.TimeOn[0:2], qso.TimeOn[2:4])
 	}
+
 	return qso.TimeOn
 }
 

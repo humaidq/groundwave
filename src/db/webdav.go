@@ -59,7 +59,7 @@ func GetWebDAVConfig() (*WebDAVConfig, error) {
 	// Username and password are optional (no auth if not provided)
 	// At least one path must be configured for this to be useful
 	if zkPath == "" && invPath == "" && filesPath == "" {
-		return nil, fmt.Errorf("no WebDAV paths configured")
+		return nil, ErrNoWebDAVPathsConfigured
 	}
 
 	return &WebDAVConfig{
@@ -99,13 +99,14 @@ func ListInventoryFiles(ctx context.Context, inventoryID string) ([]WebDAVFile, 
 	}
 
 	if config.InvPath == "" {
-		return nil, fmt.Errorf("WEBDAV_INV_PATH not configured")
+		return nil, ErrWebDAVInventoryPathNotConfigured
 	}
 
 	// Construct directory path: WEBDAV_INV_PATH + "/" + inventoryID
 	dirPath := strings.TrimSuffix(config.InvPath, "/") + "/" + inventoryID
 
 	httpClient := newWebDAVHTTPClient(config)
+
 	client, err := webdav.NewClient(httpClient, dirPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create WebDAV client: %w", err)
@@ -118,10 +119,12 @@ func ListInventoryFiles(ctx context.Context, inventoryID string) ([]WebDAVFile, 
 		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found") {
 			return []WebDAVFile{}, nil
 		}
+
 		return nil, fmt.Errorf("failed to list WebDAV directory: %w", err)
 	}
 
-	var files []WebDAVFile
+	files := make([]WebDAVFile, 0, len(fileInfos))
+
 	for _, info := range fileInfos {
 		if info.IsDir {
 			continue // Skip subdirectories
@@ -149,7 +152,7 @@ func FetchInventoryFile(ctx context.Context, inventoryID string, filename string
 	}
 
 	if config.InvPath == "" {
-		return nil, "", fmt.Errorf("WEBDAV_INV_PATH not configured")
+		return nil, "", ErrWebDAVInventoryPathNotConfigured
 	}
 
 	// Construct file URL: WEBDAV_INV_PATH + "/" + inventoryID + "/" + filename
@@ -157,7 +160,7 @@ func FetchInventoryFile(ctx context.Context, inventoryID string, filename string
 
 	httpClient := newWebDAVHTTPClient(config)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", fileURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fileURL, nil)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create request: %w", err)
 	}
@@ -166,6 +169,7 @@ func FetchInventoryFile(ctx context.Context, inventoryID string, filename string
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to fetch file: %w", err)
 	}
+
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			logger.Warn("Failed to close WebDAV inventory response body", "error", err)
@@ -173,7 +177,7 @@ func FetchInventoryFile(ctx context.Context, inventoryID string, filename string
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, "", fmt.Errorf("failed to fetch file: HTTP %d", resp.StatusCode)
+		return nil, "", fmt.Errorf("%w: HTTP %d", ErrFetchFileFailed, resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -182,6 +186,7 @@ func FetchInventoryFile(ctx context.Context, inventoryID string, filename string
 	}
 
 	contentType := inferContentType(filename)
+
 	return body, contentType, nil
 }
 
@@ -193,7 +198,7 @@ func ListFilesEntries(ctx context.Context, dirPath string) ([]WebDAVEntry, error
 	}
 
 	if config.FilesPath == "" {
-		return nil, fmt.Errorf("WEBDAV_FILES_PATH not configured")
+		return nil, ErrWebDAVFilesPathNotConfigured
 	}
 
 	client, err := newFilesWebDAVClient(config)
@@ -203,10 +208,11 @@ func ListFilesEntries(ctx context.Context, dirPath string) ([]WebDAVEntry, error
 
 	basePath := filesBasePath(config)
 	if basePath == "" {
-		return nil, fmt.Errorf("WEBDAV_FILES_PATH not configured")
+		return nil, ErrWebDAVFilesPathNotConfigured
 	}
 
 	target := filesReadDirTarget(basePath, dirPath)
+
 	fileInfos, err := client.ReadDir(ctx, target, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list WebDAV directory: %w", err)
@@ -217,10 +223,12 @@ func ListFilesEntries(ctx context.Context, dirPath string) ([]WebDAVEntry, error
 		if isListingSelf(info.Path, dirPath, basePath) {
 			continue
 		}
+
 		name := extractFilename(info.Path)
 		if name == "" {
 			continue
 		}
+
 		if strings.HasPrefix(name, ".") {
 			continue
 		}
@@ -239,6 +247,7 @@ func ListFilesEntries(ctx context.Context, dirPath string) ([]WebDAVEntry, error
 		if entries[i].IsDir != entries[j].IsDir {
 			return entries[i].IsDir
 		}
+
 		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
 	})
 
@@ -253,7 +262,7 @@ func FetchFilesFile(ctx context.Context, filePath string) ([]byte, string, error
 	}
 
 	if config.FilesPath == "" {
-		return nil, "", fmt.Errorf("WEBDAV_FILES_PATH not configured")
+		return nil, "", ErrWebDAVFilesPathNotConfigured
 	}
 
 	client, err := newFilesWebDAVClient(config)
@@ -265,6 +274,7 @@ func FetchFilesFile(ctx context.Context, filePath string) ([]byte, string, error
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to fetch WebDAV file: %w", err)
 	}
+
 	defer func() {
 		if err := reader.Close(); err != nil {
 			logger.Warn("Failed to close WebDAV file reader", "error", err)
@@ -277,6 +287,7 @@ func FetchFilesFile(ctx context.Context, filePath string) ([]byte, string, error
 	}
 
 	contentType := inferContentType(filePath)
+
 	return body, contentType, nil
 }
 
@@ -288,16 +299,17 @@ func IsFilesPathRestricted(ctx context.Context, dirPath string) (bool, error) {
 	}
 
 	if config.FilesPath == "" {
-		return false, fmt.Errorf("WEBDAV_FILES_PATH not configured")
+		return false, ErrWebDAVFilesPathNotConfigured
 	}
 
 	client, err := newFilesWebDAVClient(config)
 	if err != nil {
 		return false, fmt.Errorf("failed to create WebDAV client: %w", err)
 	}
+
 	basePath := filesBasePath(config)
 	if basePath == "" {
-		return false, fmt.Errorf("WEBDAV_FILES_PATH not configured")
+		return false, ErrWebDAVFilesPathNotConfigured
 	}
 
 	return isFilesPathMarked(ctx, client, basePath, dirPath, ".gw_btg")
@@ -311,16 +323,17 @@ func IsFilesPathAdminOnly(ctx context.Context, dirPath string) (bool, error) {
 	}
 
 	if config.FilesPath == "" {
-		return false, fmt.Errorf("WEBDAV_FILES_PATH not configured")
+		return false, ErrWebDAVFilesPathNotConfigured
 	}
 
 	client, err := newFilesWebDAVClient(config)
 	if err != nil {
 		return false, fmt.Errorf("failed to create WebDAV client: %w", err)
 	}
+
 	basePath := filesBasePath(config)
 	if basePath == "" {
-		return false, fmt.Errorf("WEBDAV_FILES_PATH not configured")
+		return false, ErrWebDAVFilesPathNotConfigured
 	}
 
 	return isFilesPathMarked(ctx, client, basePath, dirPath, ".gw_admin")
@@ -329,15 +342,17 @@ func IsFilesPathAdminOnly(ctx context.Context, dirPath string) (bool, error) {
 func newFilesWebDAVClient(config *WebDAVConfig) (*webdav.Client, error) {
 	basePath := strings.TrimRight(config.FilesPath, "/")
 	if basePath == "" {
-		return nil, fmt.Errorf("WEBDAV_FILES_PATH not configured")
+		return nil, ErrWebDAVFilesPathNotConfigured
 	}
 
 	endpoint := basePath + "/"
 	httpClient := newWebDAVHTTPClient(config)
+
 	client, err := webdav.NewClient(httpClient, endpoint)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create files webdav client: %w", err)
 	}
+
 	return client, nil
 }
 
@@ -346,6 +361,7 @@ func isFilesPathMarked(ctx context.Context, client *webdav.Client, basePath stri
 	if err != nil {
 		return false, err
 	}
+
 	if restricted {
 		return true, nil
 	}
@@ -356,10 +372,12 @@ func isFilesPathMarked(ctx context.Context, client *webdav.Client, basePath stri
 
 	segments := strings.Split(dirPath, "/")
 	current := ""
+
 	for _, segment := range segments {
 		if segment == "" {
 			continue
 		}
+
 		if current == "" {
 			current = segment
 		} else {
@@ -370,6 +388,7 @@ func isFilesPathMarked(ctx context.Context, client *webdav.Client, basePath stri
 		if err != nil {
 			return false, err
 		}
+
 		if restricted {
 			return true, nil
 		}
@@ -380,9 +399,10 @@ func isFilesPathMarked(ctx context.Context, client *webdav.Client, basePath stri
 
 func dirHasMarker(ctx context.Context, client *webdav.Client, basePath string, dirPath string, marker string) (bool, error) {
 	target := filesReadDirTarget(basePath, dirPath)
+
 	fileInfos, err := client.ReadDir(ctx, target, false)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to read webdav directory %q: %w", target, err)
 	}
 
 	for _, info := range fileInfos {
@@ -399,24 +419,30 @@ func dirHasMarker(ctx context.Context, client *webdav.Client, basePath string, d
 
 func extractFilename(path string) string {
 	trimmed := strings.TrimSuffix(path, "/")
+
 	parts := strings.Split(strings.TrimPrefix(trimmed, "/"), "/")
 	if len(parts) == 0 {
 		return ""
 	}
+
 	return parts[len(parts)-1]
 }
 
 func isListingSelf(entryPath string, dirPath string, basePath string) bool {
 	entry := normalizeFilesPathForCompare(entryPath, basePath)
+
 	dir := normalizeFilesPathForCompare(dirPath, "")
 	if entry == dir {
 		return true
 	}
+
 	if dir == "" {
 		entryRoot := normalizeFilesPathForCompare(entryPath, "")
 		baseRoot := normalizeFilesPathForCompare(basePath, "")
+
 		return entryRoot == baseRoot
 	}
+
 	return false
 }
 
@@ -425,16 +451,20 @@ func normalizeFilesPathForCompare(value string, basePath string) string {
 	if trimmed == "" {
 		return ""
 	}
+
 	if decoded, err := url.PathUnescape(trimmed); err == nil {
 		trimmed = decoded
 	}
+
 	if basePath != "" {
 		base := basePath
 		if decoded, err := url.PathUnescape(base); err == nil {
 			base = decoded
 		}
+
 		if trimmed != base {
 			original := trimmed
+
 			trimmed = strings.TrimPrefix(trimmed, base)
 			if trimmed == original {
 				altBase := strings.TrimSuffix(base, "/")
@@ -444,11 +474,14 @@ func normalizeFilesPathForCompare(value string, basePath string) string {
 			}
 		}
 	}
+
 	trimmed = strings.TrimPrefix(trimmed, "/")
+
 	trimmed = strings.TrimSuffix(trimmed, "/")
 	if trimmed == "." {
 		trimmed = ""
 	}
+
 	return trimmed
 }
 
@@ -457,16 +490,20 @@ func filesBasePath(config *WebDAVConfig) string {
 	if err != nil {
 		return ""
 	}
+
 	basePath := parsed.Path
 	if basePath == "" {
 		basePath = "/"
 	}
+
 	if !strings.HasPrefix(basePath, "/") {
 		basePath = "/" + basePath
 	}
+
 	if !strings.HasSuffix(basePath, "/") {
 		basePath += "/"
 	}
+
 	return basePath
 }
 
@@ -475,19 +512,25 @@ func filesReadDirTarget(basePath string, dirPath string) string {
 	if trimmed == "" || trimmed == "." || trimmed == "/" {
 		return basePath
 	}
+
 	trimmed = strings.TrimPrefix(trimmed, "/")
+
 	trimmed = strings.TrimSuffix(trimmed, "/")
 	if trimmed == "" {
 		return basePath
 	}
+
 	root := strings.TrimSuffix(basePath, "/")
+
 	target := path.Join(root, trimmed)
 	if !strings.HasPrefix(target, "/") {
 		target = "/" + target
 	}
+
 	if !strings.HasSuffix(target, "/") {
 		target += "/"
 	}
+
 	return target
 }
 
@@ -543,5 +586,6 @@ func inferContentType(filename string) string {
 	if ct, ok := contentTypes[ext]; ok {
 		return ct
 	}
+
 	return "application/octet-stream"
 }

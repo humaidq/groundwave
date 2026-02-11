@@ -19,7 +19,9 @@ func LoginForm(c flamego.Context, s session.Session, t template.Template, data t
 		c.Redirect("/", http.StatusSeeOther)
 		return
 	}
+
 	data["HeaderOnly"] = true
+
 	t.HTML(http.StatusOK, "login")
 }
 
@@ -41,7 +43,9 @@ func RequireAuth(s session.Session, c flamego.Context) {
 	if !ok || !authenticated {
 		logAccessDenied(c, s, "not_authenticated", http.StatusFound, "/login")
 		c.Redirect("/login")
+
 		return
 	}
+
 	c.Next()
 }

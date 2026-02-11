@@ -15,6 +15,7 @@ type LinkedInURLContact struct {
 	ContactID string
 }
 
+// ContactName contains a contact identifier and display name.
 type ContactName struct {
 	ID          string
 	NameDisplay string
@@ -23,7 +24,7 @@ type ContactName struct {
 // ListLinkedInURLs returns all LinkedIn URLs stored for contacts.
 func ListLinkedInURLs(ctx context.Context) ([]LinkedInURLContact, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -40,11 +41,13 @@ func ListLinkedInURLs(ctx context.Context) ([]LinkedInURLContact, error) {
 	defer rows.Close()
 
 	var urls []LinkedInURLContact
+
 	for rows.Next() {
 		var url LinkedInURLContact
 		if err := rows.Scan(&url.URL, &url.ContactID); err != nil {
 			return nil, fmt.Errorf("failed to scan LinkedIn URL: %w", err)
 		}
+
 		urls = append(urls, url)
 	}
 
@@ -58,7 +61,7 @@ func ListLinkedInURLs(ctx context.Context) ([]LinkedInURLContact, error) {
 // ListContactsWithoutLinkedIn returns contacts missing LinkedIn URLs.
 func ListContactsWithoutLinkedIn(ctx context.Context) ([]ContactName, error) {
 	if pool == nil {
-		return nil, fmt.Errorf("database connection not initialized")
+		return nil, ErrDatabaseConnectionNotInitialized
 	}
 
 	query := `
@@ -79,11 +82,13 @@ func ListContactsWithoutLinkedIn(ctx context.Context) ([]ContactName, error) {
 	defer rows.Close()
 
 	var contacts []ContactName
+
 	for rows.Next() {
 		var contact ContactName
 		if err := rows.Scan(&contact.ID, &contact.NameDisplay); err != nil {
 			return nil, fmt.Errorf("failed to scan contact: %w", err)
 		}
+
 		contacts = append(contacts, contact)
 	}
 

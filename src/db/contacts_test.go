@@ -6,6 +6,8 @@ package db
 import "testing"
 
 func TestNormalizeLinkedInURL(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name  string
 		input string
@@ -64,10 +66,13 @@ func TestNormalizeLinkedInURL(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, ok := NormalizeLinkedInURL(tc.input)
 			if ok != tc.ok {
 				t.Fatalf("expected ok=%v, got %v", tc.ok, ok)
 			}
+
 			if got != tc.want {
 				t.Fatalf("expected %q, got %q", tc.want, got)
 			}

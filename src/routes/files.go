@@ -25,6 +25,7 @@ func FilesList(c flamego.Context, s session.Session, t template.Template, data t
 	if !ok {
 		SetErrorFlash(s, "Invalid path")
 		c.Redirect("/files", http.StatusSeeOther)
+
 		return
 	}
 
@@ -39,45 +40,64 @@ func FilesList(c flamego.Context, s session.Session, t template.Template, data t
 	data["FileModTime"] = time.Time{}
 
 	ctx := c.Request().Context()
+
 	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil {
 		logger.Error("Error resolving admin state", "error", err)
+
 		isAdmin = false
 	}
+
 	data["IsAdmin"] = isAdmin
 
 	adminOnly, err := db.IsFilesPathAdminOnly(ctx, relPath)
 	if err != nil {
 		logger.Error("Error checking WebDAV admin restriction", "path", relPath, "error", err)
+
 		data["Error"] = "Failed to load files. Please check your WEBDAV_FILES_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables."
 		data["Entries"] = []db.WebDAVEntry{}
+
 		t.HTML(http.StatusOK, "files")
+
 		return
 	}
+
 	if adminOnly && !isAdmin {
 		SetErrorFlash(s, "Access restricted")
+
 		if relPath == "" {
 			c.Redirect("/inventory", http.StatusSeeOther)
 			return
 		}
+
 		c.Redirect("/files", http.StatusSeeOther)
+
 		return
 	}
+
 	data["IsAdminOnly"] = adminOnly
 
 	restricted, err := db.IsFilesPathRestricted(ctx, relPath)
 	if err != nil {
 		logger.Error("Error checking WebDAV restriction", "path", relPath, "error", err)
+
 		data["Error"] = "Failed to load files. Please check your WEBDAV_FILES_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables."
 		data["Entries"] = []db.WebDAVEntry{}
+
 		t.HTML(http.StatusOK, "files")
+
 		return
 	}
+
 	if adminOnly {
 		restricted = true
 	}
 
 	data["IsRestricted"] = restricted
+	if restricted {
+		data["PageRequiresSensitiveAccess"] = true
+	}
+
 	if restricted && !HasSensitiveAccess(s, time.Now()) {
 		redirectToBreakGlass(c, s)
 		return
@@ -86,9 +106,11 @@ func FilesList(c flamego.Context, s session.Session, t template.Template, data t
 	entries, err := db.ListFilesEntries(ctx, relPath)
 	if err != nil {
 		logger.Error("Error listing WebDAV files", "path", relPath, "error", err)
+
 		data["Error"] = "Failed to load files. Please check your WEBDAV_FILES_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables."
 		entries = []db.WebDAVEntry{}
 	}
+
 	if !isAdmin {
 		filtered := make([]db.WebDAVEntry, 0, len(entries))
 		for _, entry := range entries {
@@ -98,23 +120,28 @@ func FilesList(c flamego.Context, s session.Session, t template.Template, data t
 					logger.Error("Error checking admin-only marker", "path", entry.Path, "error", err)
 					continue
 				}
+
 				if entryAdminOnly {
 					continue
 				}
 			}
+
 			filtered = append(filtered, entry)
 		}
+
 		entries = filtered
 	} else {
 		for i := range entries {
 			if !entries[i].IsDir {
 				continue
 			}
+
 			entryAdminOnly, err := db.IsFilesPathAdminOnly(ctx, entries[i].Path)
 			if err != nil {
 				logger.Error("Error checking admin-only marker", "path", entries[i].Path, "error", err)
 				continue
 			}
+
 			entries[i].IsAdminOnly = entryAdminOnly
 		}
 	}
@@ -131,6 +158,7 @@ func FilesView(c flamego.Context, s session.Session, t template.Template, data t
 	if !ok || relPath == "" {
 		SetErrorFlash(s, "Invalid file path")
 		c.Redirect("/files", http.StatusSeeOther)
+
 		return
 	}
 
@@ -145,11 +173,14 @@ func FilesView(c flamego.Context, s session.Session, t template.Template, data t
 	data["FileModTime"] = time.Time{}
 
 	ctx := c.Request().Context()
+
 	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil {
 		logger.Error("Error resolving admin state", "error", err)
+
 		isAdmin = false
 	}
+
 	data["IsAdmin"] = isAdmin
 
 	dirPath := path.Dir(relPath)
@@ -162,17 +193,23 @@ func FilesView(c flamego.Context, s session.Session, t template.Template, data t
 		logger.Error("Error checking WebDAV admin restriction", "path", relPath, "error", err)
 		SetErrorFlash(s, "Failed to load file")
 		c.Redirect(filesRedirectPath(dirPath), http.StatusSeeOther)
+
 		return
 	}
+
 	if adminOnly && !isAdmin {
 		SetErrorFlash(s, "Access restricted")
+
 		if dirPath == "" {
 			c.Redirect("/inventory", http.StatusSeeOther)
 			return
 		}
+
 		c.Redirect("/files", http.StatusSeeOther)
+
 		return
 	}
+
 	data["IsAdminOnly"] = adminOnly
 
 	restricted, err := db.IsFilesPathRestricted(ctx, dirPath)
@@ -180,12 +217,19 @@ func FilesView(c flamego.Context, s session.Session, t template.Template, data t
 		logger.Error("Error checking WebDAV restriction", "path", relPath, "error", err)
 		SetErrorFlash(s, "Failed to load file")
 		c.Redirect(filesRedirectPath(dirPath), http.StatusSeeOther)
+
 		return
 	}
+
 	if adminOnly {
 		restricted = true
 	}
+
 	data["IsRestricted"] = restricted
+	if restricted {
+		data["PageRequiresSensitiveAccess"] = true
+	}
+
 	if restricted && !HasSensitiveAccess(s, time.Now()) {
 		redirectToBreakGlass(c, s)
 		return
@@ -194,24 +238,31 @@ func FilesView(c flamego.Context, s session.Session, t template.Template, data t
 	entries, err := db.ListFilesEntries(ctx, dirPath)
 	if err != nil {
 		logger.Error("Error listing WebDAV files", "path", dirPath, "error", err)
+
 		data["Error"] = "Failed to load file. Please check your WEBDAV_FILES_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables."
 		data["Entries"] = []db.WebDAVEntry{}
+
 		t.HTML(http.StatusOK, "files_view")
+
 		return
 	}
 
 	var fileEntry *db.WebDAVEntry
+
 	for i := range entries {
 		if entries[i].Name == fileName {
 			fileEntry = &entries[i]
 			break
 		}
 	}
+
 	if fileEntry == nil {
 		SetErrorFlash(s, "File not found")
 		c.Redirect(filesRedirectPath(dirPath), http.StatusSeeOther)
+
 		return
 	}
+
 	if fileEntry.IsDir {
 		c.Redirect(filesRedirectPath(relPath), http.StatusSeeOther)
 		return
@@ -222,11 +273,13 @@ func FilesView(c flamego.Context, s session.Session, t template.Template, data t
 	data["FileModTime"] = fileEntry.ModTime
 
 	viewerType := filesViewerType(fileEntry.Name)
+
 	data["ViewerType"] = viewerType
 	if viewerType == "text" || viewerType == "markdown" {
 		fileData, _, err := db.FetchFilesFile(ctx, relPath)
 		if err != nil {
 			logger.Error("Error fetching WebDAV file for preview", "path", relPath, "error", err)
+
 			data["PreviewError"] = "Preview unavailable"
 			data["ViewerType"] = "unknown"
 		} else {
@@ -243,10 +296,12 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 	if !ok || relPath == "" {
 		SetErrorFlash(s, "Invalid file path")
 		c.Redirect("/files", http.StatusSeeOther)
+
 		return
 	}
 
 	ctx := c.Request().Context()
+
 	dirPath := path.Dir(relPath)
 	if dirPath == "." {
 		dirPath = ""
@@ -255,6 +310,7 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 	isAdmin, err := resolveSessionIsAdmin(ctx, s)
 	if err != nil {
 		logger.Error("Error resolving admin state", "error", err)
+
 		isAdmin = false
 	}
 
@@ -263,15 +319,20 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 		logger.Error("Error checking WebDAV admin restriction", "path", relPath, "error", err)
 		SetErrorFlash(s, "Failed to load file")
 		c.Redirect(filesRedirectPath(dirPath), http.StatusSeeOther)
+
 		return
 	}
+
 	if adminOnly && !isAdmin {
 		SetErrorFlash(s, "Access restricted")
+
 		if dirPath == "" {
 			c.Redirect("/inventory", http.StatusSeeOther)
 			return
 		}
+
 		c.Redirect("/files", http.StatusSeeOther)
+
 		return
 	}
 
@@ -280,11 +341,14 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 		logger.Error("Error checking WebDAV restriction", "path", relPath, "error", err)
 		SetErrorFlash(s, "Failed to load file")
 		c.Redirect(filesRedirectPath(dirPath), http.StatusSeeOther)
+
 		return
 	}
+
 	if adminOnly {
 		restricted = true
 	}
+
 	if restricted && !HasSensitiveAccess(s, time.Now()) {
 		redirectToBreakGlass(c, s)
 		return
@@ -295,19 +359,23 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 		logger.Error("Error fetching WebDAV file", "path", relPath, "error", err)
 		SetErrorFlash(s, "File not found")
 		c.Redirect(filesRedirectPath(dirPath), http.StatusSeeOther)
+
 		return
 	}
 
 	filename := sanitizeFilenameForHeader(path.Base(relPath))
+
 	contentDisposition := "inline"
 	if isDownloadRequested(c.Query("download")) {
 		contentDisposition = "attachment"
 	}
+
 	c.ResponseWriter().Header().Set("Content-Type", contentType)
 	c.ResponseWriter().Header().Set("Content-Disposition", contentDisposition+"; filename=\""+filename+"\"")
 	c.ResponseWriter().Header().Set("Content-Length", strconv.Itoa(len(fileData)))
 
 	c.ResponseWriter().WriteHeader(http.StatusOK)
+
 	if _, err := c.ResponseWriter().Write(fileData); err != nil {
 		logger.Error("Error writing file response", "path", relPath, "error", err)
 	}
@@ -332,10 +400,12 @@ func buildFilesBreadcrumbs(relPath string) []BreadcrumbItem {
 	crumbs = append(crumbs, BreadcrumbItem{Name: "Files", URL: "/files", IsCurrent: false})
 
 	current := ""
+
 	for i, segment := range segments {
 		if segment == "" {
 			continue
 		}
+
 		if current == "" {
 			current = segment
 		} else {
@@ -343,10 +413,12 @@ func buildFilesBreadcrumbs(relPath string) []BreadcrumbItem {
 		}
 
 		isCurrent := i == len(segments)-1
+
 		urlPath := ""
 		if !isCurrent {
 			urlPath = "/files?path=" + url.QueryEscape(current)
 		}
+
 		crumbs = append(crumbs, BreadcrumbItem{Name: segment, URL: urlPath, IsCurrent: isCurrent})
 	}
 
@@ -357,6 +429,7 @@ func formatFilesPathDisplay(relPath string) string {
 	if relPath == "" {
 		return "/"
 	}
+
 	return "/" + relPath
 }
 
@@ -364,10 +437,12 @@ func parentFilesPath(relPath string) string {
 	if relPath == "" {
 		return ""
 	}
+
 	parent := path.Dir(relPath)
 	if parent == "." {
 		return ""
 	}
+
 	return parent
 }
 
@@ -375,6 +450,7 @@ func filesRedirectPath(relPath string) string {
 	if relPath == "" {
 		return "/files"
 	}
+
 	return "/files?path=" + url.QueryEscape(relPath)
 }
 
@@ -383,23 +459,29 @@ func sanitizeFilesPath(raw string) (string, bool) {
 	if raw == "" {
 		return "", true
 	}
+
 	if strings.Contains(raw, "\\") {
 		return "", false
 	}
+
 	raw = strings.TrimPrefix(raw, "/")
 
 	segments := strings.Split(raw, "/")
+
 	cleaned := make([]string, 0, len(segments))
 	for _, segment := range segments {
 		if segment == "" {
 			continue
 		}
+
 		if segment == "." || segment == ".." {
 			return "", false
 		}
+
 		if strings.HasPrefix(segment, ".") {
 			return "", false
 		}
+
 		cleaned = append(cleaned, segment)
 	}
 

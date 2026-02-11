@@ -20,9 +20,11 @@ func buildZKChatPrompt(notes []ZKChatNote, message string) string {
 		sb.WriteString(fmt.Sprintf("Note ID: %s\n", note.ID))
 		sb.WriteString("Note Content:\n")
 		sb.WriteString(note.Content)
+
 		if !strings.HasSuffix(note.Content, "\n") {
 			sb.WriteString("\n")
 		}
+
 		sb.WriteString("\n---\n\n")
 	}
 

@@ -6,7 +6,7 @@ package templates
 
 import "embed"
 
-// Append "**/*" if you also have template files in subdirectories
+// Templates contains embedded HTML templates from this directory.
 //
 //go:embed *.html
 var Templates embed.FS

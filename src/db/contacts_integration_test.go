@@ -12,6 +12,7 @@ import (
 
 func TestContactListFiltersAndServiceContacts(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	primaryEmail := "alice@example.com"
@@ -53,6 +54,7 @@ func TestContactListFiltersAndServiceContacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListContacts failed: %v", err)
 	}
+
 	if len(contacts) != 2 {
 		t.Fatalf("expected 2 non-service contacts, got %d", len(contacts))
 	}
@@ -64,6 +66,7 @@ func TestContactListFiltersAndServiceContacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListContactsWithFilters failed: %v", err)
 	}
+
 	if len(noEmail) != 1 || noEmail[0].ID != contact2 {
 		t.Fatalf("expected contact without email")
 	}
@@ -75,6 +78,7 @@ func TestContactListFiltersAndServiceContacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListContactsWithFilters failed: %v", err)
 	}
+
 	if len(noPhone) != 1 || noPhone[0].ID != contact2 {
 		t.Fatalf("expected contact without phone")
 	}
@@ -86,6 +90,7 @@ func TestContactListFiltersAndServiceContacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListContactsWithFilters failed: %v", err)
 	}
+
 	if len(noLinkedIn) != 1 || noLinkedIn[0].ID != contact2 {
 		t.Fatalf("expected contact without LinkedIn")
 	}
@@ -97,6 +102,7 @@ func TestContactListFiltersAndServiceContacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListContactsWithFilters failed: %v", err)
 	}
+
 	if len(noCardDAV) != 2 {
 		t.Fatalf("expected contacts without CardDAV, got %d", len(noCardDAV))
 	}
@@ -105,6 +111,7 @@ func TestContactListFiltersAndServiceContacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListAllTags failed: %v", err)
 	}
+
 	if len(tags) != 1 {
 		t.Fatalf("expected 1 tag, got %d", len(tags))
 	}
@@ -116,6 +123,7 @@ func TestContactListFiltersAndServiceContacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListContactsWithFilters failed: %v", err)
 	}
+
 	if len(withTags) != 1 || withTags[0].ID != contact1 {
 		t.Fatalf("expected tagged contact")
 	}
@@ -132,6 +140,7 @@ func TestContactListFiltersAndServiceContacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListServiceContacts failed: %v", err)
 	}
+
 	if len(services) != 1 || services[0].ID != serviceContact {
 		t.Fatalf("expected 1 service contact")
 	}
@@ -139,10 +148,12 @@ func TestContactListFiltersAndServiceContacts(t *testing.T) {
 	if err := AddChat(ctx, AddChatInput{ContactID: serviceContact, Message: "ignored"}); err != nil {
 		t.Fatalf("AddChat for service contact failed: %v", err)
 	}
+
 	serviceChats, err := GetContactChats(ctx, serviceContact)
 	if err != nil {
 		t.Fatalf("GetContactChats failed: %v", err)
 	}
+
 	if len(serviceChats) != 0 {
 		t.Fatalf("expected no chats for service contact")
 	}
@@ -155,6 +166,7 @@ func TestContactListFiltersAndServiceContacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("IsServiceContact failed: %v", err)
 	}
+
 	if !isService {
 		t.Fatalf("expected contact to be service")
 	}
@@ -163,6 +175,7 @@ func TestContactListFiltersAndServiceContacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListServiceContacts failed: %v", err)
 	}
+
 	if len(services) != 2 {
 		t.Fatalf("expected 2 service contacts, got %d", len(services))
 	}
@@ -171,6 +184,7 @@ func TestContactListFiltersAndServiceContacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetContactsCount failed: %v", err)
 	}
+
 	if count != 3 {
 		t.Fatalf("expected 3 contacts, got %d", count)
 	}
@@ -179,6 +193,7 @@ func TestContactListFiltersAndServiceContacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetRecentContacts failed: %v", err)
 	}
+
 	if len(recent) != 2 {
 		t.Fatalf("expected 2 recent contacts, got %d", len(recent))
 	}
@@ -192,6 +207,7 @@ func TestContactListFiltersAndServiceContacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetOverdueContacts failed: %v", err)
 	}
+
 	if len(overdue) == 0 {
 		t.Fatalf("expected overdue contacts")
 	}
@@ -199,6 +215,7 @@ func TestContactListFiltersAndServiceContacts(t *testing.T) {
 
 func TestContactDetailsAndLogs(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	primaryEmail := "carlos@example.com"
@@ -213,9 +230,11 @@ func TestContactDetailsAndLogs(t *testing.T) {
 	if err := AddEmail(ctx, AddEmailInput{ContactID: contactID, Email: "alt@example.com", EmailType: EmailWork, IsPrimary: false}); err != nil {
 		t.Fatalf("AddEmail failed: %v", err)
 	}
+
 	if err := AddPhone(ctx, AddPhoneInput{ContactID: contactID, Phone: "+1 555-2222", PhoneType: PhoneHome, IsPrimary: false}); err != nil {
 		t.Fatalf("AddPhone failed: %v", err)
 	}
+
 	if err := AddURL(ctx, AddURLInput{ContactID: contactID, URL: "https://example.com", URLType: URLWebsite}); err != nil {
 		t.Fatalf("AddURL failed: %v", err)
 	}
@@ -224,9 +243,11 @@ func TestContactDetailsAndLogs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetContact failed: %v", err)
 	}
+
 	if detail.NameDisplay != "Carlos" {
 		t.Fatalf("expected name Carlos, got %q", detail.NameDisplay)
 	}
+
 	if len(detail.Emails) != 2 || len(detail.Phones) != 2 || len(detail.URLs) != 1 {
 		t.Fatalf("expected emails/phones/urls to be populated")
 	}
@@ -235,6 +256,7 @@ func TestContactDetailsAndLogs(t *testing.T) {
 	if err := UpdateEmail(ctx, UpdateEmailInput{ID: primaryEmailID, ContactID: contactID, Email: "carlos@example.com", EmailType: EmailPersonal, IsPrimary: true}); err != nil {
 		t.Fatalf("UpdateEmail failed: %v", err)
 	}
+
 	primaryPhoneID := detail.Phones[0].ID.String()
 	if err := UpdatePhone(ctx, UpdatePhoneInput{ID: primaryPhoneID, ContactID: contactID, Phone: "+1 555-3333", PhoneType: PhoneCell, IsPrimary: true}); err != nil {
 		t.Fatalf("UpdatePhone failed: %v", err)
@@ -243,6 +265,7 @@ func TestContactDetailsAndLogs(t *testing.T) {
 	if _, err := GetContactIDByEmailID(ctx, primaryEmailID); err != nil {
 		t.Fatalf("GetContactIDByEmailID failed: %v", err)
 	}
+
 	if _, err := GetContactIDByPhoneID(ctx, primaryPhoneID); err != nil {
 		t.Fatalf("GetContactIDByPhoneID failed: %v", err)
 	}
@@ -252,6 +275,7 @@ func TestContactDetailsAndLogs(t *testing.T) {
 	}
 
 	logSubject := "Check in"
+
 	logContent := "Met at conference"
 	if err := AddLog(ctx, AddLogInput{ContactID: contactID, LogType: LogGeneral, Subject: &logSubject, Content: &logContent}); err != nil {
 		t.Fatalf("AddLog failed: %v", err)
@@ -259,10 +283,12 @@ func TestContactDetailsAndLogs(t *testing.T) {
 
 	start := time.Now().AddDate(0, 0, -7)
 	end := time.Now().AddDate(0, 0, 7)
+
 	counts, err := ListContactWeeklyActivityCounts(ctx, contactID, start, end)
 	if err != nil {
 		t.Fatalf("ListContactWeeklyActivityCounts failed: %v", err)
 	}
+
 	if len(counts) == 0 {
 		t.Fatalf("expected weekly activity counts")
 	}
@@ -271,16 +297,20 @@ func TestContactDetailsAndLogs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListContactLogsTimeline failed: %v", err)
 	}
+
 	if len(timeline) != 1 {
 		t.Fatalf("expected 1 timeline entry, got %d", len(timeline))
 	}
+
 	if err := DeleteLog(ctx, timeline[0].ID.String()); err != nil {
 		t.Fatalf("DeleteLog failed: %v", err)
 	}
+
 	counts, err = ListContactWeeklyActivityCounts(ctx, contactID, start, end)
 	if err != nil {
 		t.Fatalf("ListContactWeeklyActivityCounts failed: %v", err)
 	}
+
 	if len(counts) != 0 {
 		t.Fatalf("expected no weekly counts after log deletion")
 	}
@@ -294,6 +324,7 @@ func TestContactDetailsAndLogs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetContactChats failed: %v", err)
 	}
+
 	if len(chats) != 1 {
 		t.Fatalf("expected 1 chat, got %d", len(chats))
 	}
@@ -302,6 +333,7 @@ func TestContactDetailsAndLogs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetContactChatsSince failed: %v", err)
 	}
+
 	if len(chatsSince) != 1 {
 		t.Fatalf("expected 1 chat since, got %d", len(chatsSince))
 	}
@@ -314,9 +346,11 @@ func TestContactDetailsAndLogs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetContact failed: %v", err)
 	}
+
 	if len(detail.Notes) != 1 {
 		t.Fatalf("expected 1 note, got %d", len(detail.Notes))
 	}
+
 	if err := DeleteNote(ctx, detail.Notes[0].ID.String()); err != nil {
 		t.Fatalf("DeleteNote failed: %v", err)
 	}
@@ -324,10 +358,12 @@ func TestContactDetailsAndLogs(t *testing.T) {
 	if err := LinkCardDAV(ctx, contactID, "carddav-uuid"); err != nil {
 		t.Fatalf("LinkCardDAV failed: %v", err)
 	}
+
 	linked, err := IsCardDAVUUIDLinked(ctx, "carddav-uuid")
 	if err != nil {
 		t.Fatalf("IsCardDAVUUIDLinked failed: %v", err)
 	}
+
 	if !linked {
 		t.Fatalf("expected carddav uuid to be linked")
 	}
@@ -336,6 +372,7 @@ func TestContactDetailsAndLogs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLinkedCardDAVUUIDs failed: %v", err)
 	}
+
 	if len(linkedUUIDs) != 1 {
 		t.Fatalf("expected 1 linked uuid, got %d", len(linkedUUIDs))
 	}
@@ -344,6 +381,7 @@ func TestContactDetailsAndLogs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLinkedCardDAVUUIDsWithServiceStatus failed: %v", err)
 	}
+
 	if len(statusMap) != 1 {
 		t.Fatalf("expected 1 status map entry, got %d", len(statusMap))
 	}
@@ -357,11 +395,13 @@ func TestContactDetailsAndLogs(t *testing.T) {
 			t.Fatalf("DeleteEmail failed: %v", err)
 		}
 	}
+
 	for _, phone := range detail.Phones {
 		if err := DeletePhone(ctx, phone.ID.String(), contactID); err != nil {
 			t.Fatalf("DeletePhone failed: %v", err)
 		}
 	}
+
 	for _, url := range detail.URLs {
 		if err := DeleteURL(ctx, url.ID.String()); err != nil {
 			t.Fatalf("DeleteURL failed: %v", err)
@@ -375,6 +415,7 @@ func TestContactDetailsAndLogs(t *testing.T) {
 
 func TestContactPrimaryEmailPhoneBehavior(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	contactID := mustCreateContact(t, CreateContactInput{
@@ -385,6 +426,7 @@ func TestContactPrimaryEmailPhoneBehavior(t *testing.T) {
 	if err := AddEmail(ctx, AddEmailInput{ContactID: contactID, Email: "first@example.com", EmailType: EmailWork, IsPrimary: false}); err != nil {
 		t.Fatalf("AddEmail failed: %v", err)
 	}
+
 	if err := AddEmail(ctx, AddEmailInput{ContactID: contactID, Email: "second@example.com", EmailType: EmailWork, IsPrimary: false}); err != nil {
 		t.Fatalf("AddEmail failed: %v", err)
 	}
@@ -393,11 +435,13 @@ func TestContactPrimaryEmailPhoneBehavior(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetContact failed: %v", err)
 	}
+
 	if len(detail.Emails) != 2 {
 		t.Fatalf("expected 2 emails, got %d", len(detail.Emails))
 	}
 
 	var firstEmailID, secondEmailID string
+
 	for _, email := range detail.Emails {
 		switch email.Email {
 		case "first@example.com":
@@ -406,6 +450,7 @@ func TestContactPrimaryEmailPhoneBehavior(t *testing.T) {
 			secondEmailID = email.ID.String()
 		}
 	}
+
 	if firstEmailID == "" || secondEmailID == "" {
 		t.Fatalf("expected email IDs to be populated")
 	}
@@ -413,6 +458,7 @@ func TestContactPrimaryEmailPhoneBehavior(t *testing.T) {
 	if err := UpdateEmail(ctx, UpdateEmailInput{ID: secondEmailID, ContactID: contactID, Email: "second@example.com", EmailType: EmailWork, IsPrimary: false}); err != nil {
 		t.Fatalf("UpdateEmail failed: %v", err)
 	}
+
 	if err := UpdateEmail(ctx, UpdateEmailInput{ID: firstEmailID, ContactID: contactID, Email: "first@example.com", EmailType: EmailWork, IsPrimary: false}); err != nil {
 		t.Fatalf("UpdateEmail failed: %v", err)
 	}
@@ -420,6 +466,7 @@ func TestContactPrimaryEmailPhoneBehavior(t *testing.T) {
 	if err := AddPhone(ctx, AddPhoneInput{ContactID: contactID, Phone: "+1 555-0001", PhoneType: PhoneCell, IsPrimary: false}); err != nil {
 		t.Fatalf("AddPhone failed: %v", err)
 	}
+
 	if err := AddPhone(ctx, AddPhoneInput{ContactID: contactID, Phone: "+1 555-0002", PhoneType: PhoneCell, IsPrimary: false}); err != nil {
 		t.Fatalf("AddPhone failed: %v", err)
 	}
@@ -428,11 +475,13 @@ func TestContactPrimaryEmailPhoneBehavior(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetContact failed: %v", err)
 	}
+
 	if len(detail.Phones) != 2 {
 		t.Fatalf("expected 2 phones, got %d", len(detail.Phones))
 	}
 
 	var firstPhoneID, secondPhoneID string
+
 	for _, phone := range detail.Phones {
 		switch phone.Phone {
 		case "+1 555-0001":
@@ -441,6 +490,7 @@ func TestContactPrimaryEmailPhoneBehavior(t *testing.T) {
 			secondPhoneID = phone.ID.String()
 		}
 	}
+
 	if firstPhoneID == "" || secondPhoneID == "" {
 		t.Fatalf("expected phone IDs to be populated")
 	}
@@ -448,6 +498,7 @@ func TestContactPrimaryEmailPhoneBehavior(t *testing.T) {
 	if err := UpdatePhone(ctx, UpdatePhoneInput{ID: secondPhoneID, ContactID: contactID, Phone: "+1 555-0002", PhoneType: PhoneCell, IsPrimary: false}); err != nil {
 		t.Fatalf("UpdatePhone failed: %v", err)
 	}
+
 	if err := UpdatePhone(ctx, UpdatePhoneInput{ID: firstPhoneID, ContactID: contactID, Phone: "+1 555-0001", PhoneType: PhoneCell, IsPrimary: false}); err != nil {
 		t.Fatalf("UpdatePhone failed: %v", err)
 	}
@@ -455,6 +506,7 @@ func TestContactPrimaryEmailPhoneBehavior(t *testing.T) {
 
 func TestUpdateContactLinksQSOs(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	contactID := mustCreateContact(t, CreateContactInput{NameGiven: "Caller", Tier: TierB})
@@ -475,6 +527,7 @@ func TestUpdateContactLinksQSOs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListQSOs failed: %v", err)
 	}
+
 	if len(all) != 1 {
 		t.Fatalf("expected 1 QSO, got %d", len(all))
 	}
@@ -483,6 +536,7 @@ func TestUpdateContactLinksQSOs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetQSO failed: %v", err)
 	}
+
 	if detail.ContactID == nil || detail.ContactID.String() != contactID {
 		t.Fatalf("expected QSO contact link to be updated")
 	}
@@ -490,6 +544,7 @@ func TestUpdateContactLinksQSOs(t *testing.T) {
 
 func TestAddChatDefaultsAndValidation(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	contactID := mustCreateContact(t, CreateContactInput{NameGiven: "Chat", Tier: TierB})
@@ -506,12 +561,15 @@ func TestAddChatDefaultsAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetContactChats failed: %v", err)
 	}
+
 	if len(chats) != 1 {
 		t.Fatalf("expected 1 chat, got %d", len(chats))
 	}
+
 	if chats[0].Platform != ChatPlatformManual {
 		t.Fatalf("expected default platform manual")
 	}
+
 	if chats[0].Sender != ChatSenderThem {
 		t.Fatalf("expected default sender them")
 	}

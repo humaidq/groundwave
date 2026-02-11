@@ -11,6 +11,7 @@ import (
 
 func TestQSOImportAndQueries(t *testing.T) {
 	resetDatabase(t)
+
 	ctx := testContext()
 
 	callSign := "K1ABC"
@@ -38,6 +39,7 @@ func TestQSOImportAndQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ImportADIFQSOs failed: %v", err)
 	}
+
 	if count != 1 {
 		t.Fatalf("expected 1 QSO imported, got %d", count)
 	}
@@ -46,6 +48,7 @@ func TestQSOImportAndQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListQSOs failed: %v", err)
 	}
+
 	if len(all) != 1 {
 		t.Fatalf("expected 1 QSO, got %d", len(all))
 	}
@@ -54,6 +57,7 @@ func TestQSOImportAndQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListRecentQSOs failed: %v", err)
 	}
+
 	if len(recent) != 1 {
 		t.Fatalf("expected 1 recent QSO, got %d", len(recent))
 	}
@@ -62,6 +66,7 @@ func TestQSOImportAndQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetQSO failed: %v", err)
 	}
+
 	if detail.Call != callSign {
 		t.Fatalf("expected call %q, got %q", callSign, detail.Call)
 	}
@@ -70,6 +75,7 @@ func TestQSOImportAndQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetQSOsByCallSign failed: %v", err)
 	}
+
 	if len(byCall) != 1 {
 		t.Fatalf("expected 1 QSO by call, got %d", len(byCall))
 	}
@@ -78,15 +84,22 @@ func TestQSOImportAndQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetQSOCount failed: %v", err)
 	}
+
 	if countAll != 1 {
 		t.Fatalf("expected 1 QSO count, got %d", countAll)
 	}
 
+	if len(qsos) == 0 {
+		t.Fatalf("expected imported QSOs to contain at least one entry")
+	}
+
 	qsos[0].Mode = "CW"
+
 	updatedCount, err := ImportADIFQSOs(ctx, qsos)
 	if err != nil {
 		t.Fatalf("ImportADIFQSOs update failed: %v", err)
 	}
+
 	if updatedCount != 1 {
 		t.Fatalf("expected 1 QSO processed, got %d", updatedCount)
 	}

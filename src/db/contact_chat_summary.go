@@ -20,9 +20,12 @@ func buildContactChatSummaryPrompt(contact *Contact, chats []ContactChat) string
 
 	for _, chat := range chats {
 		sender := "Them"
+
 		switch chat.Sender {
 		case ChatSenderMe:
 			sender = "Me"
+		case ChatSenderThem:
+			sender = "Them"
 		case ChatSenderMix:
 			sender = "Mixed"
 		}

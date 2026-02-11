@@ -33,16 +33,19 @@ func BreakGlassForm(c flamego.Context, s session.Session, t template.Template, d
 }
 
 // RequireSensitiveAccessForHealth enforces sensitive access for health routes.
-func RequireSensitiveAccessForHealth(s session.Session, c flamego.Context) {
+func RequireSensitiveAccessForHealth(s session.Session, c flamego.Context, data template.Data) {
 	path := c.Request().URL.Path
 	if !strings.HasPrefix(path, "/health") {
 		c.Next()
 		return
 	}
+
 	if strings.HasPrefix(path, "/health/break-glass") {
 		c.Next()
 		return
 	}
+
+	data["PageRequiresSensitiveAccess"] = true
 
 	if HasSensitiveAccess(s, time.Now()) {
 		c.Next()
@@ -53,11 +56,14 @@ func RequireSensitiveAccessForHealth(s session.Session, c flamego.Context) {
 }
 
 // RequireSensitiveAccess redirects to break glass when locked.
-func RequireSensitiveAccess(s session.Session, c flamego.Context) {
+func RequireSensitiveAccess(s session.Session, c flamego.Context, data template.Data) {
+	data["PageRequiresSensitiveAccess"] = true
+
 	if HasSensitiveAccess(s, time.Now()) {
 		c.Next()
 		return
 	}
+
 	redirectToBreakGlass(c, s)
 }
 
@@ -65,11 +71,14 @@ func RequireSensitiveAccess(s session.Session, c flamego.Context) {
 func LockSensitiveAccess(s session.Session, c flamego.Context) {
 	s.Delete(sensitiveAccessSessionKey)
 
-	referer := c.Request().Header.Get("Referer")
-	if referer == "" {
-		referer = "/contacts"
+	requiresSensitiveAccess := isTruthyFormValue(c.Request().FormValue("requires_sensitive_access"))
+	if requiresSensitiveAccess {
+		c.Redirect("/", http.StatusSeeOther)
+		return
 	}
-	c.Redirect(referer, http.StatusSeeOther)
+
+	destination := sanitizeNextPath(c.Request().Header.Get("Referer"))
+	c.Redirect(destination, http.StatusSeeOther)
 }
 
 // HasSensitiveAccess returns true if the session is within the unlock window.
@@ -78,6 +87,7 @@ func HasSensitiveAccess(s session.Session, now time.Time) bool {
 	if !ok {
 		return false
 	}
+
 	return now.Sub(stamp) <= sensitiveAccessWindow
 }
 
@@ -100,6 +110,7 @@ func getSensitiveAccessTime(s session.Session) (time.Time, bool) {
 		if v == nil {
 			return time.Time{}, false
 		}
+
 		return *v, true
 	default:
 		logger.Warn("Unexpected break glass timestamp type", "type", fmt.Sprintf("%T", val))
@@ -114,6 +125,7 @@ func redirectToBreakGlass(c flamego.Context, s session.Session) {
 		redirectURL := "/break-glass?next=" + url.QueryEscape(next)
 		logAccessDenied(c, s, "sensitive_access_locked", http.StatusSeeOther, "/break-glass", "next", next)
 		c.Redirect(redirectURL, http.StatusSeeOther)
+
 		return
 	}
 
@@ -129,6 +141,7 @@ func getSessionDisplayName(s session.Session) string {
 			return displayName
 		}
 	}
+
 	return "Admin"
 }
 
@@ -137,31 +150,49 @@ func sanitizeNextPath(raw string) string {
 	if raw == "" {
 		return "/contacts"
 	}
+
 	if strings.Contains(raw, "\n") || strings.Contains(raw, "\r") {
 		return "/contacts"
 	}
+
 	if strings.Contains(raw, "://") {
 		parsed, err := url.Parse(raw)
 		if err != nil {
 			return "/contacts"
 		}
+
 		path := parsed.EscapedPath()
 		if path == "" {
 			path = "/"
 		}
+
 		if strings.HasPrefix(path, "//") {
 			return "/contacts"
 		}
+
 		if parsed.RawQuery != "" {
 			return path + "?" + parsed.RawQuery
 		}
+
 		return path
 	}
+
 	if !strings.HasPrefix(raw, "/") {
 		return "/contacts"
 	}
+
 	if strings.HasPrefix(raw, "//") {
 		return "/contacts"
 	}
+
 	return raw
+}
+
+func isTruthyFormValue(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "1", "true", "on", "yes":
+		return true
+	default:
+		return false
+	}
 }

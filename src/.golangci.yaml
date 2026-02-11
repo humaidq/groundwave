@@ -1,0 +1,70 @@
+version: "2"
+linters:
+  default: standard
+  enable:
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - copyloopvar
+    - contextcheck
+    - durationcheck
+    - dupword
+    - errchkjson
+    - err113
+    - errname
+    - errorlint
+    - exhaustive
+    - fatcontext
+    - gocheckcompilerdirectives
+    - gosec
+    - gomoddirectives
+    - intrange
+    - loggercheck
+    - makezero
+    - misspell
+    - nilerr
+    - nilnesserr
+    - nilnil
+    - noctx
+    - nolintlint
+    - paralleltest
+    - perfsprint
+    - prealloc
+    - recvcheck
+    - revive
+    - rowserrcheck
+    - sloglint
+    - sqlclosecheck
+    - tparallel
+    - thelper
+    - unparam
+    - unqueryvet
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+    - wrapcheck
+    - wsl_v5
+  settings:
+    revive:
+      rules:
+        - name: package-comments
+          disabled: true
+    wsl_v5:
+      allow-first-in-block: true
+      allow-whole-block: false
+      branch-max-lines: 2
+  exclusions:
+    rules:
+      - path: db/.*_integration_test\.go
+        linters:
+          - paralleltest
+      - path: db/(db_init_test|extension_test|health_shares_test|journal_day_metadata_test|ledger_budget_usage_test|qsl_card_requests_test|reference_ranges_test|user_invites_test|whatsapp_test|zettelkasten_comments_test|zettelkasten_links_cache_unit_test)\.go
+        linters:
+          - paralleltest
+      - path: routes/(extension_endpoints_auth_test|helpers_more_unit_test|mutating_handlers_unit_test)\.go
+        linters:
+          - paralleltest
+      - path: utils/(map_test|orgparse_test)\.go
+        linters:
+          - paralleltest
