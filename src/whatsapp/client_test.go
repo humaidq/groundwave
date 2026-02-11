@@ -4,10 +4,134 @@
 package whatsapp
 
 import (
+	"context"
+	"errors"
 	"testing"
 
+	waStore "go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/types"
 )
+
+var (
+	errTestLoaderShouldNotBeCalled = errors.New("loader should not be called")
+	errTestLoaderBoom              = errors.New("boom")
+)
+
+func TestIsStaleDeviceStore(t *testing.T) {
+	t.Parallel()
+
+	jid := types.NewJID("11111111111", types.DefaultUserServer)
+
+	tests := []struct {
+		name      string
+		device    *waStore.Device
+		wantStale bool
+	}{
+		{
+			name:      "nil device store is not stale",
+			device:    nil,
+			wantStale: false,
+		},
+		{
+			name:      "new uninitialized store is not stale",
+			device:    &waStore.Device{Initialized: false},
+			wantStale: false,
+		},
+		{
+			name:      "initialized store without jid is stale",
+			device:    &waStore.Device{Initialized: true},
+			wantStale: true,
+		},
+		{
+			name:      "initialized store with jid is not stale",
+			device:    &waStore.Device{ID: &jid, Initialized: true},
+			wantStale: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := isStaleDeviceStore(tt.device); got != tt.wantStale {
+				t.Fatalf("isStaleDeviceStore() = %v, want %v", got, tt.wantStale)
+			}
+		})
+	}
+}
+
+func TestRefreshStaleDeviceStore(t *testing.T) {
+	t.Parallel()
+
+	t.Run("reloads stale store", func(t *testing.T) {
+		t.Parallel()
+
+		staleStore := &waStore.Device{Initialized: true}
+		freshStore := &waStore.Device{}
+		called := false
+
+		got, err := refreshStaleDeviceStore(context.Background(), staleStore, func(context.Context) (*waStore.Device, error) {
+			called = true
+			return freshStore, nil
+		})
+		if err != nil {
+			t.Fatalf("refreshStaleDeviceStore() returned error: %v", err)
+		}
+
+		if !called {
+			t.Fatal("expected loader to be called for stale store")
+		}
+
+		if got != freshStore {
+			t.Fatal("expected refreshed store to be returned")
+		}
+	})
+
+	t.Run("skips reload for non-stale store", func(t *testing.T) {
+		t.Parallel()
+
+		originalStore := &waStore.Device{Initialized: false}
+		called := false
+
+		got, err := refreshStaleDeviceStore(context.Background(), originalStore, func(context.Context) (*waStore.Device, error) {
+			called = true
+			return nil, errTestLoaderShouldNotBeCalled
+		})
+		if err != nil {
+			t.Fatalf("refreshStaleDeviceStore() returned error: %v", err)
+		}
+
+		if called {
+			t.Fatal("expected loader not to be called for non-stale store")
+		}
+
+		if got != originalStore {
+			t.Fatal("expected original store to be returned for non-stale store")
+		}
+	})
+
+	t.Run("wraps loader error", func(t *testing.T) {
+		t.Parallel()
+
+		loadErr := errTestLoaderBoom
+
+		_, err := refreshStaleDeviceStore(context.Background(), &waStore.Device{Initialized: true}, func(context.Context) (*waStore.Device, error) {
+			return nil, loadErr
+		})
+		if !errors.Is(err, loadErr) {
+			t.Fatalf("expected wrapped loader error, got: %v", err)
+		}
+	})
+
+	t.Run("fails when stale store has no loader", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := refreshStaleDeviceStore(context.Background(), &waStore.Device{Initialized: true}, nil)
+		if !errors.Is(err, errNoDeviceStoreLoader) {
+			t.Fatalf("expected errNoDeviceStoreLoader, got: %v", err)
+		}
+	})
+}
 
 func TestResolveOtherPartyJID(t *testing.T) {
 	t.Parallel()

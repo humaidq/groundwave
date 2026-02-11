@@ -135,9 +135,65 @@ func (c *Client) setQRCode(qrCode string) {
 	c.qrCode = qrCode
 }
 
+func isStaleDeviceStore(deviceStore *store.Device) bool {
+	if deviceStore == nil {
+		return false
+	}
+
+	return deviceStore.ID == nil && deviceStore.Initialized
+}
+
+func refreshStaleDeviceStore(
+	ctx context.Context,
+	deviceStore *store.Device,
+	loadDeviceStore func(context.Context) (*store.Device, error),
+) (*store.Device, error) {
+	if !isStaleDeviceStore(deviceStore) {
+		return deviceStore, nil
+	}
+
+	if loadDeviceStore == nil {
+		return nil, errNoDeviceStoreLoader
+	}
+
+	refreshedStore, err := loadDeviceStore(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload device store: %w", err)
+	}
+
+	return refreshedStore, nil
+}
+
+func (c *Client) refreshDeviceStoreIfStale(ctx context.Context) error {
+	refreshedStore, err := refreshStaleDeviceStore(ctx, c.deviceStore, func(loadCtx context.Context) (*store.Device, error) {
+		if c.container == nil {
+			return nil, errNoDeviceStoreContainer
+		}
+
+		return c.container.GetFirstDevice(loadCtx)
+	})
+	if err != nil {
+		return err
+	}
+
+	if refreshedStore != c.deviceStore {
+		c.deviceStore = refreshedStore
+
+		logger.Info("Refreshed stale WhatsApp device store")
+	}
+
+	return nil
+}
+
 // Connect initiates the WhatsApp connection
 func (c *Client) Connect(ctx context.Context) error {
 	c.setStatus(StatusConnecting)
+
+	if err := c.refreshDeviceStoreIfStale(ctx); err != nil {
+		c.setStatus(StatusDisconnected)
+
+		return fmt.Errorf("failed to prepare device store for connect: %w", err)
+	}
 
 	// Create new client with structured logger
 	c.client = whatsmeow.NewClient(c.deviceStore, newWALogger("whatsmeow"))
@@ -280,6 +336,12 @@ func (c *Client) handleEvent(evt interface{}) {
 
 	case *events.LoggedOut:
 		c.setStatus(StatusDisconnected)
+		c.setQRCode("")
+
+		if err := c.refreshDeviceStoreIfStale(context.Background()); err != nil {
+			logger.Warn("Failed to refresh WhatsApp device store after logout", "error", err)
+		}
+
 		logger.Info("WhatsApp logged out")
 
 	case *events.Message:
