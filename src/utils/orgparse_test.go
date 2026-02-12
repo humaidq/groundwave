@@ -247,6 +247,7 @@ func TestIsExternalLink(t *testing.T) {
 		{href: "", expected: false},
 		{href: "#section", expected: false},
 		{href: "/zk/123", expected: false},
+		{href: "/home/123", expected: false},
 		{href: "/note/123", expected: false},
 		{href: "https://groundwave.example.com", expected: false},
 		{href: "https://groundwave.example.com/zk/123", expected: false},
@@ -296,6 +297,23 @@ func TestIsPublicAccess(t *testing.T) {
 	content = "#+access: private"
 	if IsPublicAccess(content) {
 		t.Fatalf("expected private access to be false")
+	}
+}
+
+func TestIsHomeAccess(t *testing.T) {
+	content := "#+access: home\n#+TITLE: Note"
+	if !IsHomeAccess(content) {
+		t.Fatalf("expected home access to be detected")
+	}
+
+	content = "#+ACCESS: HOME"
+	if !IsHomeAccess(content) {
+		t.Fatalf("expected case-insensitive home access to be detected")
+	}
+
+	content = "#+access: public"
+	if IsHomeAccess(content) {
+		t.Fatalf("expected public access to not match home access")
 	}
 }
 

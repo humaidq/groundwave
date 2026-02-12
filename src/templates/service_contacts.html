@@ -90,32 +90,39 @@
 <div class="list-card-list" id="serviceList">
   {{ range .ServiceContacts }}
     <div class="list-card" data-org="{{ if .Organization }}{{ .Organization }}{{ end }}" data-name="{{ .NameDisplay }}">
-      <a href="/contact/{{ .ID }}" class="list-card-link">
-        <div class="list-card-title">
-          {{ if .Organization }}
-            <strong>{{ .Organization }}</strong> — {{ .NameDisplay }}{{ if .Title }} ({{ .Title }}){{ end }}
-          {{ else }}
-            {{ .NameDisplay }}{{ if .Title }} - {{ .Title }}{{ end }}
-          {{ end }}
-        </div>
-        <div class="list-card-meta">
-          {{ if or .PrimaryPhone .PrimaryEmail }}
-          <span class="muted-text">
-            {{ if .PrimaryPhone }}{{ .PrimaryPhone }}{{ end }}
-            {{ if and .PrimaryPhone .PrimaryEmail }} • {{ end }}
-            {{ if .PrimaryEmail }}{{ .PrimaryEmail }}{{ end }}
+      <a href="/contact/{{ .ID }}" class="list-card-link list-card-entry-link">
+        <div class="list-card-entry">
+          <span class="list-card-leading">
+            <span class="list-card-icon" aria-hidden="true"><i class="fa-solid fa-building"></i></span>
           </span>
-          {{ end }}
-          {{ if .Tags }}
-          <div class="tag-badges">
-            {{ range .Tags }}
-            <a href="/service-contacts?tag={{ .ID }}" class="tag-badge"
-               onclick="event.stopPropagation(); event.preventDefault(); window.location.href='/service-contacts?tag={{ .ID }}';">
-              {{ .Name }}
-            </a>
-            {{ end }}
+          <div class="list-card-entry-body">
+            <div class="list-card-title">
+              {{ if .Organization }}
+                <strong>{{ .Organization }}</strong> — {{ .NameDisplay }}{{ if .Title }} ({{ .Title }}){{ end }}
+              {{ else }}
+                {{ .NameDisplay }}{{ if .Title }} - {{ .Title }}{{ end }}
+              {{ end }}
+            </div>
+            <div class="list-card-meta">
+              {{ if or .PrimaryPhone .PrimaryEmail }}
+              <span class="muted-text">
+                {{ if .PrimaryPhone }}{{ .PrimaryPhone }}{{ end }}
+                {{ if and .PrimaryPhone .PrimaryEmail }} • {{ end }}
+                {{ if .PrimaryEmail }}{{ .PrimaryEmail }}{{ end }}
+              </span>
+              {{ end }}
+              {{ if .Tags }}
+              <div class="tag-badges">
+                {{ range .Tags }}
+                <a href="/service-contacts?tag={{ .ID }}" class="tag-badge"
+                   onclick="event.stopPropagation(); event.preventDefault(); window.location.href='/service-contacts?tag={{ .ID }}';">
+                  {{ .Name }}
+                </a>
+                {{ end }}
+              </div>
+              {{ end }}
+            </div>
           </div>
-          {{ end }}
         </div>
       </a>
     </div>

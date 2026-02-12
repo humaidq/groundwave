@@ -100,9 +100,13 @@ func ParseOrgToHTMLWithBasePath(content string, basePath string) (string, error)
 	return annotatedHTML, nil
 }
 
-var internalLinkPrefixes = []string{"/zk", "/note", "/groundwave"}
+var internalLinkPrefixes = []string{"/zk", "/home", "/note", "/groundwave"}
 
 var externalLinkRelTokens = []string{"noopener", "noreferrer"}
+
+var publicAccessDirectivePattern = regexp.MustCompile(`(?im)^\s*#\+access:\s*public\s*$`)
+
+var homeAccessDirectivePattern = regexp.MustCompile(`(?im)^\s*#\+access:\s*home\s*$`)
 
 func addExternalLinkPrefix(htmlBody string) (string, error) {
 	if strings.TrimSpace(htmlBody) == "" {
@@ -294,8 +298,12 @@ func parseAbsoluteURL(raw string) (*url.URL, bool) {
 
 // IsPublicAccess checks for #+access: public in org content.
 func IsPublicAccess(content string) bool {
-	re := regexp.MustCompile(`(?im)^\s*#\+access:\s*public\s*$`)
-	return re.MatchString(content)
+	return publicAccessDirectivePattern.MatchString(content)
+}
+
+// IsHomeAccess checks for #+access: home in org content.
+func IsHomeAccess(content string) bool {
+	return homeAccessDirectivePattern.MatchString(content)
 }
 
 // ExtractIDProperty extracts the :ID: property from org-mode content

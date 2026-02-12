@@ -36,6 +36,14 @@ type Backlink struct {
 	URL   string
 }
 
+type backlinkVisibility int
+
+const (
+	backlinkVisibilityAll backlinkVisibility = iota
+	backlinkVisibilityPublicOnly
+	backlinkVisibilityHomeOrPublic
+)
+
 const zkHistoryKey = "zk_history"
 const zkPublicHistoryKey = "zk_public_history"
 const zkHistoryMaxItems = 4
@@ -106,7 +114,7 @@ func prepareZKHistoryForTemplate(history []ZKHistoryItem, currentID string) []ZK
 	return result
 }
 
-func buildBacklinks(ctx context.Context, backlinkIDs []string, basePath string, publicOnly bool) []Backlink {
+func buildBacklinks(ctx context.Context, backlinkIDs []string, basePath string, visibility backlinkVisibility) []Backlink {
 	backlinks := make([]Backlink, 0, len(backlinkIDs))
 
 	trimmedBase := strings.TrimRight(basePath, "/")
@@ -116,7 +124,7 @@ func buildBacklinks(ctx context.Context, backlinkIDs []string, basePath string, 
 
 	for _, backlinkID := range backlinkIDs {
 		if strings.HasPrefix(backlinkID, db.DailyBacklinkPrefix) {
-			if publicOnly {
+			if visibility != backlinkVisibilityAll {
 				continue
 			}
 
@@ -142,8 +150,16 @@ func buildBacklinks(ctx context.Context, backlinkIDs []string, basePath string, 
 			continue
 		}
 
-		if publicOnly && !backlinkNote.IsPublic {
-			continue
+		switch visibility {
+		case backlinkVisibilityAll:
+		case backlinkVisibilityPublicOnly:
+			if !backlinkNote.IsPublic {
+				continue
+			}
+		case backlinkVisibilityHomeOrPublic:
+			if !backlinkNote.IsPublic && !backlinkNote.IsHome {
+				continue
+			}
 		}
 
 		backlinks = append(backlinks, Backlink{
@@ -187,7 +203,7 @@ func ZettelkastenIndex(c flamego.Context, s session.Session, t template.Template
 		backlinkIDs = db.GetBacklinksFromCache(note.ID)
 	}
 
-	backlinks := buildBacklinks(ctx, backlinkIDs, "/zk", false)
+	backlinks := buildBacklinks(ctx, backlinkIDs, "/zk", backlinkVisibilityAll)
 
 	// Get last cache build time
 	lastCacheUpdate := db.GetLastCacheBuildTime()
@@ -251,7 +267,7 @@ func ViewZKNote(c flamego.Context, s session.Session, t template.Template, data 
 	// Fetch backlinks for this zettel
 	backlinkIDs := db.GetBacklinksFromCache(noteID)
 
-	backlinks := buildBacklinks(ctx, backlinkIDs, "/zk", false)
+	backlinks := buildBacklinks(ctx, backlinkIDs, "/zk", backlinkVisibilityAll)
 
 	// Get last cache build time
 	lastCacheUpdate := db.GetLastCacheBuildTime()
@@ -309,7 +325,7 @@ func ViewPublicNote(c flamego.Context, s session.Session, t template.Template, d
 	}
 
 	backlinkIDs := db.GetBacklinksFromCache(noteID)
-	backlinks := buildBacklinks(ctx, backlinkIDs, "/note", true)
+	backlinks := buildBacklinks(ctx, backlinkIDs, "/note", backlinkVisibilityPublicOnly)
 
 	history := updateZKHistoryWithKey(s, zkPublicHistoryKey, noteID, note.Title)
 	history = prepareZKHistoryForTemplate(history, noteID)

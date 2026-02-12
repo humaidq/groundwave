@@ -2,8 +2,201 @@
 
 <div class="welcome-container">
   <h2>Welcome to Groundwave</h2>
-  <p class="welcome-subtitle">The database</p>
+  <p class="welcome-subtitle">Choose a service</p>
 
+  <div class="list-card-list welcome-service-list">
+    {{ if .IsAdmin }}
+    <div class="list-card">
+      <a href="/todo" class="list-card-link list-card-entry-link">
+        <div class="list-card-entry">
+          <span class="list-card-leading">
+            <span class="list-card-icon" aria-hidden="true"><i class="fa-solid fa-square-check"></i></span>
+          </span>
+          <div class="list-card-entry-body">
+            <div class="list-card-entry-title">Todo</div>
+            <div class="list-card-entry-description">Your todo tasks, projects and reminders.</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="list-card">
+      <a href="/contacts" class="list-card-link list-card-entry-link">
+        <div class="list-card-entry">
+          <span class="list-card-leading">
+            <span class="list-card-icon" aria-hidden="true"><i class="fa-solid fa-address-book"></i></span>
+          </span>
+          <div class="list-card-entry-body">
+            <div class="list-card-entry-title">Contacts</div>
+            <div class="list-card-entry-description">People, organizations, and relationship history.</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="list-card">
+      <a href="/timeline" class="list-card-link list-card-entry-link">
+        <div class="list-card-entry">
+          <span class="list-card-leading">
+            <span class="list-card-icon" aria-hidden="true"><i class="fa-solid fa-clock-rotate-left"></i></span>
+          </span>
+          <div class="list-card-entry-body">
+            <div class="list-card-entry-title">Timeline</div>
+            <div class="list-card-entry-description">Journal, contact logs, notes, and QSOs by day.</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="list-card">
+      <a href="/ledger" class="list-card-link list-card-entry-link">
+        <div class="list-card-entry">
+          <span class="list-card-leading">
+            <span class="list-card-icon" aria-hidden="true"><i class="fa-solid fa-wallet"></i></span>
+          </span>
+          <div class="list-card-entry-body">
+            <div class="list-card-entry-title">Ledger</div>
+            <div class="list-card-entry-description">Accounts, budgets, transactions, and reconciliations.</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="list-card">
+      <a href="/qsl" class="list-card-link list-card-entry-link">
+        <div class="list-card-entry">
+          <span class="list-card-leading">
+            <span class="list-card-icon" aria-hidden="true"><i class="fa-solid fa-tower-broadcast"></i></span>
+          </span>
+          <div class="list-card-entry-body">
+            <div class="list-card-entry-title">QSL Log</div>
+            <div class="list-card-entry-description">Ham radio contacts and card confirmations.</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="list-card">
+      <a href="/zk" class="list-card-link list-card-entry-link">
+        <div class="list-card-entry">
+          <span class="list-card-leading">
+            <span class="list-card-icon" aria-hidden="true"><i class="fa-solid fa-note-sticky"></i></span>
+          </span>
+          <div class="list-card-entry-body">
+            <div class="list-card-entry-title">Zettelkasten</div>
+            <div class="list-card-entry-description">Linked notes, backlinks, and knowledge chat.</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    {{ end }}
+
+    <div class="list-card">
+      <a href="/home" class="list-card-link list-card-entry-link">
+        <div class="list-card-entry">
+          <span class="list-card-leading">
+            <span class="list-card-icon" aria-hidden="true"><i class="fa-solid fa-book-open"></i></span>
+          </span>
+          <div class="list-card-entry-body">
+            <div class="list-card-entry-title">Home Wiki</div>
+            <div class="list-card-entry-description">Household notes with home and public access pages.</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="list-card">
+      <a href="/files" class="list-card-link list-card-entry-link">
+        <div class="list-card-entry">
+          <span class="list-card-leading">
+            <span class="list-card-icon" aria-hidden="true"><i class="fa-solid fa-folder-open"></i></span>
+          </span>
+          <div class="list-card-entry-body">
+            <div class="list-card-entry-title">Files</div>
+            <div class="list-card-entry-description">Browse and preview files from WebDAV storage.</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="list-card">
+      <a href="/inventory" class="list-card-link list-card-entry-link">
+        <div class="list-card-entry">
+          <span class="list-card-leading">
+            <span class="list-card-icon" aria-hidden="true"><i class="fa-solid fa-boxes-stacked"></i></span>
+          </span>
+          <div class="list-card-entry-body">
+            <div class="list-card-entry-title">Inventory</div>
+            <div class="list-card-entry-description">Track items, statuses, locations, and attached files.</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="list-card">
+      <a href="/health" class="list-card-link list-card-entry-link">
+        <div class="list-card-entry">
+          <span class="list-card-leading">
+            <span class="list-card-icon" aria-hidden="true"><i class="fa-solid fa-heart-pulse"></i></span>
+          </span>
+          <div class="list-card-entry-body">
+            <div class="list-card-entry-title">Health</div>
+            <div class="list-card-entry-description">Profiles, follow-ups, labs, and trend charts.</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    {{ if .IsAdmin }}
+    <div class="list-card">
+      <a href="/whatsapp" class="list-card-link list-card-entry-link">
+        <div class="list-card-entry">
+          <span class="list-card-leading">
+            <span class="list-card-icon" aria-hidden="true"><i class="fa-brands fa-whatsapp"></i></span>
+          </span>
+          <div class="list-card-entry-body">
+            <div class="list-card-entry-title">WhatsApp</div>
+            <div class="list-card-entry-description">
+              Pair and manage WhatsApp connectivity.
+              <span class="welcome-service-status{{ if eq .WhatsAppStatus "connected" }} welcome-service-status-connected{{ else if or (eq .WhatsAppStatus "connecting") (eq .WhatsAppStatus "pairing") }} welcome-service-status-pending{{ else }} welcome-service-status-offline{{ end }}">{{ .WhatsAppStatus }}</span>
+            </div>
+          </div>
+        </div>
+      </a>
+    </div>
+    {{ end }}
+
+    <div class="list-card">
+      <a href="/security" class="list-card-link list-card-entry-link">
+        <div class="list-card-entry">
+          <span class="list-card-leading">
+            <span class="list-card-icon" aria-hidden="true"><i class="fa-solid fa-shield-halved"></i></span>
+          </span>
+          <div class="list-card-entry-body">
+            <div class="list-card-entry-title">Security</div>
+            <div class="list-card-entry-description">Manage sessions, passkeys, and account security.</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="list-card">
+      <form action="/logout" method="post" class="list-card-form">
+        <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+        <button type="submit" class="list-card-entry-button">
+          <span class="list-card-leading">
+            <span class="list-card-icon" aria-hidden="true"><i class="fa-solid fa-right-from-bracket"></i></span>
+          </span>
+          <span class="list-card-entry-body">
+            <span class="list-card-entry-title">Logout</span>
+            <span class="list-card-entry-description">Sign out from this device.</span>
+          </span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <h3 class="welcome-stats-title">Stats</h3>
   <div class="stats-compact">
     {{ if .IsAdmin }}
     <div class="stat-item">
@@ -36,26 +229,6 @@
       <span class="stat-item-value">{{ .HealthProfileCount }}</span>
     </div>
     {{ end }}
-  </div>
-
-  <div class="welcome-actions">
-    {{ if .IsAdmin }}
-      {{ if gt .OverdueCount 0 }}
-      <a href="/overdue" class="btn">View Overdue Contacts ({{ .OverdueCount }})</a>
-      {{ end }}
-      <a href="/bulk-contact-log" class="btn">Bulk Contact Log</a>
-      <a href="/whatsapp" class="btn{{ if eq .WhatsAppStatus "connected" }} btn-success{{ end }}">WhatsApp: {{ .WhatsAppStatus }}</a>
-      <a href="/security" class="btn">Security</a>
-    {{ else }}
-      <a href="/inventory" class="btn">Inventory</a>
-      <a href="/files" class="btn">Files</a>
-      <a href="/health" class="btn">Health</a>
-      <a href="/security" class="btn">Security</a>
-    {{ end }}
-    <form action="/logout" method="post" class="inline-form">
-      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
-      <button type="submit" class="btn">Logout</button>
-    </form>
   </div>
 
 </div>

@@ -14,6 +14,7 @@ func TestZettelkastenWebDAVAndCaches(t *testing.T) {
 	t.Setenv("WEBDAV_USERNAME", "")
 	t.Setenv("WEBDAV_PASSWORD", "")
 	t.Setenv("WEBDAV_ZK_PATH", server.server.URL+"/zk/index.org")
+	t.Setenv("WEBDAV_HOME_PATH", server.server.URL+"/zk/home.org")
 	t.Setenv("GROUNDWAVE_BASE_URL", "https://groundwave.example.com")
 
 	config, err := GetZKConfig()
@@ -23,6 +24,15 @@ func TestZettelkastenWebDAVAndCaches(t *testing.T) {
 
 	if config.IndexFile != "index.org" {
 		t.Fatalf("expected index file to be index.org")
+	}
+
+	homeConfig, err := GetHomeConfig()
+	if err != nil {
+		t.Fatalf("GetHomeConfig failed: %v", err)
+	}
+
+	if homeConfig.IndexFile != "home.org" {
+		t.Fatalf("expected home index file to be home.org")
 	}
 
 	content, err := FetchOrgFile(testContext(), "index.org")
@@ -183,6 +193,21 @@ func TestZettelkastenWebDAVAndCaches(t *testing.T) {
 
 	if indexNote.Title == "" {
 		t.Fatalf("expected index note title")
+	}
+
+	homeIndexNote, err := GetHomeIndexNote(testContext())
+	if err != nil {
+		t.Fatalf("GetHomeIndexNote failed: %v", err)
+	}
+
+	if !homeIndexNote.IsHome {
+		t.Fatalf("expected home index note to include home access")
+	}
+
+	t.Setenv("WEBDAV_HOME_PATH", server.server.URL+"/other/home.org")
+
+	if _, err := GetHomeConfig(); err == nil {
+		t.Fatalf("expected GetHomeConfig to fail when parent directories differ")
 	}
 
 	if err := RebuildZettelkastenCaches(testContext()); err != nil {

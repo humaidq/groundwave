@@ -72,6 +72,8 @@ func newUnauthenticatedAccessTestApp() *flamego.Flame {
 		f.Get("/files", handler)
 		f.Get("/files/view", handler)
 		f.Get("/files/file", handler)
+		f.Get("/home", handler)
+		f.Get("/home/{id}", handler)
 
 		f.Get("/health/break-glass", handler)
 		f.Get("/health", handler)
@@ -132,6 +134,8 @@ func TestUnauthenticatedAccessRedirectsToLogin(t *testing.T) {
 		{name: "files root", method: http.MethodGet, path: "/files"},
 		{name: "files view", method: http.MethodGet, path: "/files/view?path=docs/readme.md"},
 		{name: "files download", method: http.MethodGet, path: "/files/file?path=docs/readme.md"},
+		{name: "home wiki root", method: http.MethodGet, path: "/home"},
+		{name: "home wiki note", method: http.MethodGet, path: "/home/note-1"},
 
 		{name: "health root", method: http.MethodGet, path: "/health"},
 		{name: "health break glass", method: http.MethodGet, path: "/health/break-glass"},

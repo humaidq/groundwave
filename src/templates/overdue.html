@@ -35,13 +35,17 @@
 <div class="list-card-list">
   {{ range .OverdueContacts }}
   <div class="list-card">
-    <a href="/contact/{{ .ID }}" class="list-card-link">
-      <div class="list-card-content">
+    <a href="/contact/{{ .ID }}" class="list-card-link list-card-entry-link">
+      <div class="list-card-entry">
         {{ $photo := safeImageURL .PhotoURL }}
-        {{ if and $photo $.SensitiveAccess }}
-        <img src="{{ $photo }}" alt="Photo of {{ .NameDisplay }}" class="contact-avatar contact-avatar-small" loading="lazy">
-        {{ end }}
-        <div class="list-card-body">
+        <span class="list-card-leading">
+          {{ if and $photo $.SensitiveAccess }}
+          <img src="{{ $photo }}" alt="Photo of {{ .NameDisplay }}" class="contact-avatar contact-avatar-small" loading="lazy">
+          {{ else }}
+          <span class="list-card-icon" aria-hidden="true"><i class="fa-solid fa-user-clock"></i></span>
+          {{ end }}
+        </span>
+        <div class="list-card-entry-body">
           <div class="list-card-title">
             {{ .NameDisplay }}
             {{ if .LastContactDate }}
@@ -51,7 +55,7 @@
             {{ end }}
           </div>
           <div class="list-card-meta muted-text">
-            {{ if .SensitiveAccess }}
+            {{ if $.SensitiveAccess }}
               {{ if .Organization }}{{ .Organization }} • {{ end }}Tier {{ .Tier }} (every {{ .ContactInterval }} days){{ if .LastContactDate }} • Last contact: {{ .LastContactDate }}{{ end }}
             {{ else }}
               {{ if .Organization }}{{ .Organization }}{{ end }}{{ if .LastContactDate }}{{ if .Organization }} • {{ end }}Last contact: {{ .LastContactDate }}{{ end }}

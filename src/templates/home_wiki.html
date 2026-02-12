@@ -1,0 +1,57 @@
+{{ template "head" . }}
+
+{{ if .ZKHistory }}
+<nav class="breadcrumb" aria-label="Navigation history">
+  {{ range $i, $h := .ZKHistory }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $h.IsCurrent }}
+      <span class="breadcrumb-current">{{ truncateBreadcrumb $h.Title }}</span>
+    {{ else }}
+      <a href="/home/{{ $h.ID }}" class="breadcrumb-item">{{ truncateBreadcrumb $h.Title }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+{{ if .Error }}
+  <div class="zk-error">
+    <h2>Error Loading Page</h2>
+    <p>{{ .Error }}</p>
+  </div>
+{{ else }}
+  <div class="zk-note">
+    <header class="zk-header">
+      <div class="page-header-actions">
+        <a href="/home" class="btn">Index</a>
+      </div>
+    </header>
+
+    <div class="zk-content">
+      {{ .Note.HTMLBody }}
+    </div>
+
+    <div class="backlinks-section">
+      <h3>Backlinks ({{ len .Backlinks }})</h3>
+      {{ if .Backlinks }}
+      <p class="backlinks-description">Pages that link to this page:</p>
+      <ul class="backlinks-list">
+        {{ range .Backlinks }}
+        <li><a href="{{ .URL }}">{{ .Title }}</a></li>
+        {{ end }}
+      </ul>
+      {{ else }}
+      <p class="backlinks-description">No backlinks yet.</p>
+      {{ end }}
+    </div>
+
+    <div class="cache-info">
+      {{ if .LastCacheUpdate.IsZero }}
+      <small>Links index not yet built...</small>
+      {{ else }}
+      <small>Links last updated: {{ .LastCacheUpdate.Format "Jan 2, 2006 3:04 PM" }}</small>
+      {{ end }}
+    </div>
+  </div>
+{{ end }}
+
+{{ template "foot" . }}

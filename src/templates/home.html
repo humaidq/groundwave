@@ -18,6 +18,7 @@
   <div class="page-header-actions">
     <a href="/overdue" class="btn">Overdue{{ if .OverdueCount }} ({{ .OverdueCount }}){{ end }}</a>
     <a href="/service-contacts" class="btn">Service Contacts</a>
+    <a href="/bulk-contact-log" class="btn">Bulk Contact Log</a>
     <a href="/contact/new" class="btn">+ Add Contact</a>
   </div>
 </div>
@@ -164,13 +165,12 @@
   <div class="list-card-list">
   {{ range .Contacts }}
     <div class="list-card">
-      <a href="/contact/{{ .ID }}" class="list-card-link">
-        <div class="list-card-content">
-          {{ $photo := safeImageURL .PhotoURL }}
-          {{ if and $photo $.SensitiveAccess }}
-          <img src="{{ $photo }}" alt="Photo of {{ .NameDisplay }}" class="contact-avatar contact-avatar-small" loading="lazy">
-          {{ end }}
-          <div class="list-card-body">
+      <a href="/contact/{{ .ID }}" class="list-card-link list-card-entry-link">
+        <div class="list-card-entry">
+          <span class="list-card-leading">
+            <span class="list-card-icon" aria-hidden="true"><i class="fa-solid fa-user"></i></span>
+          </span>
+          <div class="list-card-entry-body">
             <div class="list-card-title">{{ .NameDisplay }}</div>
             {{ if .Organization }}
             <div class="list-card-meta">
@@ -194,13 +194,17 @@
       {{ $prevTier = .Tier }}
     {{ end }}
     <div class="list-card">
-      <a href="/contact/{{ .ID }}" class="list-card-link">
-        <div class="list-card-content">
+      <a href="/contact/{{ .ID }}" class="list-card-link list-card-entry-link">
+        <div class="list-card-entry">
           {{ $photo := safeImageURL .PhotoURL }}
-          {{ if and $photo $.SensitiveAccess }}
-          <img src="{{ $photo }}" alt="Photo of {{ .NameDisplay }}" class="contact-avatar contact-avatar-small" loading="lazy">
-          {{ end }}
-          <div class="list-card-body">
+          <span class="list-card-leading">
+            {{ if $photo }}
+            <img src="{{ $photo }}" alt="Photo of {{ .NameDisplay }}" class="contact-avatar contact-avatar-small" loading="lazy">
+            {{ else }}
+            <span class="list-card-icon" aria-hidden="true"><i class="fa-solid fa-user"></i></span>
+            {{ end }}
+          </span>
+          <div class="list-card-entry-body">
             <div class="list-card-title">{{ .NameDisplay }}</div>
             {{ if or .Organization .Tags }}
             <div class="list-card-meta">

@@ -485,6 +485,8 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	f.Group("", func() {
 		// Shared routes
 		f.Get("/", routes.Welcome)
+		f.Get("/home", routes.HomeWikiIndex)
+		f.Get("/home/{id}", routes.ViewHomeWikiNote)
 		f.Get("/break-glass", routes.BreakGlassForm)
 
 		// Inventory read-only routes

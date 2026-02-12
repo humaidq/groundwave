@@ -363,7 +363,7 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 	if sensitiveAccess {
 		zkLinkIDs := db.GetContactLinksFromCache(contactID)
 		if len(zkLinkIDs) > 0 {
-			zkLinks := buildBacklinks(c.Request().Context(), zkLinkIDs, "/zk", false)
+			zkLinks := buildBacklinks(c.Request().Context(), zkLinkIDs, "/zk", backlinkVisibilityAll)
 			if len(zkLinks) > 0 {
 				data["ZKLinks"] = zkLinks
 			}

@@ -78,6 +78,11 @@ func newWebDAVTestServer(t *testing.T) *webdavTestServer {
 		t.Fatalf("failed to write index org: %v", err)
 	}
 
+	homeContent := "#+TITLE: Home Index\n#+access: home\n:PROPERTIES:\n:ID: 66666666-6666-6666-6666-666666666666\n:END:\n[[id:22222222-2222-2222-2222-222222222222][Note One]]\n[[id:33333333-3333-3333-3333-333333333333][Note Two]]"
+	if err := os.WriteFile(filepath.Join(zkDir, "home.org"), []byte(homeContent), 0o600); err != nil {
+		t.Fatalf("failed to write home org: %v", err)
+	}
+
 	noteOneContent := "#+TITLE: Note One\n#+access: public\n:PROPERTIES:\n:ID: 22222222-2222-2222-2222-222222222222\n:END:\n[[id:33333333-3333-3333-3333-333333333333][Note Two]]\n[[https://groundwave.example.com/contact/44444444-4444-4444-4444-444444444444][Contact]]"
 	if err := os.WriteFile(filepath.Join(zkDir, "20240101010101-note-one.org"), []byte(noteOneContent), 0o600); err != nil {
 		t.Fatalf("failed to write note one: %v", err)
