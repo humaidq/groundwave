@@ -17,8 +17,9 @@ import (
 
 // PostgresSessionConfig contains options for the PostgreSQL session store
 type PostgresSessionConfig struct {
-	// Lifetime is the duration to have no access to a session before being recycled.
-	// Default is 30 days (720 hours).
+	// Lifetime is the absolute duration a session remains valid after it is first
+	// persisted. Session activity does not extend this value.
+	// Default is 14 days (336 hours).
 	Lifetime time.Duration
 	// TableName is the name of the session table. Default is "flamego_sessions".
 	TableName string
@@ -59,7 +60,7 @@ func PostgresSessionIniter() session.Initer {
 
 		// Set defaults
 		if config.Lifetime == 0 {
-			config.Lifetime = 30 * 24 * time.Hour // 30 days
+			config.Lifetime = 14 * 24 * time.Hour // 14 days
 		}
 
 		if config.TableName == "" {
@@ -143,19 +144,8 @@ func (s *PostgresSessionStore) Destroy(ctx context.Context, sid string) error {
 	return nil
 }
 
-// Touch updates the expiry time of the session with given ID
-func (s *PostgresSessionStore) Touch(ctx context.Context, sid string) error {
-	expiresAt := time.Now().Add(s.config.Lifetime)
-
-	_, err := pool.Exec(ctx,
-		`UPDATE `+s.config.TableName+` SET expires_at = $1 WHERE id = $2`,
-		expiresAt,
-		sid,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to update session expiry %q: %w", sid, err)
-	}
-
+// Touch is a no-op to enforce absolute session expiry.
+func (s *PostgresSessionStore) Touch(_ context.Context, _ string) error {
 	return nil
 }
 
@@ -169,13 +159,17 @@ func (s *PostgresSessionStore) Save(ctx context.Context, sess session.Session) e
 
 	expiresAt := time.Now().Add(s.config.Lifetime)
 
-	// Use UPSERT (INSERT ... ON CONFLICT UPDATE)
+	// Use UPSERT while preserving expiry for active sessions.
+	// Expired rows can be refreshed to start a new lifecycle.
 	_, err = pool.Exec(ctx,
 		`INSERT INTO `+s.config.TableName+` (id, data, expires_at)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (id) DO UPDATE SET
 			data = EXCLUDED.data,
-			expires_at = EXCLUDED.expires_at`,
+			expires_at = CASE
+				WHEN `+s.config.TableName+`.expires_at <= NOW() THEN EXCLUDED.expires_at
+				ELSE `+s.config.TableName+`.expires_at
+			END`,
 		sess.ID(),
 		data,
 		expiresAt,

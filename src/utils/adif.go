@@ -28,34 +28,74 @@ const (
 
 // QSO represents one ADIF contact record.
 type QSO struct {
-	Call         string
-	QSODate      string // YYYYMMDD format
-	TimeOn       string // HHMMSS format
-	QSODateOff   string // YYYYMMDD format (optional)
-	TimeOff      string // HHMMSS format (optional)
-	Band         string
-	Mode         string
-	Freq         string
-	RSTSent      string
-	RSTRcvd      string
-	QTH          string
-	Name         string
-	Comment      string
-	GridSquare   string
-	Country      string
-	DXCC         string
-	MyGridSquare string
-	StationCall  string
-	MyRig        string
-	MyAntenna    string
-	TxPwr        string
-	QslSent      QslStatus
-	QslRcvd      QslStatus
-	LotwSent     QslStatus
-	LotwRcvd     QslStatus
-	EqslSent     QslStatus
-	EqslRcvd     QslStatus
-	Timestamp    time.Time // Parsed datetime for easier searching
+	Call                   string
+	QSODate                string // YYYYMMDD format
+	TimeOn                 string // HHMMSS format
+	QSODateOff             string // YYYYMMDD format (optional)
+	TimeOff                string // HHMMSS format (optional)
+	Band                   string
+	BandRx                 string
+	Mode                   string
+	Submode                string
+	Freq                   string
+	FreqRx                 string
+	RSTSent                string
+	RSTRcvd                string
+	QTH                    string
+	Name                   string
+	Comment                string
+	Notes                  string
+	GridSquare             string
+	Country                string
+	DXCC                   string
+	CQZ                    string
+	ITUZ                   string
+	Cont                   string
+	State                  string
+	Cnty                   string
+	Pfx                    string
+	IOTA                   string
+	Distance               string
+	AIndex                 string
+	KIndex                 string
+	SFI                    string
+	MyName                 string
+	MyCity                 string
+	MyCountry              string
+	MyCQZone               string
+	MyITUZone              string
+	MyDXCC                 string
+	MyGridSquare           string
+	StationCall            string
+	Operator               string
+	MyRig                  string
+	MyAntenna              string
+	TxPwr                  string
+	QslSent                QslStatus
+	QslRcvd                QslStatus
+	QSLSDate               string
+	QSLRDate               string
+	QSLSentVia             string
+	QSLRcvdVia             string
+	QSLVia                 string
+	QSLMsg                 string
+	QSLMsgRcvd             string
+	LotwSent               QslStatus
+	LotwRcvd               QslStatus
+	LotwQSLSDate           string
+	LotwQSLRDate           string
+	EqslSent               QslStatus
+	EqslRcvd               QslStatus
+	EqslQSLSDate           string
+	EqslQSLRDate           string
+	EqslAG                 string
+	ClublogQSOUploadDate   string
+	ClublogQSOUploadStatus string
+	HRDLogQSOUploadDate    string
+	HRDLogQSOUploadStatus  string
+	AppFields              map[string]any
+	UserFields             map[string]any
+	Timestamp              time.Time // Parsed datetime for easier searching
 }
 
 // ADIFParser parses ADIF content and stores parsed QSOs.
@@ -109,10 +149,13 @@ func (p *ADIFParser) parseContent(content string) error {
 }
 
 func (p *ADIFParser) parseRecord(record string) (QSO, error) {
-	qso := QSO{}
+	qso := QSO{
+		AppFields:  make(map[string]any),
+		UserFields: make(map[string]any),
+	}
 
-	// Regex to match ADIF fields: <FIELDNAME:LENGTH>DATA
-	fieldRegex := regexp.MustCompile(`<([^:>]+):(\d+)>([^<]*)`)
+	// Regex to match ADIF fields: <FIELDNAME:LENGTH[:TYPE]>DATA
+	fieldRegex := regexp.MustCompile(`<([^:>]+):(\d+)(?::[^>]*)?>([^<]*)`)
 	matches := fieldRegex.FindAllStringSubmatch(record, -1)
 
 	for _, match := range matches {
@@ -146,10 +189,16 @@ func (p *ADIFParser) parseRecord(record string) (QSO, error) {
 			qso.TimeOff = fieldValue
 		case "band":
 			qso.Band = fieldValue
+		case "band_rx":
+			qso.BandRx = fieldValue
 		case "mode":
 			qso.Mode = fieldValue
+		case "submode":
+			qso.Submode = fieldValue
 		case "freq":
 			qso.Freq = fieldValue
+		case "freq_rx":
+			qso.FreqRx = fieldValue
 		case "rst_sent":
 			qso.RSTSent = fieldValue
 		case "rst_rcvd":
@@ -160,16 +209,54 @@ func (p *ADIFParser) parseRecord(record string) (QSO, error) {
 			qso.Name = fieldValue
 		case "comment":
 			qso.Comment = fieldValue
+		case "notes":
+			qso.Notes = fieldValue
 		case "gridsquare":
 			qso.GridSquare = fieldValue
 		case "country":
 			qso.Country = fieldValue
 		case "dxcc":
 			qso.DXCC = fieldValue
+		case "cqz":
+			qso.CQZ = fieldValue
+		case "ituz":
+			qso.ITUZ = fieldValue
+		case "cont":
+			qso.Cont = fieldValue
+		case "state":
+			qso.State = fieldValue
+		case "cnty":
+			qso.Cnty = fieldValue
+		case "pfx":
+			qso.Pfx = fieldValue
+		case "iota":
+			qso.IOTA = fieldValue
+		case "distance":
+			qso.Distance = fieldValue
+		case "a_index":
+			qso.AIndex = fieldValue
+		case "k_index":
+			qso.KIndex = fieldValue
+		case "sfi":
+			qso.SFI = fieldValue
 		case "my_gridsquare":
 			qso.MyGridSquare = fieldValue
 		case "station_callsign":
 			qso.StationCall = fieldValue
+		case "operator":
+			qso.Operator = fieldValue
+		case "my_name":
+			qso.MyName = fieldValue
+		case "my_city":
+			qso.MyCity = fieldValue
+		case "my_country":
+			qso.MyCountry = fieldValue
+		case "my_cq_zone":
+			qso.MyCQZone = fieldValue
+		case "my_itu_zone":
+			qso.MyITUZone = fieldValue
+		case "my_dxcc":
+			qso.MyDXCC = fieldValue
 		case "my_rig":
 			qso.MyRig = fieldValue
 		case "my_antenna":
@@ -177,18 +264,65 @@ func (p *ADIFParser) parseRecord(record string) (QSO, error) {
 		case "tx_pwr":
 			qso.TxPwr = fieldValue
 		case "qsl_sent":
-			qso.QslSent = QslStatus(fieldValue)
+			qso.QslSent = QslStatus(strings.ToUpper(fieldValue))
 		case "qsl_rcvd":
-			qso.QslRcvd = QslStatus(fieldValue)
+			qso.QslRcvd = QslStatus(strings.ToUpper(fieldValue))
+		case "qslsdate":
+			qso.QSLSDate = fieldValue
+		case "qslrdate":
+			qso.QSLRDate = fieldValue
+		case "qsl_sent_via":
+			qso.QSLSentVia = strings.ToUpper(fieldValue)
+		case "qsl_rcvd_via":
+			qso.QSLRcvdVia = strings.ToUpper(fieldValue)
+		case "qsl_via":
+			qso.QSLVia = fieldValue
+		case "qslmsg":
+			qso.QSLMsg = fieldValue
+		case "qslmsg_rcvd":
+			qso.QSLMsgRcvd = fieldValue
 		case "lotw_qsl_sent":
-			qso.LotwSent = QslStatus(fieldValue)
+			qso.LotwSent = QslStatus(strings.ToUpper(fieldValue))
 		case "lotw_qsl_rcvd":
-			qso.LotwRcvd = QslStatus(fieldValue)
+			qso.LotwRcvd = QslStatus(strings.ToUpper(fieldValue))
+		case "lotw_qslsdate":
+			qso.LotwQSLSDate = fieldValue
+		case "lotw_qslrdate":
+			qso.LotwQSLRDate = fieldValue
 		case "eqsl_qsl_sent":
-			qso.EqslSent = QslStatus(fieldValue)
+			qso.EqslSent = QslStatus(strings.ToUpper(fieldValue))
 		case "eqsl_qsl_rcvd":
-			qso.EqslRcvd = QslStatus(fieldValue)
+			qso.EqslRcvd = QslStatus(strings.ToUpper(fieldValue))
+		case "eqsl_qslsdate":
+			qso.EqslQSLSDate = fieldValue
+		case "eqsl_qslrdate":
+			qso.EqslQSLRDate = fieldValue
+		case "eqsl_ag":
+			qso.EqslAG = strings.ToUpper(fieldValue)
+		case "clublog_qso_upload_date":
+			qso.ClublogQSOUploadDate = fieldValue
+		case "clublog_qso_upload_status":
+			qso.ClublogQSOUploadStatus = strings.ToUpper(fieldValue)
+		case "hrdlog_qso_upload_date":
+			qso.HRDLogQSOUploadDate = fieldValue
+		case "hrdlog_qso_upload_status":
+			qso.HRDLogQSOUploadStatus = strings.ToUpper(fieldValue)
+		default:
+			switch {
+			case strings.HasPrefix(fieldName, "app_"):
+				qso.AppFields[fieldName] = fieldValue
+			case strings.HasPrefix(fieldName, "userdef"):
+				qso.UserFields[fieldName] = fieldValue
+			}
 		}
+	}
+
+	if len(qso.AppFields) == 0 {
+		qso.AppFields = nil
+	}
+
+	if len(qso.UserFields) == 0 {
+		qso.UserFields = nil
 	}
 
 	// Parse timestamp for easier searching

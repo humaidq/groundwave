@@ -11,7 +11,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/flamego/flamego"
 	"github.com/flamego/session"
@@ -153,6 +155,94 @@ func generateMapIfNeeded(fileName, myGrid, theirGrid string) {
 	if err := utils.CreateGridMap(myGrid, theirGrid, config); err != nil {
 		logger.Error("Failed to generate map", "file", fileName, "error", err)
 	}
+}
+
+// ExportADIF exports QSOs as an ADIF file.
+func ExportADIF(c flamego.Context, s session.Session) {
+	fromDate, hasFromDate, err := parseADIFExportDate(c.Query("from"))
+	if err != nil {
+		SetErrorFlash(s, "Invalid export date, use YYYY-MM-DD")
+		c.Redirect("/qsl", http.StatusSeeOther)
+
+		return
+	}
+
+	toDate, hasToDate, err := parseADIFExportDate(c.Query("to"))
+	if err != nil {
+		SetErrorFlash(s, "Invalid export date, use YYYY-MM-DD")
+		c.Redirect("/qsl", http.StatusSeeOther)
+
+		return
+	}
+
+	var fromDatePtr *time.Time
+	if hasFromDate {
+		fromDatePtr = &fromDate
+	}
+
+	var toDatePtr *time.Time
+	if hasToDate {
+		toDatePtr = &toDate
+	}
+
+	if fromDatePtr != nil && toDatePtr != nil && fromDatePtr.After(*toDatePtr) {
+		SetErrorFlash(s, "Export date range is invalid")
+		c.Redirect("/qsl", http.StatusSeeOther)
+
+		return
+	}
+
+	adif, err := db.ExportADIF(c.Request().Context(), fromDatePtr, toDatePtr)
+	if err != nil {
+		logger.Error("Error exporting ADIF", "error", err)
+		SetErrorFlash(s, "Failed to export ADIF")
+		c.Redirect("/qsl", http.StatusSeeOther)
+
+		return
+	}
+
+	filename := buildADIFFilename(fromDatePtr, toDatePtr)
+
+	c.ResponseWriter().Header().Set("Content-Type", "text/plain; charset=utf-8")
+	c.ResponseWriter().Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
+	c.ResponseWriter().Header().Set("Content-Length", strconv.Itoa(len(adif)))
+	c.ResponseWriter().WriteHeader(http.StatusOK)
+
+	if _, err := c.ResponseWriter().Write([]byte(adif)); err != nil {
+		logger.Error("Error writing ADIF export response", "error", err)
+	}
+}
+
+func parseADIFExportDate(raw string) (time.Time, bool, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return time.Time{}, false, nil
+	}
+
+	parsed, err := time.Parse("2006-01-02", trimmed)
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("%w: %s", errInvalidADIFExportDate, trimmed)
+	}
+
+	return parsed, true, nil
+}
+
+func buildADIFFilename(fromDate *time.Time, toDate *time.Time) string {
+	if fromDate == nil && toDate == nil {
+		return "qsos-" + time.Now().UTC().Format("20060102-150405") + ".adi"
+	}
+
+	fromPart := "all"
+	if fromDate != nil {
+		fromPart = fromDate.Format("20060102")
+	}
+
+	toPart := "all"
+	if toDate != nil {
+		toPart = toDate.Format("20060102")
+	}
+
+	return fmt.Sprintf("qsos-%s-%s.adi", fromPart, toPart)
 }
 
 // ImportADIF handles ADIF file upload and import

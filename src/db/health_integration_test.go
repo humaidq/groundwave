@@ -313,3 +313,68 @@ func TestGetPrimaryHealthProfileNoRows(t *testing.T) {
 		t.Fatalf("expected no primary profile")
 	}
 }
+
+func TestUpdateHealthProfilePreservesAndClearsOptionalFields(t *testing.T) {
+	resetDatabase(t)
+
+	ctx := testContext()
+
+	dob := time.Date(1990, time.March, 15, 0, 0, 0, 0, time.UTC)
+	gender := GenderFemale
+	description := "Initial baseline notes"
+
+	profileID, err := CreateHealthProfile(ctx, "Sam", &dob, &gender, &description, true)
+	if err != nil {
+		t.Fatalf("CreateHealthProfile failed: %v", err)
+	}
+
+	updatedDOB := time.Date(1991, time.April, 20, 0, 0, 0, 0, time.UTC)
+	updatedGender := GenderMale
+	updatedDescription := "Updated baseline notes"
+
+	if err := UpdateHealthProfile(ctx, profileID, "Sam Updated", &updatedDOB, &updatedGender, &updatedDescription, true); err != nil {
+		t.Fatalf("UpdateHealthProfile preserve/update failed: %v", err)
+	}
+
+	updatedProfile, err := GetHealthProfile(ctx, profileID)
+	if err != nil {
+		t.Fatalf("GetHealthProfile failed: %v", err)
+	}
+
+	if updatedProfile.Name != "Sam Updated" {
+		t.Fatalf("expected updated profile name, got %q", updatedProfile.Name)
+	}
+
+	if updatedProfile.DateOfBirth == nil || updatedProfile.DateOfBirth.Format("2006-01-02") != updatedDOB.Format("2006-01-02") {
+		t.Fatalf("expected updated date_of_birth %s, got %#v", updatedDOB.Format("2006-01-02"), updatedProfile.DateOfBirth)
+	}
+
+	if updatedProfile.Gender == nil || *updatedProfile.Gender != updatedGender {
+		t.Fatalf("expected updated gender %q, got %#v", updatedGender, updatedProfile.Gender)
+	}
+
+	if updatedProfile.Description == nil || *updatedProfile.Description != updatedDescription {
+		t.Fatalf("expected updated description %q, got %#v", updatedDescription, updatedProfile.Description)
+	}
+
+	if err := UpdateHealthProfile(ctx, profileID, "Sam Updated", nil, nil, nil, false); err != nil {
+		t.Fatalf("UpdateHealthProfile explicit clear failed: %v", err)
+	}
+
+	clearedProfile, err := GetHealthProfile(ctx, profileID)
+	if err != nil {
+		t.Fatalf("GetHealthProfile failed: %v", err)
+	}
+
+	if clearedProfile.DateOfBirth != nil {
+		t.Fatalf("expected date_of_birth to be cleared, got %#v", clearedProfile.DateOfBirth)
+	}
+
+	if clearedProfile.Gender != nil {
+		t.Fatalf("expected gender to be cleared, got %#v", clearedProfile.Gender)
+	}
+
+	if clearedProfile.Description != nil {
+		t.Fatalf("expected description to be cleared, got %#v", clearedProfile.Description)
+	}
+}

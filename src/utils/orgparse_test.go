@@ -60,8 +60,8 @@ func TestParseOrgToHTMLWithBasePathResolvesIDLinks(t *testing.T) {
 		t.Fatalf("expected external links to include noopener noreferrer, got %s", rendered)
 	}
 
-	if !strings.Contains(rendered, "🗗") {
-		t.Fatalf("expected external link prefix to be added")
+	if !strings.Contains(rendered, "fa-up-right-from-square") {
+		t.Fatalf("expected external link icon prefix to be added")
 	}
 }
 
@@ -106,15 +106,15 @@ func TestAddExternalLinkPrefix(t *testing.T) {
 	input := `<p><a href="https://example.com">Example</a> ` +
 		`<a href="/zk/123">Internal</a> ` +
 		`<a href="#section">Anchor</a> ` +
-		`<a href="https://example.com/already">🗗 Already</a></p>`
+		`<a href="https://example.com/already"><i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i> Already</a></p>`
 
 	output, err := addExternalLinkPrefix(input)
 	if err != nil {
 		t.Fatalf("addExternalLinkPrefix failed: %v", err)
 	}
 
-	if !strings.Contains(output, ">🗗 Example</a>") {
-		t.Fatalf("expected prefix inserted for external link, got %s", output)
+	if !strings.Contains(output, `><i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i> Example</a>`) {
+		t.Fatalf("expected icon prefix inserted for external link, got %s", output)
 	}
 
 	if !strings.Contains(output, `href="https://example.com" target="_blank" rel="noopener noreferrer"`) {
@@ -141,8 +141,8 @@ func TestAddExternalLinkPrefix(t *testing.T) {
 		t.Fatalf("expected already-prefixed external links to include target and rel attributes, got %s", output)
 	}
 
-	if strings.Count(output, "🗗") != 2 {
-		t.Fatalf("expected two external link prefixes, got %d", strings.Count(output, "🗗"))
+	if strings.Count(output, "fa-up-right-from-square") != 2 {
+		t.Fatalf("expected two external link icon prefixes, got %d", strings.Count(output, "fa-up-right-from-square"))
 	}
 }
 
@@ -157,7 +157,7 @@ func TestAddExternalLinkPrefixSkipsBaseURL(t *testing.T) {
 		t.Fatalf("addExternalLinkPrefix failed: %v", err)
 	}
 
-	if strings.Contains(output, ">🗗 Internal</a>") {
+	if strings.Contains(output, `fa-up-right-from-square"></i> Internal</a>`) {
 		t.Fatalf("expected base URL link to remain unprefixed, got %s", output)
 	}
 
@@ -169,8 +169,8 @@ func TestAddExternalLinkPrefixSkipsBaseURL(t *testing.T) {
 		t.Fatalf("expected external links to include target and rel attributes, got %s", output)
 	}
 
-	if strings.Count(output, "🗗") != 1 {
-		t.Fatalf("expected one external link prefix, got %d", strings.Count(output, "🗗"))
+	if strings.Count(output, "fa-up-right-from-square") != 1 {
+		t.Fatalf("expected one external link icon prefix, got %d", strings.Count(output, "fa-up-right-from-square"))
 	}
 }
 
@@ -214,8 +214,8 @@ func TestAddExternalLinkPrefixEmptyAnchor(t *testing.T) {
 		t.Fatalf("addExternalLinkPrefix failed: %v", err)
 	}
 
-	if !strings.Contains(output, "🗗") {
-		t.Fatalf("expected prefix for empty anchor, got %s", output)
+	if !strings.Contains(output, "fa-up-right-from-square") {
+		t.Fatalf("expected icon prefix for empty anchor, got %s", output)
 	}
 }
 

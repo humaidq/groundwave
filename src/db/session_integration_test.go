@@ -129,3 +129,98 @@ func TestPostgresSessionStoreGCAndReadFallback(t *testing.T) {
 		t.Fatalf("expected session id to match")
 	}
 }
+
+func TestPostgresSessionStoreUsesAbsoluteExpiry(t *testing.T) {
+	resetDatabase(t)
+
+	ctx := testContext()
+
+	initer := PostgresSessionIniter()
+
+	store, err := initer(ctx, PostgresSessionConfig{Lifetime: time.Hour})
+	if err != nil {
+		t.Fatalf("PostgresSessionIniter failed: %v", err)
+	}
+
+	pgStore := store.(*PostgresSessionStore)
+
+	noopWriter := func(_ http.ResponseWriter, _ *http.Request, _ string) {}
+	sess := session.NewBaseSession("absolute", session.GobEncoder, noopWriter)
+	sess.Set("authenticated", true)
+
+	if err := pgStore.Save(ctx, sess); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	var initialExpiry time.Time
+	if err := pool.QueryRow(ctx, `SELECT expires_at FROM flamego_sessions WHERE id = $1`, "absolute").Scan(&initialExpiry); err != nil {
+		t.Fatalf("failed to load initial expiry: %v", err)
+	}
+
+	if err := pgStore.Touch(ctx, "absolute"); err != nil {
+		t.Fatalf("Touch failed: %v", err)
+	}
+
+	var expiryAfterTouch time.Time
+	if err := pool.QueryRow(ctx, `SELECT expires_at FROM flamego_sessions WHERE id = $1`, "absolute").Scan(&expiryAfterTouch); err != nil {
+		t.Fatalf("failed to load expiry after touch: %v", err)
+	}
+
+	if !expiryAfterTouch.Equal(initialExpiry) {
+		t.Fatalf("expected Touch not to extend expiry: initial=%v after=%v", initialExpiry, expiryAfterTouch)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+	sess.Set("user_display_name", "Updated User")
+
+	if err := pgStore.Save(ctx, sess); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	var expiryAfterSave time.Time
+	if err := pool.QueryRow(ctx, `SELECT expires_at FROM flamego_sessions WHERE id = $1`, "absolute").Scan(&expiryAfterSave); err != nil {
+		t.Fatalf("failed to load expiry after save: %v", err)
+	}
+
+	if !expiryAfterSave.Equal(initialExpiry) {
+		t.Fatalf("expected Save not to extend active session expiry: initial=%v after=%v", initialExpiry, expiryAfterSave)
+	}
+}
+
+func TestPostgresSessionStoreSaveRefreshesExpiredConflictRow(t *testing.T) {
+	resetDatabase(t)
+
+	ctx := testContext()
+
+	initer := PostgresSessionIniter()
+
+	store, err := initer(ctx, PostgresSessionConfig{Lifetime: time.Hour})
+	if err != nil {
+		t.Fatalf("PostgresSessionIniter failed: %v", err)
+	}
+
+	pgStore := store.(*PostgresSessionStore)
+
+	if _, err := pool.Exec(ctx, `INSERT INTO flamego_sessions (id, data, expires_at) VALUES ($1, $2, NOW() - interval '1 minute')`, "expired-conflict", []byte("stale")); err != nil {
+		t.Fatalf("failed to insert expired session: %v", err)
+	}
+
+	noopWriter := func(_ http.ResponseWriter, _ *http.Request, _ string) {}
+	sess := session.NewBaseSession("expired-conflict", session.GobEncoder, noopWriter)
+	sess.Set("authenticated", true)
+
+	saveStartedAt := time.Now()
+
+	if err := pgStore.Save(ctx, sess); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	var refreshedExpiry time.Time
+	if err := pool.QueryRow(ctx, `SELECT expires_at FROM flamego_sessions WHERE id = $1`, "expired-conflict").Scan(&refreshedExpiry); err != nil {
+		t.Fatalf("failed to load refreshed expiry: %v", err)
+	}
+
+	if !refreshedExpiry.After(saveStartedAt.Add(30 * time.Minute)) {
+		t.Fatalf("expected refreshed expiry to be in the future, got %v", refreshedExpiry)
+	}
+}

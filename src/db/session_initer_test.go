@@ -30,7 +30,7 @@ func TestPostgresSessionIniterDefaults(t *testing.T) {
 		t.Fatalf("expected default table name, got %q", pgStore.config.TableName)
 	}
 
-	if pgStore.config.Lifetime != 30*24*time.Hour {
+	if pgStore.config.Lifetime != 14*24*time.Hour {
 		t.Fatalf("expected default lifetime, got %v", pgStore.config.Lifetime)
 	}
 

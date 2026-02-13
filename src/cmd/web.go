@@ -402,15 +402,15 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 			return sign + integer + "." + fraction
 		},
 	}
-	// Configure PostgreSQL session store with 30-day expiry
+	// Configure PostgreSQL session store with 14-day absolute expiry
 	f.Use(session.Sessioner(session.Options{
 		Initer: db.PostgresSessionIniter(),
 		Config: db.PostgresSessionConfig{
-			Lifetime:  30 * 24 * time.Hour, // 30 days
+			Lifetime:  14 * 24 * time.Hour, // 14 days
 			TableName: "flamego_sessions",
 		},
 		Cookie: session.CookieOptions{
-			MaxAge:   30 * 24 * 60 * 60, // 30 days in seconds
+			MaxAge:   14 * 24 * 60 * 60, // 14 days in seconds
 			Secure:   isProduction,
 			HTTPOnly: true,
 			SameSite: http.SameSiteLaxMode,
@@ -585,6 +585,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		f.Get("/contacts", routes.Home)
 		f.Get("/overdue", routes.Overdue)
 		f.Get("/qsl", routes.QSL)
+		f.Get("/qsl/export", routes.ExportADIF)
 		f.Get("/qsl/{id}", routes.ViewQSO)
 		f.Get("/contact/{id}", routes.ViewContact)
 		f.Get("/contact/{id}/chats", routes.ViewContactChats)

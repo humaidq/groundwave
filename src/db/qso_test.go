@@ -113,3 +113,55 @@ func TestParseADIFDate(t *testing.T) {
 		t.Fatalf("expected error for invalid date length")
 	}
 }
+
+func TestNormalizeCNTY(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty cnty", func(t *testing.T) {
+		t.Parallel()
+
+		if got := normalizeCNTY(" ", nil); got != nil {
+			t.Fatalf("expected nil for empty cnty, got %q", *got)
+		}
+	})
+
+	t.Run("valid sponsor code retained", func(t *testing.T) {
+		t.Parallel()
+
+		got := normalizeCNTY("VA,CULPEPER", nil)
+		if got == nil || *got != "VA,CULPEPER" {
+			t.Fatalf("expected VA,CULPEPER, got %+v", got)
+		}
+	})
+
+	t.Run("drops country-like cnty", func(t *testing.T) {
+		t.Parallel()
+
+		country := "Germany"
+
+		if got := normalizeCNTY(" germany ", &country); got != nil {
+			t.Fatalf("expected nil when cnty equals country, got %q", *got)
+		}
+	})
+
+	t.Run("drops country variant cnty", func(t *testing.T) {
+		t.Parallel()
+
+		country := "Fed. Rep. of Germany"
+
+		if got := normalizeCNTY("Germany", &country); got != nil {
+			t.Fatalf("expected nil when cnty is contained in country variant, got %q", *got)
+		}
+	})
+
+	t.Run("different country and cnty retained", func(t *testing.T) {
+		t.Parallel()
+
+		country := "United States"
+
+		got := normalizeCNTY("CA,ALAMEDA", &country)
+		if got == nil || *got != "CA,ALAMEDA" {
+			t.Fatalf("expected CA,ALAMEDA, got %+v", got)
+		}
+	})
+}

@@ -128,3 +128,60 @@ func TestInventoryErrors(t *testing.T) {
 		t.Fatalf("expected error for missing inventory comment")
 	}
 }
+
+func TestUpdateInventoryItemPreservesAndClearsOptionalFields(t *testing.T) {
+	resetDatabase(t)
+
+	ctx := testContext()
+
+	location := "Shelf A"
+	description := "HF transceiver"
+	inspectionDate := time.Date(2026, time.March, 10, 0, 0, 0, 0, time.UTC)
+
+	inventoryID, err := CreateInventoryItem(ctx, "Radio", &location, &description, InventoryStatusActive, &inspectionDate)
+	if err != nil {
+		t.Fatalf("CreateInventoryItem failed: %v", err)
+	}
+
+	if err := UpdateInventoryItem(ctx, inventoryID, "Radio Updated", &location, &description, InventoryStatusStored, &inspectionDate); err != nil {
+		t.Fatalf("UpdateInventoryItem preserve/update failed: %v", err)
+	}
+
+	updatedItem, err := GetInventoryItem(ctx, inventoryID)
+	if err != nil {
+		t.Fatalf("GetInventoryItem failed: %v", err)
+	}
+
+	if updatedItem.Location == nil || *updatedItem.Location != location {
+		t.Fatalf("expected location %q to remain set, got %#v", location, updatedItem.Location)
+	}
+
+	if updatedItem.Description == nil || *updatedItem.Description != description {
+		t.Fatalf("expected description %q to remain set, got %#v", description, updatedItem.Description)
+	}
+
+	if updatedItem.InspectionDate == nil || updatedItem.InspectionDate.Format("2006-01-02") != inspectionDate.Format("2006-01-02") {
+		t.Fatalf("expected inspection_date %s to remain set, got %#v", inspectionDate.Format("2006-01-02"), updatedItem.InspectionDate)
+	}
+
+	if err := UpdateInventoryItem(ctx, inventoryID, "Radio Updated", nil, nil, InventoryStatusStored, nil); err != nil {
+		t.Fatalf("UpdateInventoryItem explicit clear failed: %v", err)
+	}
+
+	clearedItem, err := GetInventoryItem(ctx, inventoryID)
+	if err != nil {
+		t.Fatalf("GetInventoryItem failed: %v", err)
+	}
+
+	if clearedItem.Location != nil {
+		t.Fatalf("expected location to be cleared, got %#v", clearedItem.Location)
+	}
+
+	if clearedItem.Description != nil {
+		t.Fatalf("expected description to be cleared, got %#v", clearedItem.Description)
+	}
+
+	if clearedItem.InspectionDate != nil {
+		t.Fatalf("expected inspection_date to be cleared, got %#v", clearedItem.InspectionDate)
+	}
+}

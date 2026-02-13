@@ -574,3 +574,99 @@ func TestAddChatDefaultsAndValidation(t *testing.T) {
 		t.Fatalf("expected default sender them")
 	}
 }
+
+func TestUpdateContactPreservesAndClearsOptionalFields(t *testing.T) {
+	resetDatabase(t)
+
+	ctx := testContext()
+
+	nameFamily := "Doe"
+	organization := "Acme Corp"
+	title := "Engineer"
+	callSign := "W1ABC"
+
+	contactID := mustCreateContact(t, CreateContactInput{
+		NameGiven:    "Jane",
+		NameFamily:   &nameFamily,
+		Organization: &organization,
+		Title:        &title,
+		CallSign:     &callSign,
+		Tier:         TierB,
+	})
+
+	updatedGivenName := "Janet"
+
+	if err := UpdateContact(ctx, UpdateContactInput{
+		ID:           contactID,
+		NameGiven:    updatedGivenName,
+		NameFamily:   stringPtr(nameFamily),
+		Organization: stringPtr(organization),
+		Title:        stringPtr(title),
+		CallSign:     stringPtr(callSign),
+		Tier:         TierA,
+	}); err != nil {
+		t.Fatalf("UpdateContact preserve/update failed: %v", err)
+	}
+
+	updatedContact, err := GetContact(ctx, contactID)
+	if err != nil {
+		t.Fatalf("GetContact failed: %v", err)
+	}
+
+	if updatedContact.NameGiven == nil || *updatedContact.NameGiven != updatedGivenName {
+		t.Fatalf("expected updated given name %q, got %#v", updatedGivenName, updatedContact.NameGiven)
+	}
+
+	if updatedContact.NameFamily == nil || *updatedContact.NameFamily != nameFamily {
+		t.Fatalf("expected name_family %q to remain set, got %#v", nameFamily, updatedContact.NameFamily)
+	}
+
+	if updatedContact.Organization == nil || *updatedContact.Organization != organization {
+		t.Fatalf("expected organization %q to remain set, got %#v", organization, updatedContact.Organization)
+	}
+
+	if updatedContact.Title == nil || *updatedContact.Title != title {
+		t.Fatalf("expected title %q to remain set, got %#v", title, updatedContact.Title)
+	}
+
+	if updatedContact.CallSign == nil || *updatedContact.CallSign != callSign {
+		t.Fatalf("expected call_sign %q to remain set, got %#v", callSign, updatedContact.CallSign)
+	}
+
+	if err := UpdateContact(ctx, UpdateContactInput{
+		ID:           contactID,
+		NameGiven:    updatedGivenName,
+		NameFamily:   nil,
+		Organization: nil,
+		Title:        nil,
+		CallSign:     nil,
+		Tier:         TierA,
+	}); err != nil {
+		t.Fatalf("UpdateContact explicit clear failed: %v", err)
+	}
+
+	clearedContact, err := GetContact(ctx, contactID)
+	if err != nil {
+		t.Fatalf("GetContact failed: %v", err)
+	}
+
+	if clearedContact.NameDisplay != updatedGivenName {
+		t.Fatalf("expected name_display %q after clear, got %q", updatedGivenName, clearedContact.NameDisplay)
+	}
+
+	if clearedContact.NameFamily != nil {
+		t.Fatalf("expected name_family to be cleared, got %#v", clearedContact.NameFamily)
+	}
+
+	if clearedContact.Organization != nil {
+		t.Fatalf("expected organization to be cleared, got %#v", clearedContact.Organization)
+	}
+
+	if clearedContact.Title != nil {
+		t.Fatalf("expected title to be cleared, got %#v", clearedContact.Title)
+	}
+
+	if clearedContact.CallSign != nil {
+		t.Fatalf("expected call_sign to be cleared, got %#v", clearedContact.CallSign)
+	}
+}

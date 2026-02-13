@@ -21,4 +21,5 @@ var (
 	errInvalidSetupUser          = errors.New("invalid setup user")
 	errDisplayNameMissing        = errors.New("display name missing")
 	errRegistrationUserMissing   = errors.New("registration user missing")
+	errInvalidADIFExportDate     = errors.New("invalid ADIF export date")
 )

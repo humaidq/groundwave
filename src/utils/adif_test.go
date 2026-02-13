@@ -5,6 +5,7 @@ package utils
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -150,6 +151,116 @@ func TestADIFParserParseRecordAllFields(t *testing.T) {
 
 	if qso.QslSent != QslYes || qso.QslRcvd != QslNo || qso.LotwSent != QslRequested || qso.LotwRcvd != QslYes || qso.EqslSent != QslNo || qso.EqslRcvd != QslYes {
 		t.Fatalf("unexpected qsl fields: %+v", qso)
+	}
+}
+
+func TestADIFParserParseRecordAdditionalImportFields(t *testing.T) {
+	t.Parallel()
+
+	parser := NewADIFParser()
+
+	field := func(name, value string) string {
+		return fmt.Sprintf("<%s:%d>%s", name, len(value), value)
+	}
+
+	record := strings.Join([]string{
+		field("call", "A65EB"),
+		field("qso_date", "20250121"),
+		field("time_on", "131400"),
+		field("time_off", "131400"),
+		field("qso_date_off", "20250121"),
+		field("band", "2m"),
+		field("band_rx", "15m"),
+		field("mode", "FM"),
+		field("submode", "FT4"),
+		field("freq", "144.65"),
+		field("freq_rx", "21.074"),
+		field("cqz", "21"),
+		field("ituz", "39"),
+		field("cont", "AS"),
+		field("state", "AZ"),
+		field("cnty", "VA,CULPEPER"),
+		field("pfx", "A65"),
+		field("distance", "55.606462659392456"),
+		field("a_index", "12"),
+		field("k_index", "3"),
+		field("sfi", "150"),
+		field("my_name", "A66H"),
+		field("my_city", "Ajman"),
+		field("my_country", "United Arab Emirates"),
+		field("my_cq_zone", "21"),
+		field("my_itu_zone", "39"),
+		field("my_dxcc", "391"),
+		field("operator", "A66H"),
+		field("qsl_sent_via", "D"),
+		field("qsl_rcvd_via", "E"),
+		field("qsl_via", "Email"),
+		field("qslmsg", "tnx"),
+		field("qslmsg_rcvd", "tnx!"),
+		field("qslsdate", "20250301"),
+		field("qslrdate", "20250302"),
+		field("lotw_qslsdate", "20250303"),
+		field("lotw_qslrdate", "20250304"),
+		field("eqsl_qslsdate", "20250305"),
+		field("eqsl_qslrdate", "20250306"),
+		field("eqsl_ag", "Y"),
+		field("clublog_qso_upload_date", "20250307"),
+		field("clublog_qso_upload_status", "M"),
+		field("hrdlog_qso_upload_date", "20250308"),
+		field("hrdlog_qso_upload_status", "Y"),
+		field("iota", "AS-001"),
+		field("notes", "grid approx"),
+		field("app_cqrlog_profile", "test"),
+		field("userdef1", "hello"),
+	}, "")
+
+	qso, err := parser.parseRecord(record)
+	if err != nil {
+		t.Fatalf("parseRecord failed: %v", err)
+	}
+
+	if qso.BandRx != "15m" || qso.FreqRx != "21.074" || qso.Submode != "FT4" {
+		t.Fatalf("unexpected rx/submode fields: %+v", qso)
+	}
+
+	if qso.CQZ != "21" || qso.ITUZ != "39" || qso.Cont != "AS" || qso.State != "AZ" {
+		t.Fatalf("unexpected region fields: %+v", qso)
+	}
+
+	if qso.Cnty != "VA,CULPEPER" || qso.Pfx != "A65" || qso.IOTA != "AS-001" {
+		t.Fatalf("unexpected location identifiers: %+v", qso)
+	}
+
+	if qso.Distance != "55.606462659392456" || qso.AIndex != "12" || qso.KIndex != "3" || qso.SFI != "150" {
+		t.Fatalf("unexpected propagation fields: %+v", qso)
+	}
+
+	if qso.MyName != "A66H" || qso.MyCity != "Ajman" || qso.MyCountry != "United Arab Emirates" || qso.MyCQZone != "21" || qso.MyITUZone != "39" || qso.MyDXCC != "391" {
+		t.Fatalf("unexpected my-station fields: %+v", qso)
+	}
+
+	if qso.QSLSentVia != "D" || qso.QSLRcvdVia != "E" || qso.QSLVia != "Email" || qso.QSLMsg != "tnx" || qso.QSLMsgRcvd != "tnx!" {
+		t.Fatalf("unexpected paper qsl fields: %+v", qso)
+	}
+
+	if qso.QSLSDate != "20250301" || qso.QSLRDate != "20250302" || qso.LotwQSLSDate != "20250303" || qso.LotwQSLRDate != "20250304" || qso.EqslQSLSDate != "20250305" || qso.EqslQSLRDate != "20250306" {
+		t.Fatalf("unexpected qsl date fields: %+v", qso)
+	}
+
+	if qso.EqslAG != "Y" || qso.ClublogQSOUploadDate != "20250307" || qso.ClublogQSOUploadStatus != "M" || qso.HRDLogQSOUploadDate != "20250308" || qso.HRDLogQSOUploadStatus != "Y" {
+		t.Fatalf("unexpected upload fields: %+v", qso)
+	}
+
+	if qso.Notes != "grid approx" {
+		t.Fatalf("unexpected notes field: %+v", qso)
+	}
+
+	if qso.AppFields["app_cqrlog_profile"] != "test" {
+		t.Fatalf("expected app field to be captured, got %+v", qso.AppFields)
+	}
+
+	if qso.UserFields["userdef1"] != "hello" {
+		t.Fatalf("expected user field to be captured, got %+v", qso.UserFields)
 	}
 }
 

@@ -8,6 +8,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -17,15 +19,19 @@ import (
 
 // QSOListItem represents a QSO in the list view
 type QSOListItem struct {
-	ID      string    `db:"id"`
-	Call    string    `db:"call"`
-	QSODate time.Time `db:"qso_date"`
-	TimeOn  time.Time `db:"time_on"`
-	Band    *string   `db:"band"`
-	Mode    string    `db:"mode"`
-	RSTSent *string   `db:"rst_sent"`
-	RSTRcvd *string   `db:"rst_rcvd"`
-	Country *string   `db:"country"`
+	ID         string    `db:"id"`
+	Call       string    `db:"call"`
+	QSODate    time.Time `db:"qso_date"`
+	TimeOn     time.Time `db:"time_on"`
+	Band       *string   `db:"band"`
+	Mode       string    `db:"mode"`
+	RSTSent    *string   `db:"rst_sent"`
+	RSTRcvd    *string   `db:"rst_rcvd"`
+	Country    *string   `db:"country"`
+	Name       *string   `db:"name"`
+	QTH        *string   `db:"qth"`
+	State      *string   `db:"state"`
+	GridSquare *string   `db:"gridsquare"`
 }
 
 // FormatDate formats QSO date as YYYY-MM-DD
@@ -112,7 +118,11 @@ func ListQSOs(ctx context.Context) ([]QSOListItem, error) {
 			mode,
 			rst_sent,
 			rst_rcvd,
-			country
+			country,
+			name,
+			qth,
+			state,
+			gridsquare
 		FROM qsos
 		ORDER BY qso_date DESC, time_on DESC
 	`
@@ -138,6 +148,10 @@ func ListQSOs(ctx context.Context) ([]QSOListItem, error) {
 			&qso.RSTSent,
 			&qso.RSTRcvd,
 			&qso.Country,
+			&qso.Name,
+			&qso.QTH,
+			&qso.State,
+			&qso.GridSquare,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan QSO: %w", err)
@@ -169,7 +183,11 @@ func ListRecentQSOs(ctx context.Context, limit int) ([]QSOListItem, error) {
 			mode,
 			rst_sent,
 			rst_rcvd,
-			country
+			country,
+			name,
+			qth,
+			state,
+			gridsquare
 		FROM qsos
 		ORDER BY qso_date DESC, time_on DESC
 		LIMIT $1
@@ -196,6 +214,10 @@ func ListRecentQSOs(ctx context.Context, limit int) ([]QSOListItem, error) {
 			&qso.RSTSent,
 			&qso.RSTRcvd,
 			&qso.Country,
+			&qso.Name,
+			&qso.QTH,
+			&qso.State,
+			&qso.GridSquare,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan QSO: %w", err)
@@ -222,37 +244,92 @@ func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {
 	updated := 0
 
 	for _, qso := range qsos {
-		// Parse timestamp
 		timestamp, err := parseADIFTimestamp(qso.QSODate, qso.TimeOn)
 		if err != nil {
-			// Skip QSOs with invalid timestamps
 			continue
 		}
 
-		// Parse optional time_off
-		var timeOff *time.Time
-
-		if qso.QSODateOff != "" && qso.TimeOff != "" {
-			t, err := parseADIFTimestamp(qso.QSODateOff, qso.TimeOff)
-			if err == nil {
-				timeOff = &t
-			}
+		mode := trimOptional(qso.Mode)
+		if mode == nil {
+			continue
 		}
 
-		// Parse optional qso_date_off
-		dateOff := ""
-
-		if qso.QSODateOff != "" {
-			if d, err := parseADIFDate(qso.QSODateOff); err == nil {
-				dateOff = d.Format("2006-01-02")
-			}
+		timeOff := parseOptionalADIFTimestamp(qso.QSODateOff, qso.TimeOff)
+		if timeOff == nil {
+			timeOff = parseOptionalADIFTimestamp(qso.QSODate, qso.TimeOff)
 		}
 
-		if dateOff == "" && timeOff != nil {
-			if d, err := parseADIFDate(qso.QSODate); err == nil {
-				dateOff = d.Format("2006-01-02")
-			}
+		qsoDateOff := parseOptionalADIFDate(qso.QSODateOff)
+		if qsoDateOff == nil && timeOff != nil {
+			qsoDateOff = parseOptionalADIFDate(qso.QSODate)
 		}
+
+		band := trimOptional(qso.Band)
+		freq := parseOptionalADIFFloat(qso.Freq)
+		bandRx := trimOptional(qso.BandRx)
+		freqRx := parseOptionalADIFFloat(qso.FreqRx)
+		submode := trimOptional(qso.Submode)
+		rstSent := trimOptional(qso.RSTSent)
+		rstRcvd := trimOptional(qso.RSTRcvd)
+		qth := trimOptional(qso.QTH)
+		name := trimOptional(qso.Name)
+		comment := trimOptional(qso.Comment)
+		notes := trimOptional(qso.Notes)
+		gridSquare := trimOptional(qso.GridSquare)
+		country := trimOptional(qso.Country)
+		dxcc := parseOptionalADIFInt(qso.DXCC)
+		cqz := parseOptionalADIFInt(qso.CQZ)
+		ituz := parseOptionalADIFInt(qso.ITUZ)
+		cont := trimOptional(qso.Cont)
+		state := trimOptional(qso.State)
+		cnty := normalizeCNTY(qso.Cnty, country)
+		pfx := trimOptional(qso.Pfx)
+		iota := trimOptional(qso.IOTA)
+		distance := parseOptionalADIFFloat(qso.Distance)
+		aIndex := parseOptionalADIFInt(qso.AIndex)
+		kIndex := parseOptionalADIFInt(qso.KIndex)
+		sfi := parseOptionalADIFInt(qso.SFI)
+		myName := trimOptional(qso.MyName)
+		myCity := trimOptional(qso.MyCity)
+		myCountry := trimOptional(qso.MyCountry)
+		myCQZone := parseOptionalADIFInt(qso.MyCQZone)
+		myITUZone := parseOptionalADIFInt(qso.MyITUZone)
+		myDXCC := parseOptionalADIFInt(qso.MyDXCC)
+		myGridSquare := trimOptional(qso.MyGridSquare)
+		stationCall := trimOptional(qso.StationCall)
+		operator := trimOptional(qso.Operator)
+		myRig := trimOptional(qso.MyRig)
+		myAntenna := trimOptional(qso.MyAntenna)
+		txPwr := parseOptionalADIFFloat(qso.TxPwr)
+
+		qslSent := normalizeQSLSentStatus(string(qso.QslSent))
+		qslRcvd := normalizeQSLStatus(string(qso.QslRcvd))
+		qslsDate := parseOptionalADIFDate(qso.QSLSDate)
+		qslrDate := parseOptionalADIFDate(qso.QSLRDate)
+		qslSentVia := normalizeQSLVia(qso.QSLSentVia)
+		qslRcvdVia := normalizeQSLVia(qso.QSLRcvdVia)
+		qslVia := trimOptional(qso.QSLVia)
+		qslMsg := trimOptional(qso.QSLMsg)
+		qslMsgRcvd := trimOptional(qso.QSLMsgRcvd)
+
+		lotwSent := normalizeQSLSentStatus(string(qso.LotwSent))
+		lotwRcvd := normalizeQSLStatus(string(qso.LotwRcvd))
+		lotwQSLSDate := parseOptionalADIFDate(qso.LotwQSLSDate)
+		lotwQSLRDate := parseOptionalADIFDate(qso.LotwQSLRDate)
+
+		eqslSent := normalizeQSLSentStatus(string(qso.EqslSent))
+		eqslRcvd := normalizeQSLStatus(string(qso.EqslRcvd))
+		eqslQSLSDate := parseOptionalADIFDate(qso.EqslQSLSDate)
+		eqslQSLRDate := parseOptionalADIFDate(qso.EqslQSLRDate)
+		eqslAG := parseOptionalADIFBool(qso.EqslAG)
+
+		clublogUploadDate := parseOptionalADIFDate(qso.ClublogQSOUploadDate)
+		clublogUploadStatus := normalizeQSOUploadStatus(qso.ClublogQSOUploadStatus)
+		hrdlogUploadDate := parseOptionalADIFDate(qso.HRDLogQSOUploadDate)
+		hrdlogUploadStatus := normalizeQSOUploadStatus(qso.HRDLogQSOUploadStatus)
+
+		appFields := normalizeJSONFields(qso.AppFields)
+		userFields := normalizeJSONFields(qso.UserFields)
 
 		// Check if QSO already exists (by call, date, and time)
 		exists, err := qsoExists(ctx, qso.Call, timestamp)
@@ -261,63 +338,141 @@ func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {
 		}
 
 		if exists {
-			// UPDATE existing QSO with merge logic
-			// COALESCE keeps existing value if new value is NULL
 			query := `
 				UPDATE qsos SET
-					band = COALESCE(NULLIF($1, ''), band),
-					freq = CASE WHEN $2::text != '' THEN $2::double precision ELSE freq END,
-					mode = COALESCE(NULLIF($3, ''), mode),
+					band = COALESCE($1, band),
+					freq = COALESCE($2, freq),
+					mode = COALESCE($3, mode),
 					time_off = COALESCE($4, time_off),
-					qso_date_off = COALESCE(NULLIF($5, '')::date, qso_date_off),
-					rst_sent = COALESCE(NULLIF($6, ''), rst_sent),
-					rst_rcvd = COALESCE(NULLIF($7, ''), rst_rcvd),
-					qth = COALESCE(NULLIF($8, ''), qth),
-					name = COALESCE(NULLIF($9, ''), name),
-					comment = COALESCE(NULLIF($10, ''), comment),
-					gridsquare = COALESCE(NULLIF($11, ''), gridsquare),
-					country = COALESCE(NULLIF($12, ''), country),
-					dxcc = CASE WHEN $13::text != '' THEN $13::integer ELSE dxcc END,
-					my_gridsquare = COALESCE(NULLIF($14, ''), my_gridsquare),
-					station_callsign = COALESCE(NULLIF($15, ''), station_callsign),
-					my_rig = COALESCE(NULLIF($16, ''), my_rig),
-					my_antenna = COALESCE(NULLIF($17, ''), my_antenna),
-					tx_pwr = CASE WHEN $18::text != '' THEN $18::double precision ELSE tx_pwr END,
-					qsl_sent = CASE WHEN $19 != '' THEN $19::qsl_sent_status ELSE qsl_sent END,
-					qsl_rcvd = CASE WHEN $20 != '' THEN $20::qsl_status ELSE qsl_rcvd END,
-					lotw_qsl_sent = CASE WHEN $21 != '' THEN $21::qsl_sent_status ELSE lotw_qsl_sent END,
-					lotw_qsl_rcvd = CASE WHEN $22 != '' THEN $22::qsl_status ELSE lotw_qsl_rcvd END,
-					eqsl_qsl_sent = CASE WHEN $23 != '' THEN $23::qsl_sent_status ELSE eqsl_qsl_sent END,
-					eqsl_qsl_rcvd = CASE WHEN $24 != '' THEN $24::qsl_status ELSE eqsl_qsl_rcvd END,
+					qso_date_off = COALESCE($5, qso_date_off),
+					band_rx = COALESCE($6, band_rx),
+					freq_rx = COALESCE($7, freq_rx),
+					submode = COALESCE($8, submode),
+					rst_sent = COALESCE($9, rst_sent),
+					rst_rcvd = COALESCE($10, rst_rcvd),
+					qth = COALESCE($11, qth),
+					name = COALESCE($12, name),
+					comment = COALESCE($13, comment),
+					notes = COALESCE($14, notes),
+					gridsquare = COALESCE($15, gridsquare),
+					country = COALESCE($16, country),
+					dxcc = COALESCE($17, dxcc),
+					cqz = COALESCE($18, cqz),
+					ituz = COALESCE($19, ituz),
+					cont = COALESCE($20, cont),
+					state = COALESCE($21, state),
+					cnty = COALESCE($22, cnty),
+					pfx = COALESCE($23, pfx),
+					iota = COALESCE($24, iota),
+					distance = COALESCE($25, distance),
+					a_index = COALESCE($26, a_index),
+					k_index = COALESCE($27, k_index),
+					sfi = COALESCE($28, sfi),
+					my_name = COALESCE($29, my_name),
+					my_city = COALESCE($30, my_city),
+					my_country = COALESCE($31, my_country),
+					my_cq_zone = COALESCE($32, my_cq_zone),
+					my_itu_zone = COALESCE($33, my_itu_zone),
+					my_dxcc = COALESCE($34, my_dxcc),
+					my_gridsquare = COALESCE($35, my_gridsquare),
+					station_callsign = COALESCE($36, station_callsign),
+					operator = COALESCE($37, operator),
+					my_rig = COALESCE($38, my_rig),
+					my_antenna = COALESCE($39, my_antenna),
+					tx_pwr = COALESCE($40, tx_pwr),
+					qsl_sent = COALESCE($41::qsl_sent_status, qsl_sent),
+					qsl_rcvd = COALESCE($42::qsl_status, qsl_rcvd),
+					qslsdate = COALESCE($43, qslsdate),
+					qslrdate = COALESCE($44, qslrdate),
+					qsl_sent_via = COALESCE($45::qsl_via, qsl_sent_via),
+					qsl_rcvd_via = COALESCE($46::qsl_via, qsl_rcvd_via),
+					qsl_via = COALESCE($47, qsl_via),
+					qslmsg = COALESCE($48, qslmsg),
+					qslmsg_rcvd = COALESCE($49, qslmsg_rcvd),
+					lotw_qsl_sent = COALESCE($50::qsl_sent_status, lotw_qsl_sent),
+					lotw_qsl_rcvd = COALESCE($51::qsl_status, lotw_qsl_rcvd),
+					lotw_qslsdate = COALESCE($52, lotw_qslsdate),
+					lotw_qslrdate = COALESCE($53, lotw_qslrdate),
+					eqsl_qsl_sent = COALESCE($54::qsl_sent_status, eqsl_qsl_sent),
+					eqsl_qsl_rcvd = COALESCE($55::qsl_status, eqsl_qsl_rcvd),
+					eqsl_qslsdate = COALESCE($56, eqsl_qslsdate),
+					eqsl_qslrdate = COALESCE($57, eqsl_qslrdate),
+					eqsl_ag = COALESCE($58, eqsl_ag),
+					clublog_qso_upload_date = COALESCE($59, clublog_qso_upload_date),
+					clublog_qso_upload_status = COALESCE($60::qso_upload_status, clublog_qso_upload_status),
+					hrdlog_qso_upload_date = COALESCE($61, hrdlog_qso_upload_date),
+					hrdlog_qso_upload_status = COALESCE($62::qso_upload_status, hrdlog_qso_upload_status),
+					app_fields = COALESCE(app_fields, '{}'::jsonb) || COALESCE($63::jsonb, '{}'::jsonb),
+					user_fields = COALESCE(user_fields, '{}'::jsonb) || COALESCE($64::jsonb, '{}'::jsonb),
 					updated_at = NOW()
-				WHERE call = $25 AND qso_date = $26 AND time_on = $27
+				WHERE call = $65 AND qso_date = $66 AND time_on = $67
 			`
 
 			_, err = pool.Exec(ctx, query,
-				qso.Band,
-				qso.Freq,
-				qso.Mode,
+				nullableValue(band),
+				nullableValue(freq),
+				nullableValue(mode),
 				timeOff,
-				dateOff,
-				qso.RSTSent,
-				qso.RSTRcvd,
-				qso.QTH,
-				qso.Name,
-				qso.Comment,
-				qso.GridSquare,
-				qso.Country,
-				qso.DXCC,
-				qso.MyGridSquare,
-				qso.StationCall,
-				qso.MyRig,
-				qso.MyAntenna,
-				qso.TxPwr,
-				string(qso.QslSent),
-				string(qso.QslRcvd),
-				string(qso.LotwSent),
-				string(qso.LotwRcvd),
-				string(qso.EqslSent),
-				string(qso.EqslRcvd),
+				qsoDateOff,
+				nullableValue(bandRx),
+				nullableValue(freqRx),
+				nullableValue(submode),
+				nullableValue(rstSent),
+				nullableValue(rstRcvd),
+				nullableValue(qth),
+				nullableValue(name),
+				nullableValue(comment),
+				nullableValue(notes),
+				nullableValue(gridSquare),
+				nullableValue(country),
+				nullableValue(dxcc),
+				nullableValue(cqz),
+				nullableValue(ituz),
+				nullableValue(cont),
+				nullableValue(state),
+				nullableValue(cnty),
+				nullableValue(pfx),
+				nullableValue(iota),
+				nullableValue(distance),
+				nullableValue(aIndex),
+				nullableValue(kIndex),
+				nullableValue(sfi),
+				nullableValue(myName),
+				nullableValue(myCity),
+				nullableValue(myCountry),
+				nullableValue(myCQZone),
+				nullableValue(myITUZone),
+				nullableValue(myDXCC),
+				nullableValue(myGridSquare),
+				nullableValue(stationCall),
+				nullableValue(operator),
+				nullableValue(myRig),
+				nullableValue(myAntenna),
+				nullableValue(txPwr),
+				nullableValue(qslSent),
+				nullableValue(qslRcvd),
+				qslsDate,
+				qslrDate,
+				nullableValue(qslSentVia),
+				nullableValue(qslRcvdVia),
+				nullableValue(qslVia),
+				nullableValue(qslMsg),
+				nullableValue(qslMsgRcvd),
+				nullableValue(lotwSent),
+				nullableValue(lotwRcvd),
+				lotwQSLSDate,
+				lotwQSLRDate,
+				nullableValue(eqslSent),
+				nullableValue(eqslRcvd),
+				eqslQSLSDate,
+				eqslQSLRDate,
+				nullableValue(eqslAG),
+				clublogUploadDate,
+				nullableValue(clublogUploadStatus),
+				hrdlogUploadDate,
+				nullableValue(hrdlogUploadStatus),
+				appFields,
+				userFields,
 				qso.Call,
 				timestamp,
 				timestamp,
@@ -328,30 +483,33 @@ func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {
 
 			updated++
 		} else {
-			// INSERT new QSO
 			query := `
 				INSERT INTO qsos (
 					call, qso_date, time_on, time_off, qso_date_off,
-					band, freq, mode, rst_sent, rst_rcvd,
-					qth, name, comment, gridsquare, country, dxcc,
-					my_gridsquare, station_callsign, my_rig, my_antenna, tx_pwr,
-					qsl_sent, qsl_rcvd, lotw_qsl_sent, lotw_qsl_rcvd,
-					eqsl_qsl_sent, eqsl_qsl_rcvd
+					band, freq, mode, band_rx, freq_rx, submode,
+					rst_sent, rst_rcvd, qth, name, comment, notes,
+					gridsquare, country, dxcc, cqz, ituz, cont, state, cnty, pfx, iota,
+					distance, a_index, k_index, sfi,
+					my_name, my_city, my_country, my_cq_zone, my_itu_zone, my_dxcc,
+					my_gridsquare, station_callsign, operator, my_rig, my_antenna, tx_pwr,
+					qsl_sent, qsl_rcvd, qslsdate, qslrdate, qsl_sent_via, qsl_rcvd_via, qsl_via, qslmsg, qslmsg_rcvd,
+					lotw_qsl_sent, lotw_qsl_rcvd, lotw_qslsdate, lotw_qslrdate,
+					eqsl_qsl_sent, eqsl_qsl_rcvd, eqsl_qslsdate, eqsl_qslrdate, eqsl_ag,
+					clublog_qso_upload_date, clublog_qso_upload_status, hrdlog_qso_upload_date, hrdlog_qso_upload_status,
+					app_fields, user_fields
 				) VALUES (
-					$1, $2, $3, $4, NULLIF($5, '')::date,
-					NULLIF($6, ''), CASE WHEN $7 != '' THEN $7::double precision ELSE NULL END, $8,
-					NULLIF($9, ''), NULLIF($10, ''),
-					NULLIF($11, ''), NULLIF($12, ''), NULLIF($13, ''),
-					NULLIF($14, ''), NULLIF($15, ''),
-					CASE WHEN $16 != '' THEN $16::integer ELSE NULL END,
-					NULLIF($17, ''), NULLIF($18, ''), NULLIF($19, ''),
-					NULLIF($20, ''), CASE WHEN $21 != '' THEN $21::double precision ELSE NULL END,
-					CASE WHEN $22 != '' THEN $22::qsl_sent_status ELSE NULL END,
-					CASE WHEN $23 != '' THEN $23::qsl_status ELSE NULL END,
-					CASE WHEN $24 != '' THEN $24::qsl_sent_status ELSE NULL END,
-					CASE WHEN $25 != '' THEN $25::qsl_status ELSE NULL END,
-					CASE WHEN $26 != '' THEN $26::qsl_sent_status ELSE NULL END,
-					CASE WHEN $27 != '' THEN $27::qsl_status ELSE NULL END
+					$1, $2, $3, $4, $5,
+					$6, $7, $8, $9, $10, $11,
+					$12, $13, $14, $15, $16, $17,
+					$18, $19, $20, $21, $22, $23, $24, $25, $26, $27,
+					$28, $29, $30, $31,
+					$32, $33, $34, $35, $36, $37,
+					$38, $39, $40, $41, $42, $43,
+					$44::qsl_sent_status, $45::qsl_status, $46, $47, $48::qsl_via, $49::qsl_via, $50, $51, $52,
+					$53::qsl_sent_status, $54::qsl_status, $55, $56,
+					$57::qsl_sent_status, $58::qsl_status, $59, $60, $61,
+					$62, $63::qso_upload_status, $64, $65::qso_upload_status,
+					COALESCE($66::jsonb, '{}'::jsonb), COALESCE($67::jsonb, '{}'::jsonb)
 				)
 			`
 
@@ -360,29 +518,69 @@ func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {
 				timestamp,
 				timestamp,
 				timeOff,
-				dateOff,
-				qso.Band,
-				qso.Freq,
-				qso.Mode,
-				qso.RSTSent,
-				qso.RSTRcvd,
-				qso.QTH,
-				qso.Name,
-				qso.Comment,
-				qso.GridSquare,
-				qso.Country,
-				qso.DXCC,
-				qso.MyGridSquare,
-				qso.StationCall,
-				qso.MyRig,
-				qso.MyAntenna,
-				qso.TxPwr,
-				string(qso.QslSent),
-				string(qso.QslRcvd),
-				string(qso.LotwSent),
-				string(qso.LotwRcvd),
-				string(qso.EqslSent),
-				string(qso.EqslRcvd),
+				qsoDateOff,
+				nullableValue(band),
+				nullableValue(freq),
+				nullableValue(mode),
+				nullableValue(bandRx),
+				nullableValue(freqRx),
+				nullableValue(submode),
+				nullableValue(rstSent),
+				nullableValue(rstRcvd),
+				nullableValue(qth),
+				nullableValue(name),
+				nullableValue(comment),
+				nullableValue(notes),
+				nullableValue(gridSquare),
+				nullableValue(country),
+				nullableValue(dxcc),
+				nullableValue(cqz),
+				nullableValue(ituz),
+				nullableValue(cont),
+				nullableValue(state),
+				nullableValue(cnty),
+				nullableValue(pfx),
+				nullableValue(iota),
+				nullableValue(distance),
+				nullableValue(aIndex),
+				nullableValue(kIndex),
+				nullableValue(sfi),
+				nullableValue(myName),
+				nullableValue(myCity),
+				nullableValue(myCountry),
+				nullableValue(myCQZone),
+				nullableValue(myITUZone),
+				nullableValue(myDXCC),
+				nullableValue(myGridSquare),
+				nullableValue(stationCall),
+				nullableValue(operator),
+				nullableValue(myRig),
+				nullableValue(myAntenna),
+				nullableValue(txPwr),
+				nullableValue(qslSent),
+				nullableValue(qslRcvd),
+				qslsDate,
+				qslrDate,
+				nullableValue(qslSentVia),
+				nullableValue(qslRcvdVia),
+				nullableValue(qslVia),
+				nullableValue(qslMsg),
+				nullableValue(qslMsgRcvd),
+				nullableValue(lotwSent),
+				nullableValue(lotwRcvd),
+				lotwQSLSDate,
+				lotwQSLRDate,
+				nullableValue(eqslSent),
+				nullableValue(eqslRcvd),
+				eqslQSLSDate,
+				eqslQSLRDate,
+				nullableValue(eqslAG),
+				clublogUploadDate,
+				nullableValue(clublogUploadStatus),
+				hrdlogUploadDate,
+				nullableValue(hrdlogUploadStatus),
+				appFields,
+				userFields,
 			)
 			if err != nil {
 				return imported, fmt.Errorf("failed to insert QSO: %w", err)
@@ -406,6 +604,34 @@ func ImportADIFQSOs(ctx context.Context, qsos []utils.QSO) (int, error) {
 	}
 
 	return imported + updated, nil
+}
+
+// ExportADIF exports QSOs in ADIF format, optionally filtered by date range.
+func ExportADIF(ctx context.Context, fromDate *time.Time, toDate *time.Time) (string, error) {
+	if pool == nil {
+		return "", ErrDatabaseConnectionNotInitialized
+	}
+
+	var fromArg any
+	if fromDate != nil {
+		fromArg = fromDate.Format("2006-01-02")
+	}
+
+	var toArg any
+	if toDate != nil {
+		toArg = toDate.Format("2006-01-02")
+	}
+
+	const query = `SELECT export_adif($1::date, $2::date)`
+
+	var adif string
+
+	err := pool.QueryRow(ctx, query, fromArg, toArg).Scan(&adif)
+	if err != nil {
+		return "", fmt.Errorf("failed to export adif: %w", err)
+	}
+
+	return adif, nil
 }
 
 // qsoExists checks if a QSO with the same call, date, and time already exists
@@ -462,6 +688,219 @@ func parseADIFDate(date string) (time.Time, error) {
 	}
 
 	return parsed, nil
+}
+
+func trimOptional(value string) *string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+
+	return &trimmed
+}
+
+func normalizeCNTY(cnty string, country *string) *string {
+	normalized := trimOptional(cnty)
+	if normalized == nil {
+		return nil
+	}
+
+	if country == nil {
+		return normalized
+	}
+
+	trimmedCountry := strings.TrimSpace(*country)
+	if trimmedCountry == "" {
+		return normalized
+	}
+
+	if strings.EqualFold(*normalized, trimmedCountry) {
+		return nil
+	}
+
+	if isLettersAndSpaces(*normalized) {
+		normalizedCNTYPhrase := normalizeAlnumPhrase(*normalized)
+		normalizedCountryPhrase := normalizeAlnumPhrase(trimmedCountry)
+
+		if normalizedCNTYPhrase != "" && normalizedCountryPhrase != "" {
+			if phraseContainsPhrase(normalizedCountryPhrase, normalizedCNTYPhrase) || phraseContainsPhrase(normalizedCNTYPhrase, normalizedCountryPhrase) {
+				return nil
+			}
+		}
+	}
+
+	return normalized
+}
+
+func isLettersAndSpaces(value string) bool {
+	for _, r := range value {
+		if r == ' ' {
+			continue
+		}
+
+		if (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') {
+			return false
+		}
+	}
+
+	return true
+}
+
+func normalizeAlnumPhrase(value string) string {
+	fields := strings.FieldsFunc(strings.ToLower(value), func(r rune) bool {
+		return (r < 'a' || r > 'z') && (r < '0' || r > '9')
+	})
+
+	return strings.Join(fields, " ")
+}
+
+func phraseContainsPhrase(haystack, needle string) bool {
+	return strings.Contains(" "+haystack+" ", " "+needle+" ")
+}
+
+func parseOptionalADIFFloat(value string) *float64 {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+
+	parsed, err := strconv.ParseFloat(trimmed, 64)
+	if err != nil {
+		return nil
+	}
+
+	return &parsed
+}
+
+func parseOptionalADIFInt(value string) *int {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+
+	parsed, err := strconv.Atoi(trimmed)
+	if err != nil {
+		return nil
+	}
+
+	return &parsed
+}
+
+func parseOptionalADIFDate(value string) *time.Time {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+
+	parsed, err := parseADIFDate(trimmed)
+	if err != nil {
+		return nil
+	}
+
+	return &parsed
+}
+
+func parseOptionalADIFTimestamp(date string, timeOn string) *time.Time {
+	trimmedDate := strings.TrimSpace(date)
+
+	trimmedTime := strings.TrimSpace(timeOn)
+	if trimmedDate == "" || trimmedTime == "" {
+		return nil
+	}
+
+	parsed, err := parseADIFTimestamp(trimmedDate, trimmedTime)
+	if err != nil {
+		return nil
+	}
+
+	return &parsed
+}
+
+func parseOptionalADIFBool(value string) *bool {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case "Y", "T", "TRUE", "1":
+		parsed := true
+
+		return &parsed
+	case "N", "F", "FALSE", "0":
+		parsed := false
+
+		return &parsed
+	default:
+		return nil
+	}
+}
+
+func normalizeQSLStatus(value string) *string {
+	return normalizeADIFEnum(value, "Y", "N", "R", "I", "V")
+}
+
+func normalizeQSLSentStatus(value string) *string {
+	return normalizeADIFEnum(value, "Y", "N", "R", "Q", "I")
+}
+
+func normalizeQSLVia(value string) *string {
+	return normalizeADIFEnum(value, "B", "D", "E", "M")
+}
+
+func normalizeQSOUploadStatus(value string) *string {
+	return normalizeADIFEnum(value, "Y", "N", "M")
+}
+
+func normalizeADIFEnum(value string, allowed ...string) *string {
+	trimmed := strings.ToUpper(strings.TrimSpace(value))
+	if trimmed == "" {
+		return nil
+	}
+
+	for _, candidate := range allowed {
+		if trimmed == candidate {
+			return &trimmed
+		}
+	}
+
+	return nil
+}
+
+func normalizeJSONFields(fields map[string]any) map[string]any {
+	if len(fields) == 0 {
+		return nil
+	}
+
+	normalized := make(map[string]any, len(fields))
+
+	for key, value := range fields {
+		normalizedKey := strings.TrimSpace(key)
+		if normalizedKey == "" || value == nil {
+			continue
+		}
+
+		switch castValue := value.(type) {
+		case string:
+			trimmedValue := strings.TrimSpace(castValue)
+			if trimmedValue == "" {
+				continue
+			}
+
+			normalized[normalizedKey] = trimmedValue
+		default:
+			normalized[normalizedKey] = castValue
+		}
+	}
+
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	return normalized
+}
+
+func nullableValue[T any](value *T) any {
+	if value == nil {
+		return nil
+	}
+
+	return *value
 }
 
 // GetQSO returns a single QSO by ID with contact information if linked
@@ -678,7 +1117,11 @@ func GetQSOsByCallSign(ctx context.Context, callSign string) ([]QSOListItem, err
 			mode,
 			rst_sent,
 			rst_rcvd,
-			country
+			country,
+			name,
+			qth,
+			state,
+			gridsquare
 		FROM qsos
 		WHERE UPPER(call) = UPPER($1)
 		ORDER BY qso_date DESC, time_on DESC
@@ -705,6 +1148,10 @@ func GetQSOsByCallSign(ctx context.Context, callSign string) ([]QSOListItem, err
 			&qso.RSTSent,
 			&qso.RSTRcvd,
 			&qso.Country,
+			&qso.Name,
+			&qso.QTH,
+			&qso.State,
+			&qso.GridSquare,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan QSO: %w", err)

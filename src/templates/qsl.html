@@ -16,6 +16,7 @@
 <div class="page-header">
   <h2>QSL Contacts</h2>
   <div class="page-header-actions">
+    <a href="/qsl/export" class="btn">Export ADIF</a>
     <form method="POST" action="/qsl/import/qrz" class="inline-form">
       <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
       <button type="submit" class="btn">Sync QRZ</button>
@@ -89,6 +90,9 @@
       <div><span class="qso-callsign">{{ .Call }}</span> • {{ .QSODate.Format "2006-01-02" }} {{ .TimeOn.Format "15:04" }}Z</div>
       <div class="muted-text">
         {{ .Mode }}{{ if .Band }} • {{ .Band }}{{ end }}{{ if .Country }} • {{ .Country }}{{ end }}
+      </div>
+      <div style="display:none;">
+        {{ if .Name }}{{ .Name }} {{ end }}{{ if .QTH }}{{ .QTH }} {{ end }}{{ if .State }}{{ .State }} {{ end }}{{ if .GridSquare }}{{ .GridSquare }}{{ end }}
       </div>
     </a>
   </div>

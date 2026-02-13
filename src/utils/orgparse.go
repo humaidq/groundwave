@@ -104,6 +104,12 @@ var internalLinkPrefixes = []string{"/zk", "/home", "/note", "/groundwave"}
 
 var externalLinkRelTokens = []string{"noopener", "noreferrer"}
 
+var externalLinkPrefixLegacySymbol = "🗗"
+
+var externalLinkPrefixIconClasses = []string{"fa-solid", "fa-up-right-from-square"}
+
+var externalLinkPrefixIconClass = strings.Join(externalLinkPrefixIconClasses, " ")
+
 var publicAccessDirectivePattern = regexp.MustCompile(`(?im)^\s*#\+access:\s*public\s*$`)
 
 var homeAccessDirectivePattern = regexp.MustCompile(`(?im)^\s*#\+access:\s*home\s*$`)
@@ -145,11 +151,24 @@ func annotateExternalLinks(node *nethtml.Node) {
 				setExternalLinkAttributes(child)
 
 				if !linkHasPrefix(child) {
-					prefixNode := &nethtml.Node{Type: nethtml.TextNode, Data: "🗗 "}
+					prefixNode := &nethtml.Node{
+						Type:     nethtml.ElementNode,
+						Data:     "i",
+						DataAtom: atom.I,
+						Attr: []nethtml.Attribute{
+							{Key: "class", Val: externalLinkPrefixIconClass},
+							{Key: "aria-hidden", Val: "true"},
+						},
+					}
+					separatorNode := &nethtml.Node{Type: nethtml.TextNode, Data: " "}
+
 					if child.FirstChild != nil {
-						child.InsertBefore(prefixNode, child.FirstChild)
+						firstChild := child.FirstChild
+						child.InsertBefore(prefixNode, firstChild)
+						child.InsertBefore(separatorNode, firstChild)
 					} else {
 						child.AppendChild(prefixNode)
+						child.AppendChild(separatorNode)
 					}
 				}
 			}
@@ -220,11 +239,51 @@ func mergeLinkRelValues(existing string, required ...string) string {
 }
 
 func linkHasPrefix(link *nethtml.Node) bool {
-	if link.FirstChild == nil || link.FirstChild.Type != nethtml.TextNode {
+	for child := link.FirstChild; child != nil; child = child.NextSibling {
+		if child.Type == nethtml.TextNode {
+			if strings.TrimSpace(child.Data) == "" {
+				continue
+			}
+
+			return strings.HasPrefix(child.Data, externalLinkPrefixLegacySymbol)
+		}
+
+		if child.Type == nethtml.ElementNode {
+			if child.Data == "i" && nodeHasClasses(child, externalLinkPrefixIconClasses...) {
+				return true
+			}
+
+			return false
+		}
+
 		return false
 	}
 
-	return strings.HasPrefix(link.FirstChild.Data, "🗗")
+	return false
+}
+
+func nodeHasClasses(node *nethtml.Node, required ...string) bool {
+	if len(required) == 0 {
+		return true
+	}
+
+	classes := strings.Fields(getLinkAttribute(node, "class"))
+	if len(classes) == 0 {
+		return false
+	}
+
+	have := make(map[string]struct{}, len(classes))
+	for _, className := range classes {
+		have[className] = struct{}{}
+	}
+
+	for _, className := range required {
+		if _, ok := have[className]; !ok {
+			return false
+		}
+	}
+
+	return true
 }
 
 func isExternalLink(href string) bool {

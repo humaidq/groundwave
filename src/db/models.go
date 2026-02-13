@@ -471,7 +471,7 @@ type QSO struct {
 	AntPath                 *AntPath         `db:"ant_path"`
 	AntAz                   *float64         `db:"ant_az"`
 	AntEl                   *float64         `db:"ant_el"`
-	Distance                *int             `db:"distance"`
+	Distance                *float64         `db:"distance"`
 	AIndex                  *int             `db:"a_index"`
 	KIndex                  *int             `db:"k_index"`
 	SFI                     *int             `db:"sfi"`

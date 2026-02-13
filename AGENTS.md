@@ -40,6 +40,9 @@ Prefer Nix-based commands when available.
 
 Tests live in the Go module (`src/`).
 
+Before running tests for implemented changes, run lint first and fix all lint
+issues.
+
 - Run all tests:
   - `cd src && DATABASE_URL="postgres:///pdb-test" go test ./...`
 - Run a single package:
@@ -48,6 +51,9 @@ Tests live in the Go module (`src/`).
   - `cd src && go test ./utils -run TestCreateGridMap`
 
 Notes:
+- For feature or bug-fix work, run this order: `cd src && golangci-lint run ./...`
+  then `cd src && DATABASE_URL="postgres:///pdb-test" go test ./...`.
+- Do not run tests until lint issues are fixed.
 - `TestCreateGridMap*` writes files in the repo root and cleans them up.
 - Provide write permissions to the working directory when running tests.
 - Always set `DATABASE_URL="postgres:///pdb-test"` when running tests, especially db.
