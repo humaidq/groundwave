@@ -72,4 +72,37 @@
   {{ end }}
 </div>
 
+{{ if .IsAdmin }}
+<div class="detail-section">
+  <h3>Manage File</h3>
+  <details class="add-item-details">
+    <summary class="add-item-summary">Rename file</summary>
+    <form method="POST" action="/files/rename" class="add-item-form">
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+      <input type="hidden" name="path" value="{{ .CurrentPath }}" />
+      <div class="add-item-field">
+        <input type="text" name="new_name" class="form-item" value="{{ .FileName }}" placeholder="New file name" required>
+      </div>
+      <button type="submit" class="btn btn-block">Rename</button>
+    </form>
+  </details>
+  <details class="add-item-details">
+    <summary class="add-item-summary">Move file</summary>
+    <form method="POST" action="/files/move" class="add-item-form">
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+      <input type="hidden" name="path" value="{{ .CurrentPath }}" />
+      <div class="add-item-field">
+        <input type="text" name="target_dir" class="form-item" placeholder="Destination folder (e.g. docs/archive)">
+      </div>
+      <button type="submit" class="btn btn-block">Move</button>
+    </form>
+  </details>
+  <form method="POST" action="/files/delete" class="files-manage-delete" onsubmit="return confirm('Delete this file? This cannot be undone.');">
+    <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+    <input type="hidden" name="path" value="{{ .CurrentPath }}" />
+    <button type="submit" class="btn btn-danger btn-block">Delete</button>
+  </form>
+</div>
+{{ end }}
+
 {{ template "foot" . }}

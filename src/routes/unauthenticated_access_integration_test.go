@@ -72,6 +72,7 @@ func newUnauthenticatedAccessTestApp() *flamego.Flame {
 		f.Get("/files", handler)
 		f.Get("/files/view", handler)
 		f.Get("/files/file", handler)
+		f.Post("/files/upload", handler)
 		f.Get("/home", handler)
 		f.Get("/home/{id}", handler)
 
@@ -102,6 +103,9 @@ func newUnauthenticatedAccessTestApp() *flamego.Flame {
 		f.Post("/health/{profile_id}/followup/{followup_id}/result", handler)
 		f.Post("/health/{profile_id}/followup/{followup_id}/result/{id}/edit", handler)
 		f.Post("/health/{profile_id}/followup/{followup_id}/result/{id}/delete", handler)
+		f.Post("/files/rename", handler)
+		f.Post("/files/move", handler)
+		f.Post("/files/delete", handler)
 
 		f.Get("/zk", handler)
 		f.Get("/zk/random", handler)
@@ -134,6 +138,7 @@ func TestUnauthenticatedAccessRedirectsToLogin(t *testing.T) {
 		{name: "files root", method: http.MethodGet, path: "/files"},
 		{name: "files view", method: http.MethodGet, path: "/files/view?path=docs/readme.md"},
 		{name: "files download", method: http.MethodGet, path: "/files/file?path=docs/readme.md"},
+		{name: "files upload", method: http.MethodPost, path: "/files/upload"},
 		{name: "home wiki root", method: http.MethodGet, path: "/home"},
 		{name: "home wiki note", method: http.MethodGet, path: "/home/note-1"},
 
@@ -158,6 +163,9 @@ func TestUnauthenticatedAccessRedirectsToLogin(t *testing.T) {
 		{name: "health result create", method: http.MethodPost, path: "/health/profile-1/followup/followup-1/result"},
 		{name: "health result update", method: http.MethodPost, path: "/health/profile-1/followup/followup-1/result/result-1/edit"},
 		{name: "health result delete", method: http.MethodPost, path: "/health/profile-1/followup/followup-1/result/result-1/delete"},
+		{name: "files rename", method: http.MethodPost, path: "/files/rename"},
+		{name: "files move", method: http.MethodPost, path: "/files/move"},
+		{name: "files delete", method: http.MethodPost, path: "/files/delete"},
 
 		{name: "zk root", method: http.MethodGet, path: "/zk"},
 		{name: "zk random", method: http.MethodGet, path: "/zk/random"},

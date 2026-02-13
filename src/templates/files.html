@@ -30,6 +30,12 @@
     </div>
   </div>
   <div class="page-header-actions">
+    <form method="POST" action="/files/upload" enctype="multipart/form-data" class="inline-form">
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+      <input type="hidden" name="path" value="{{ .CurrentPath }}" />
+      <input type="file" name="upload_file" id="files_upload" class="hidden-file-input" onchange="this.form.submit()">
+      <button type="button" class="btn" onclick="document.getElementById('files_upload').click()">Upload</button>
+    </form>
     {{ if .HasParent }}
     <a href="/files{{ if .ParentPath }}?path={{ .ParentPath | urlquery }}{{ end }}" class="btn">Up</a>
     {{ end }}
@@ -52,14 +58,14 @@
   <div class="list-card">
     {{ if .IsDir }}
     <a href="/files?path={{ .Path | urlquery }}" class="list-card-link">
-      <div class="list-card-title">📁 {{ .Name }}</div>
+      <div class="list-card-title"><i class="fa-solid fa-folder" aria-hidden="true"></i> {{ .Name }}</div>
       <div class="list-card-meta">
         <span class="muted-text">Folder</span>
       </div>
     </a>
     {{ else }}
     <a href="/files/view?path={{ .Path | urlquery }}" class="list-card-link">
-      <div class="list-card-title">📄 {{ .Name }}</div>
+      <div class="list-card-title"><i class="fa-solid fa-file" aria-hidden="true"></i> {{ .Name }}</div>
       <div class="list-card-meta">
         <span class="muted-text">{{ formatFileSize .Size }}{{ if not .ModTime.IsZero }} • {{ .ModTime.Format "Jan 2, 2006" }}{{ end }}</span>
       </div>

@@ -4,6 +4,8 @@
 package db
 
 import (
+	"bytes"
+	"errors"
 	"testing"
 )
 
@@ -91,5 +93,69 @@ func TestWebDAVFilesAndInventory(t *testing.T) {
 
 	if inferContentType("test.pdf") == "" {
 		t.Fatalf("expected inferred content type")
+	}
+}
+
+func TestWebDAVFilesUploadMoveDelete(t *testing.T) {
+	resetDatabase(t)
+
+	server := newWebDAVTestServer(t)
+	defer server.close()
+
+	t.Setenv("WEBDAV_USERNAME", "")
+	t.Setenv("WEBDAV_PASSWORD", "")
+	t.Setenv("WEBDAV_INV_PATH", server.server.URL+"/inv")
+	t.Setenv("WEBDAV_FILES_PATH", server.server.URL+"/files")
+	t.Setenv("WEBDAV_ZK_PATH", server.server.URL+"/zk/index.org")
+
+	content := []byte("hello")
+
+	if _, err := UploadFilesFile(testContext(), "uploads/hello.txt", bytes.NewReader(content), int64(len(content))); err != nil {
+		t.Fatalf("UploadFilesFile failed: %v", err)
+	}
+
+	if _, err := UploadFilesFile(testContext(), "uploads/hello.txt", bytes.NewReader(content), int64(len(content))); !errors.Is(err, ErrWebDAVFilesEntryExists) {
+		t.Fatalf("expected upload conflict, got %v", err)
+	}
+
+	body, _, err := FetchFilesFile(testContext(), "uploads/hello.txt")
+	if err != nil {
+		t.Fatalf("FetchFilesFile failed: %v", err)
+	}
+
+	if string(body) != "hello" {
+		t.Fatalf("unexpected upload contents: %q", string(body))
+	}
+
+	if err := MoveFilesEntry(testContext(), "uploads/hello.txt", "uploads/hello-renamed.txt"); err != nil {
+		t.Fatalf("MoveFilesEntry rename failed: %v", err)
+	}
+
+	if _, _, err := FetchFilesFile(testContext(), "uploads/hello.txt"); err == nil {
+		t.Fatalf("expected renamed file to be missing")
+	}
+
+	if _, _, err := FetchFilesFile(testContext(), "uploads/hello-renamed.txt"); err != nil {
+		t.Fatalf("expected renamed file to exist: %v", err)
+	}
+
+	if _, err := UploadFilesFile(testContext(), "uploads/second.txt", bytes.NewReader(content), int64(len(content))); err != nil {
+		t.Fatalf("UploadFilesFile failed: %v", err)
+	}
+
+	if err := MoveFilesEntry(testContext(), "uploads/hello-renamed.txt", "uploads/second.txt"); !errors.Is(err, ErrWebDAVFilesEntryExists) {
+		t.Fatalf("expected move conflict, got %v", err)
+	}
+
+	if err := MoveFilesEntry(testContext(), "uploads/hello-renamed.txt", "archive/hello-renamed.txt"); err != nil {
+		t.Fatalf("MoveFilesEntry move failed: %v", err)
+	}
+
+	if err := DeleteFilesEntry(testContext(), "archive/hello-renamed.txt"); err != nil {
+		t.Fatalf("DeleteFilesEntry failed: %v", err)
+	}
+
+	if err := DeleteFilesEntry(testContext(), "archive/hello-renamed.txt"); !errors.Is(err, ErrWebDAVFilesEntryNotFound) {
+		t.Fatalf("expected delete missing error, got %v", err)
 	}
 }

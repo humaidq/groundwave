@@ -291,6 +291,163 @@ func FetchFilesFile(ctx context.Context, filePath string) ([]byte, string, error
 	return body, contentType, nil
 }
 
+// UploadFilesFile uploads a file into the WebDAV files directory.
+// The file is written to a temporary path and moved into place to avoid partial data.
+func UploadFilesFile(ctx context.Context, filePath string, reader io.ReadSeeker, expectedSize int64) (int64, error) {
+	config, err := GetWebDAVConfig()
+	if err != nil {
+		return 0, err
+	}
+
+	if config.FilesPath == "" {
+		return 0, ErrWebDAVFilesPathNotConfigured
+	}
+
+	client, err := newFilesWebDAVClient(config)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create WebDAV client: %w", err)
+	}
+
+	exists, err := filesEntryExists(ctx, client, filePath)
+	if err != nil {
+		return 0, err
+	}
+	if exists {
+		return 0, ErrWebDAVFilesEntryExists
+	}
+
+	dirPath := path.Dir(filePath)
+	if dirPath == "." {
+		dirPath = ""
+	}
+
+	if dirPath != "" {
+		info, err := client.Stat(ctx, dirPath)
+		if err != nil {
+			if isWebDAVNotFound(err) {
+				return 0, ErrWebDAVFilesEntryNotFound
+			}
+			return 0, fmt.Errorf("failed to verify upload directory: %w", err)
+		}
+		if !info.IsDir {
+			return 0, fmt.Errorf("upload path is not a directory")
+		}
+	}
+
+	filename := path.Base(filePath)
+	tempName := fmt.Sprintf(".gw_upload_%d_%s", time.Now().UnixNano(), filename)
+	tempPath := tempName
+	if dirPath != "" {
+		tempPath = path.Join(dirPath, tempName)
+	}
+
+	size, err := filesUploadSize(reader, expectedSize)
+	if err != nil {
+		return 0, err
+	}
+
+	if err := putFilesEntry(ctx, config, tempPath, reader, size); err != nil {
+		cleanupFilesEntry(ctx, client, tempPath)
+		if exists, existsErr := filesEntryExists(ctx, client, filePath); existsErr == nil && exists {
+			return 0, ErrWebDAVFilesEntryExists
+		}
+		return 0, err
+	}
+
+	info, err := client.Stat(ctx, tempPath)
+	if err != nil {
+		cleanupFilesEntry(ctx, client, tempPath)
+		return 0, fmt.Errorf("failed to verify uploaded file: %w", err)
+	}
+	if info.Size != size {
+		cleanupFilesEntry(ctx, client, tempPath)
+		return 0, fmt.Errorf("uploaded size mismatch: expected %d bytes, got %d", size, info.Size)
+	}
+
+	if err := client.Move(ctx, tempPath, filePath, &webdav.MoveOptions{NoOverwrite: true}); err != nil {
+		cleanupFilesEntry(ctx, client, tempPath)
+		if exists, existsErr := filesEntryExists(ctx, client, filePath); existsErr == nil && exists {
+			return 0, ErrWebDAVFilesEntryExists
+		}
+		return 0, fmt.Errorf("failed to finalize upload: %w", err)
+	}
+
+	return size, nil
+}
+
+// MoveFilesEntry moves or renames a file or directory within the files WebDAV path.
+func MoveFilesEntry(ctx context.Context, sourcePath string, destPath string) error {
+	config, err := GetWebDAVConfig()
+	if err != nil {
+		return err
+	}
+
+	if config.FilesPath == "" {
+		return ErrWebDAVFilesPathNotConfigured
+	}
+
+	client, err := newFilesWebDAVClient(config)
+	if err != nil {
+		return fmt.Errorf("failed to create WebDAV client: %w", err)
+	}
+
+	exists, err := filesEntryExists(ctx, client, sourcePath)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return ErrWebDAVFilesEntryNotFound
+	}
+
+	destExists, err := filesEntryExists(ctx, client, destPath)
+	if err != nil {
+		return err
+	}
+	if destExists {
+		return ErrWebDAVFilesEntryExists
+	}
+
+	if err := client.Move(ctx, sourcePath, destPath, &webdav.MoveOptions{NoOverwrite: true}); err != nil {
+		if exists, existsErr := filesEntryExists(ctx, client, destPath); existsErr == nil && exists {
+			return ErrWebDAVFilesEntryExists
+		}
+		return fmt.Errorf("failed to move WebDAV entry: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteFilesEntry deletes a file or directory in the files WebDAV path.
+func DeleteFilesEntry(ctx context.Context, entryPath string) error {
+	config, err := GetWebDAVConfig()
+	if err != nil {
+		return err
+	}
+
+	if config.FilesPath == "" {
+		return ErrWebDAVFilesPathNotConfigured
+	}
+
+	client, err := newFilesWebDAVClient(config)
+	if err != nil {
+		return fmt.Errorf("failed to create WebDAV client: %w", err)
+	}
+
+	exists, err := filesEntryExists(ctx, client, entryPath)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return ErrWebDAVFilesEntryNotFound
+	}
+
+	if err := client.RemoveAll(ctx, entryPath); err != nil {
+		return fmt.Errorf("failed to delete WebDAV entry: %w", err)
+	}
+
+	return nil
+}
+
 // IsFilesPathRestricted reports whether a directory path is restricted by a break-glass marker.
 func IsFilesPathRestricted(ctx context.Context, dirPath string) (bool, error) {
 	config, err := GetWebDAVConfig()
@@ -413,6 +570,124 @@ func dirHasMarker(ctx context.Context, client *webdav.Client, basePath string, d
 	}
 
 	return false, nil
+}
+
+func filesUploadSize(reader io.ReadSeeker, expectedSize int64) (int64, error) {
+	if reader == nil {
+		return 0, fmt.Errorf("upload reader is nil")
+	}
+
+	end, err := reader.Seek(0, io.SeekEnd)
+	if err != nil {
+		if expectedSize >= 0 {
+			end = expectedSize
+		} else {
+			return 0, fmt.Errorf("failed to determine upload size: %w", err)
+		}
+	}
+
+	if expectedSize >= 0 && end != expectedSize {
+		return 0, fmt.Errorf("upload size mismatch: expected %d bytes, got %d", expectedSize, end)
+	}
+
+	if _, err := reader.Seek(0, io.SeekStart); err != nil {
+		return 0, fmt.Errorf("failed to rewind upload: %w", err)
+	}
+
+	return end, nil
+}
+
+func putFilesEntry(ctx context.Context, config *WebDAVConfig, entryPath string, reader io.Reader, size int64) error {
+	if size < 0 {
+		return fmt.Errorf("upload size unknown")
+	}
+
+	entryURL, err := filesEntryURL(config, entryPath)
+	if err != nil {
+		return fmt.Errorf("failed to build upload URL: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, entryURL, reader)
+	if err != nil {
+		return fmt.Errorf("failed to create upload request: %w", err)
+	}
+
+	req.ContentLength = size
+	req.Header.Set("Content-Type", "application/octet-stream")
+
+	httpClient := newWebDAVHTTPClient(config)
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to upload file: %w", err)
+	}
+
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Warn("Failed to close WebDAV upload response body", "error", err)
+		}
+	}()
+
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("failed to upload file: HTTP %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+func filesEntryURL(config *WebDAVConfig, entryPath string) (string, error) {
+	basePath := strings.TrimRight(config.FilesPath, "/") + "/"
+	parsed, err := url.Parse(basePath)
+	if err != nil {
+		return "", err
+	}
+
+	if entryPath == "" {
+		return parsed.String(), nil
+	}
+
+	cleaned := strings.TrimPrefix(entryPath, "/")
+	parsed.Path = path.Join(strings.TrimSuffix(parsed.Path, "/"), cleaned)
+	if !strings.HasPrefix(parsed.Path, "/") {
+		parsed.Path = "/" + parsed.Path
+	}
+
+	return parsed.String(), nil
+}
+
+func filesEntryExists(ctx context.Context, client *webdav.Client, entryPath string) (bool, error) {
+	_, err := client.Stat(ctx, entryPath)
+	if err == nil {
+		return true, nil
+	}
+
+	if isWebDAVNotFound(err) {
+		return false, nil
+	}
+
+	return false, fmt.Errorf("failed to stat WebDAV entry: %w", err)
+}
+
+func cleanupFilesEntry(ctx context.Context, client *webdav.Client, entryPath string) {
+	if entryPath == "" {
+		return
+	}
+
+	if err := client.RemoveAll(ctx, entryPath); err != nil {
+		if isWebDAVNotFound(err) {
+			return
+		}
+		logger.Warn("Failed to clean up WebDAV temp entry", "path", entryPath, "error", err)
+	}
+}
+
+func isWebDAVNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "404") || strings.Contains(message, "not found")
 }
 
 // Helper functions

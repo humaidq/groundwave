@@ -74,7 +74,7 @@
       {{ range .Files }}
       <li class="file-item">
         <a href="/inventory/{{ $.Item.InventoryID }}/file/{{ .Name }}" class="file-link" target="_blank">
-          📄 {{ .Name }}
+          <i class="fa-solid fa-file" aria-hidden="true"></i> {{ .Name }}
         </a>
         <span class="file-meta">{{ formatFileSize .Size }} | {{ .ModTime.Format "Jan 2, 2006" }}</span>
       </li>

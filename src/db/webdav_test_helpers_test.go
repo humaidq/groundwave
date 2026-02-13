@@ -6,9 +6,11 @@ package db
 import (
 	"encoding/xml"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,6 +53,14 @@ func newWebDAVTestServer(t *testing.T) *webdavTestServer {
 
 	if err := os.WriteFile(filepath.Join(filesDir, "readme.txt"), []byte("readme"), 0o600); err != nil {
 		t.Fatalf("failed to write file: %v", err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(filesDir, "uploads"), 0o750); err != nil {
+		t.Fatalf("failed to create uploads dir: %v", err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(filesDir, "archive"), 0o750); err != nil {
+		t.Fatalf("failed to create archive dir: %v", err)
 	}
 
 	if err := os.MkdirAll(filepath.Join(filesDir, "private"), 0o750); err != nil {
@@ -145,6 +155,12 @@ func (h *simpleWebDAVHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		h.handlePropFind(w, r, fsPath)
 	case http.MethodGet:
 		handleGetFile(w, r, fsPath)
+	case http.MethodPut:
+		h.handlePut(w, r, fsPath)
+	case http.MethodDelete:
+		h.handleDelete(w, r, fsPath)
+	case "MOVE":
+		h.handleMove(w, r, fsPath)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
@@ -157,6 +173,140 @@ func handleGetFile(w http.ResponseWriter, r *http.Request, fsPath string) {
 	}
 
 	http.ServeFile(w, r, fsPath)
+}
+
+func (h *simpleWebDAVHandler) handlePut(w http.ResponseWriter, r *http.Request, fsPath string) {
+	if strings.HasSuffix(r.URL.Path, "/") {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	parent := filepath.Dir(fsPath)
+	if _, err := os.Stat(parent); err != nil {
+		if os.IsNotExist(err) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if err := os.WriteFile(fsPath, body, 0o600); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (h *simpleWebDAVHandler) handleDelete(w http.ResponseWriter, r *http.Request, fsPath string) {
+	if _, err := os.Stat(fsPath); err != nil {
+		if os.IsNotExist(err) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if err := os.RemoveAll(fsPath); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *simpleWebDAVHandler) handleMove(w http.ResponseWriter, r *http.Request, fsPath string) {
+	destHeader := r.Header.Get("Destination")
+	if destHeader == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	destPath, err := h.resolveDestinationPath(destHeader)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if _, err := os.Stat(fsPath); err != nil {
+		if os.IsNotExist(err) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	overwrite := strings.ToUpper(strings.TrimSpace(r.Header.Get("Overwrite")))
+	if overwrite == "" {
+		overwrite = "T"
+	}
+
+	if overwrite == "F" {
+		if _, err := os.Stat(destPath); err == nil {
+			w.WriteHeader(http.StatusPreconditionFailed)
+			return
+		}
+	}
+
+	if err := h.ensureParentExists(destPath); err != nil {
+		if os.IsNotExist(err) {
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if overwrite != "F" {
+		_ = os.RemoveAll(destPath)
+	}
+
+	if err := os.Rename(fsPath, destPath); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (h *simpleWebDAVHandler) resolveDestinationPath(destHeader string) (string, error) {
+	parsed, err := url.Parse(destHeader)
+	if err != nil {
+		return "", err
+	}
+
+	pathValue := parsed.Path
+	if pathValue == "" {
+		pathValue = destHeader
+	}
+	pathValue = strings.TrimSuffix(pathValue, "/")
+
+	if !strings.HasPrefix(pathValue, h.prefix) {
+		return "", fmt.Errorf("destination outside prefix")
+	}
+
+	relPath := strings.TrimPrefix(pathValue, h.prefix)
+	relPath = strings.TrimPrefix(relPath, "/")
+	if relPath == "" {
+		return "", fmt.Errorf("empty destination path")
+	}
+
+	return filepath.Join(h.rootDir, relPath), nil
+}
+
+func (h *simpleWebDAVHandler) ensureParentExists(destPath string) error {
+	parent := filepath.Dir(destPath)
+	_, err := os.Stat(parent)
+	return err
 }
 
 type davMultiStatus struct {

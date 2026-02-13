@@ -593,6 +593,22 @@ func TestFilesHelperFunctions(t *testing.T) {
 		t.Fatal("expected backslash path to be rejected")
 	}
 
+	if got, ok := sanitizeFilesName(" report.txt "); !ok || got != "report.txt" {
+		t.Fatalf("expected sanitized file name, got %q ok=%v", got, ok)
+	}
+
+	if _, ok := sanitizeFilesName(".hidden"); ok {
+		t.Fatal("expected hidden file name to be rejected")
+	}
+
+	if _, ok := sanitizeFilesName("../notes"); ok {
+		t.Fatal("expected traversal file name to be rejected")
+	}
+
+	if _, ok := sanitizeFilesName("docs/notes"); ok {
+		t.Fatal("expected path separator in file name to be rejected")
+	}
+
 	if got := formatFilesPathDisplay(""); got != "/" {
 		t.Fatalf("unexpected root display path: %q", got)
 	}

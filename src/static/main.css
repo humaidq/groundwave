@@ -1404,6 +1404,10 @@ code:not(pre code) {
   margin-bottom: 2rem;
 }
 
+.files-manage-delete {
+  margin-top: 1rem;
+}
+
 .file-viewer {
   margin-top: 1.5rem;
   padding: 1rem;
