@@ -1,0 +1,153 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+{{ if .Error }}
+<div class="alert alert-red">
+  {{ .Error }}
+</div>
+{{ end }}
+
+<div class="page-header">
+  <div class="page-header-stack">
+    <h2>{{ .Profile.Callsign }}{{ if .Profile.DisplayName }} - {{ .Profile.DisplayName }}{{ end }}</h2>
+  </div>
+  <div class="page-header-actions">
+    <a href="/qsl/callsigns" class="btn">Back to Callsigns</a>
+    <form method="POST" action="/qrz/{{ .Profile.Callsign | urlquery }}/sync" class="inline-form">
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+      <button type="submit" class="btn">Sync QRZ</button>
+    </form>
+    {{ if .QRZLink }}
+    <a href="{{ .QRZLink }}" class="btn" target="_blank" rel="noopener noreferrer">Open QRZ.com</a>
+    {{ end }}
+  </div>
+</div>
+
+<div class="detail-layout">
+  <div class="detail-section">
+    <h3>Profile</h3>
+    {{ if .Profile.HasProfileData }}
+    {{ if .Profile.DisplayName }}
+    <div class="detail-item">
+      <span class="detail-label">Name:</span>
+      <span class="detail-value">{{ .Profile.DisplayName }}</span>
+    </div>
+    {{ end }}
+    {{ if .Profile.Nickname }}
+    <div class="detail-item">
+      <span class="detail-label">Nickname:</span>
+      <span class="detail-value">{{ .Profile.Nickname }}</span>
+    </div>
+    {{ end }}
+    {{ if .Profile.HasAddress }}
+    <div class="detail-item">
+      <span class="detail-label">Mailing Address:</span>
+      <div class="detail-value">
+        <address class="qsl-callsign-address">
+          {{ range .Profile.AddressLines }}
+          <div>{{ . }}</div>
+          {{ end }}
+        </address>
+      </div>
+    </div>
+    {{ end }}
+    {{ if .Profile.QSLMgr }}
+    <div class="detail-item">
+      <span class="detail-label">QSL via:</span>
+      <span class="detail-value">{{ .Profile.QSLMgr }}</span>
+    </div>
+    {{ end }}
+    {{ if .Profile.Email }}
+    <div class="detail-item">
+      <span class="detail-label">Email:</span>
+      <span class="detail-value"><a href="mailto:{{ .Profile.Email }}">{{ .Profile.Email }}</a></span>
+    </div>
+    {{ end }}
+    {{ if .Profile.Grid }}
+    <div class="detail-item">
+      <span class="detail-label">Grid:</span>
+      <span class="detail-value">{{ .Profile.Grid }}</span>
+    </div>
+    {{ end }}
+    {{ if .Profile.County }}
+    <div class="detail-item">
+      <span class="detail-label">County:</span>
+      <span class="detail-value">{{ .Profile.County }}</span>
+    </div>
+    {{ end }}
+    {{ if .Profile.DXCCString }}
+    <div class="detail-item">
+      <span class="detail-label">DXCC:</span>
+      <span class="detail-value">{{ .Profile.DXCCString }}</span>
+    </div>
+    {{ end }}
+    {{ if .Profile.CoordinateString }}
+    <div class="detail-item">
+      <span class="detail-label">Coordinates:</span>
+      <span class="detail-value">{{ .Profile.CoordinateString }}</span>
+    </div>
+    {{ end }}
+    {{ if .Profile.Aliases }}
+    <div class="detail-item">
+      <span class="detail-label">Aliases:</span>
+      <span class="detail-value">{{ .Profile.Aliases }}</span>
+    </div>
+    {{ end }}
+    {{ if .Profile.Xref }}
+    <div class="detail-item">
+      <span class="detail-label">Xref:</span>
+      <span class="detail-value">{{ .Profile.Xref }}</span>
+    </div>
+    {{ end }}
+    {{ if .Profile.QRZUser }}
+    <div class="detail-item">
+      <span class="detail-label">QRZ User:</span>
+      <span class="detail-value">{{ .Profile.QRZUser }}</span>
+    </div>
+    {{ end }}
+    {{ else }}
+    <p class="muted-text">No QRZ profile data yet.</p>
+    {{ end }}
+    {{ if .Profile.HasContact }}
+    <div class="detail-item">
+      <span class="detail-label">Linked Contact:</span>
+      <span class="detail-value"><a href="/contact/{{ .Profile.ContactIDValue }}">{{ .Profile.ContactLabel }}</a></span>
+    </div>
+    {{ end }}
+  </div>
+
+  <div class="detail-section">
+    <h3>QSOs</h3>
+    {{ if .QSOs }}
+    <p class="muted-text qso-count">Total QSOs: {{ len .QSOs }}</p>
+    <div class="list-card-list">
+      {{ range .QSOs }}
+      <div class="list-card">
+        <a href="/qsl/{{ .ID }}">
+          <div>{{ .FormatDate }} {{ .FormatTime }}Z</div>
+          <div class="muted-text">
+            {{ if .Band }}{{ .Band }}{{ end }}{{ if .Mode }} • {{ .Mode }}{{ end }}{{ if .Country }} • {{ .Country }}{{ end }}
+          </div>
+        </a>
+      </div>
+      {{ end }}
+    </div>
+    {{ else }}
+    <p class="muted-text">No QSOs logged for this callsign.</p>
+    {{ end }}
+  </div>
+</div>
+
+{{ template "foot" . }}

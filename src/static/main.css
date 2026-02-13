@@ -935,6 +935,48 @@ code:not(pre code) {
   margin: 0 15px;
 }
 
+/* QSO raw fields */
+.qso-raw-details {
+  margin-top: 24px;
+  border: 1px solid #e0e0e0;
+  border-radius: 0;
+  background: #fafafa;
+}
+
+.qso-raw-summary {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  font-weight: 600;
+  color: #134dae;
+  list-style: none;
+  user-select: none;
+}
+
+.qso-raw-summary::-webkit-details-marker {
+  display: none;
+}
+
+.qso-raw-summary:hover {
+  background-color: #f0f0f0;
+}
+
+.qso-raw-body {
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.qso-raw-json {
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid #e2e2e2;
+  background: #ffffff;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  white-space: pre;
+  overflow: auto;
+  max-height: 420px;
+}
+
 /* Mobile responsive layout */
 @media only screen and (max-width: 768px) {
   .qso-details-container {
@@ -2047,6 +2089,53 @@ pre.file-text-block {
 /* QSL/QSO Page Styles */
 .qso-count {
   margin-bottom: 1rem;
+}
+
+.qsl-callsign-group {
+  margin-bottom: 0.75rem;
+}
+
+.qsl-callsign-heading {
+  margin-top: 0;
+  margin-bottom: 0.35rem;
+  font-family: monospace;
+  font-size: 1.1rem;
+}
+
+.qsl-callsign-heading a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.qsl-callsign-heading a:hover,
+.qsl-callsign-heading a:focus {
+  text-decoration: underline;
+}
+
+.qsl-callsign-address {
+  margin-top: 0.4rem;
+  margin-bottom: 0.5rem;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.qsl-callsign-contact {
+  margin-top: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.qsl-callsign-qso-list {
+  margin-top: 0.45rem;
+  margin-bottom: 0;
+  padding-left: 1.2rem;
+}
+
+.qsl-callsign-qso-list li {
+  margin-bottom: 0.15rem;
+}
+
+.qsl-callsign-qso-list li:last-child {
+  margin-bottom: 0;
 }
 
 .qso-callsign {
@@ -3951,6 +4040,25 @@ pre.file-text-block {
   }
 
   .qso-map h4 {
+    color: #eee;
+  }
+
+  .qso-raw-details {
+    background: #3c4043;
+    border-color: #666;
+  }
+
+  .qso-raw-summary:hover {
+    background-color: #434449;
+  }
+
+  .qso-raw-body {
+    border-top-color: #666;
+  }
+
+  .qso-raw-json {
+    background: #2d2e31;
+    border-color: #666;
     color: #eee;
   }
 

@@ -53,6 +53,7 @@ var (
 	ErrOllamaReturnedStatus        = errors.New("ollama returned status")
 	ErrOllamaError                 = errors.New("ollama error")
 	ErrNoQRZAPIKeysProvided        = errors.New("no QRZ API keys provided")
+	ErrQRZUserAgentNotConfigured   = errors.New("QRZ_USERAGENT not configured")
 	ErrSyncAllQRZLogbooksFailed    = errors.New("failed to sync all QRZ logbooks")
 	ErrQRZPaginationMissingLogID   = errors.New("unable to continue QRZ pagination (missing APP_QRZLOG_LOGID)")
 	ErrQRZPaginationLimitReached   = errors.New("QRZ pagination limit reached")
@@ -61,9 +62,18 @@ var (
 	ErrQRZLogbookResponseMissing   = errors.New("QRZ logbook response missing RESULT")
 
 	ErrQSOIDRequired          = errors.New("qso id is required")
+	ErrCallsignRequired       = errors.New("callsign is required")
 	ErrMailingAddressRequired = errors.New("mailing address is required")
 	ErrRequestIDRequired      = errors.New("request id is required")
 	ErrQSLCardRequestNotFound = errors.New("qsl card request not found")
+
+	ErrQRZXMLCredentialsNotConfigured = errors.New("qrz xml credentials are not configured (set QRZ_XML_USERNAME and QRZ_XML_PASSWORD)")
+	ErrQRZXMLServiceURLInvalid        = errors.New("qrz xml service url is invalid")
+	ErrQRZXMLAPIReturnedStatus        = errors.New("qrz xml api returned status")
+	ErrQRZXMLResponseMalformed        = errors.New("qrz xml response malformed")
+	ErrQRZXMLLoginFailed              = errors.New("qrz xml login failed")
+	ErrQRZXMLSessionKeyMissing        = errors.New("qrz xml session key missing")
+	ErrQRZXMLLookupFailed             = errors.New("qrz xml callsign lookup failed")
 
 	ErrInvalidDateFormat = errors.New("invalid date format")
 	ErrInvalidTimeFormat = errors.New("invalid time format")

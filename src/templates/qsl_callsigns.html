@@ -1,0 +1,92 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+<div class="page-header">
+  <h2>QSL Callsigns</h2>
+  <div class="page-header-actions">
+    <a href="/qsl" class="btn">Back to QSL</a>
+  </div>
+</div>
+
+{{ if .SyncInfo }}
+<div class="alert alert-grey">
+  {{ .SyncInfo }}
+</div>
+{{ end }}
+
+{{ if .SyncWarning }}
+<div class="alert alert-yellow">
+  {{ .SyncWarning }}
+</div>
+{{ end }}
+
+{{ if .Error }}
+<div class="alert alert-red">
+  {{ .Error }}
+</div>
+{{ end }}
+
+{{ if .CallsignProfiles }}
+<p class="muted-text qso-count">Unique callsigns: {{ len .CallsignProfiles }}</p>
+
+<div class="list-card-list">
+  {{ range .CallsignProfiles }}
+  <div class="list-card qsl-callsign-group">
+    <h3 class="qsl-callsign-heading"><a href="/qrz/{{ .Callsign | urlquery }}">{{ .Callsign }}</a></h3>
+
+    {{ if .DisplayName }}
+    <p>{{ .DisplayName }}</p>
+    {{ else }}
+    <p class="muted-text">No name in QRZ profile</p>
+    {{ end }}
+
+    {{ if .HasAddress }}
+    <address class="qsl-callsign-address">
+      {{ range .AddressLines }}
+      <div>{{ . }}</div>
+      {{ end }}
+    </address>
+    {{ else }}
+    <p class="muted-text">No mailing address in QRZ profile</p>
+    {{ end }}
+
+    {{ if .HasContact }}
+    <p class="qsl-callsign-contact"><a href="/contact/{{ .ContactIDValue }}">Contact: {{ .ContactLabel }}</a></p>
+    {{ else }}
+    <p class="muted-text">No linked contact</p>
+    {{ end }}
+
+    {{ if .QSOs }}
+    <ul class="qsl-callsign-qso-list">
+      {{ range .QSOs }}
+      <li>
+        <a href="/qsl/{{ .ID }}">{{ .FormatDate }} {{ .FormatTime }}Z{{ if .Band }} - {{ .Band }}{{ end }} - {{ .Mode }}{{ if .Country }} - {{ .Country }}{{ end }}</a>
+      </li>
+      {{ end }}
+    </ul>
+    {{ else }}
+    <p class="muted-text">No QSOs logged for this callsign.</p>
+    {{ end }}
+  </div>
+  {{ end }}
+</div>
+{{ else }}
+<div class="alert alert-grey">
+  <h5 class="alert-title">No Callsigns Yet</h5>
+  <p>Import your QSO log from QRZ or ADIF to build this list.</p>
+</div>
+{{ end }}
+
+{{ template "foot" . }}

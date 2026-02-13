@@ -39,6 +39,9 @@
     </div>
   </div>
   <div class="page-header-actions">
+    {{ with .Contact.CallSign }}
+    <a href="/qrz/{{ . | urlquery }}" class="btn">View QRZ</a>
+    {{ end }}
     {{ if .SensitiveAccess }}
     <a href="/contact/{{ .Contact.ID }}/edit" class="btn">Edit Contact</a>
     <form method="POST" action="/contact/{{ .Contact.ID }}/delete" class="inline-form" onsubmit="return confirm('Are you sure you want to delete this contact? This action cannot be undone.');">
@@ -60,7 +63,7 @@
       <a href="/contact/{{ .Contact.ID }}/chats" class="btn ml-half">Chats</a>
       {{ end }}
       {{ with .Contact.CallSign }}
-      <span class="contact-callsign">{{ . }}</span>
+      <a href="/qrz/{{ . | urlquery }}" class="btn">{{ . }}</a>
       {{ end }}
       {{ end }}
     </div>

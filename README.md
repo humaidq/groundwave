@@ -50,3 +50,10 @@ The following environment variables are used by the application:
 - `OLLAMA_MODEL` - Ollama model name for AI summaries
 - `QRZ_API_KEY` - QRZ Logbook API key(s) for importing latest QSOs
   - Comma separated for multiple logbooks (example: `QRZ_API_KEY=apikey1,apikey2`)
+- `QRZ_XML_USERNAME` - QRZ username for XML callsign lookups
+  - Optional fallback: `QRZ_USERNAME`
+- `QRZ_XML_PASSWORD` - QRZ password for XML callsign lookups
+  - Optional fallback: `QRZ_PASSWORD`
+- `QRZ_XML_AGENT` - Optional QRZ XML API agent string shown to QRZ
+  - Default: `Groundwave/1.0 (+https://huma.id)`
+- `QRZ_USERAGENT` - User-Agent header for QRZ Logbook sync requests (required)

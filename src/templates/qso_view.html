@@ -14,15 +14,21 @@
 {{ end }}
 
 {{ with .QSO }}
-<h2>{{ .Call }}{{ if .HasContact }} - <a href="/contact/{{ .GetContactID }}">View Contact</a>{{ end }}</h2>
+<h2>{{ .Call }}</h2>
 
-{{ if $.PublicQSLPath }}
-<div class="zk-published" data-publish-path="{{ $.PublicQSLPath }}">
+{{ if or $.PublicQSLPath .HasContact }}
+<div class="zk-published"{{ if $.PublicQSLPath }} data-publish-path="{{ $.PublicQSLPath }}"{{ end }}>
+  <a href="/qrz/{{ .Call | urlquery }}" class="btn">View QRZ</a>
+  {{ if .HasContact }}
+  <a href="/contact/{{ .GetContactID }}" class="btn">View Contact</a>
+  {{ end }}
+  {{ if $.PublicQSLPath }}
   <div class="btn-pill">
     <span class="btn-pill-label">Public Link</span>
     <button type="button" class="btn-pill-action qsl-copy-link">Copy Link</button>
   </div>
   <span class="zk-copy-status" aria-live="polite"></span>
+  {{ end }}
 </div>
 {{ end }}
 
@@ -155,6 +161,19 @@
     </div>
     {{ end }}
   </div>
+
+  {{ if or $.QSORawJSON $.QSORawJSONError }}
+  <details class="qso-raw-details">
+    <summary class="qso-raw-summary">Raw QSO Fields</summary>
+    <div class="qso-raw-body">
+      {{ if $.QSORawJSON }}
+      <pre class="qso-raw-json">{{ $.QSORawJSON }}</pre>
+      {{ else }}
+      <p class="muted-text">{{ $.QSORawJSONError }}</p>
+      {{ end }}
+    </div>
+  </details>
+  {{ end }}
 
 </div>
 {{ end }}

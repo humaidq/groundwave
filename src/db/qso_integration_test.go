@@ -329,3 +329,168 @@ func TestExportADIF(t *testing.T) {
 		t.Fatalf("expected February QSO in filtered export, got %q", rangeExport)
 	}
 }
+
+func TestExportADIFPreservesStandardMetadataWithoutAppFields(t *testing.T) {
+	resetDatabase(t)
+
+	ctx := testContext()
+
+	qsos := []utils.QSO{
+		{
+			Call:                   "K1ABC",
+			QSODate:                "20250210",
+			TimeOn:                 "120501",
+			QSODateOff:             "20250210",
+			TimeOff:                "121015",
+			Band:                   "20m",
+			BandRx:                 "20m",
+			Mode:                   "SSB",
+			Freq:                   "14.250",
+			FreqRx:                 "14.251",
+			RSTSent:                "59",
+			RSTRcvd:                "59",
+			QTH:                    "Fairfax",
+			Name:                   "Alice",
+			Comment:                "test comment",
+			Notes:                  "portable op notes",
+			GridSquare:             "FM18",
+			Country:                "United States",
+			DXCC:                   "291",
+			CQZ:                    "5",
+			ITUZ:                   "8",
+			Cont:                   "NA",
+			Cnty:                   "CA,ALAMEDA",
+			Pfx:                    "K1",
+			Distance:               "123.456",
+			AIndex:                 "12",
+			KIndex:                 "3",
+			SFI:                    "74",
+			MyName:                 "Operator Name",
+			MyCity:                 "Fairfax",
+			MyCountry:              "United States",
+			MyCQZone:               "5",
+			MyITUZone:              "8",
+			MyDXCC:                 "291",
+			MyGridSquare:           "FM18AA",
+			StationCall:            "K1OWN",
+			Operator:               "K1OWN",
+			MyRig:                  "K3",
+			MyAntenna:              "Dipole",
+			TxPwr:                  "100",
+			QslSent:                utils.QslYes,
+			QslRcvd:                utils.QslYes,
+			QSLSDate:               "20250211",
+			QSLRDate:               "20250212",
+			QSLSentVia:             "D",
+			QSLRcvdVia:             "E",
+			QSLVia:                 "Bureau",
+			QSLMsg:                 "Please QSL",
+			QSLMsgRcvd:             "TNX card",
+			LotwSent:               utils.QslYes,
+			LotwRcvd:               utils.QslYes,
+			LotwQSLSDate:           "20250213",
+			LotwQSLRDate:           "20250214",
+			EqslSent:               utils.QslYes,
+			EqslRcvd:               utils.QslYes,
+			EqslQSLSDate:           "20250215",
+			EqslQSLRDate:           "20250216",
+			EqslAG:                 "Y",
+			ClublogQSOUploadDate:   "20250217",
+			ClublogQSOUploadStatus: "Y",
+			HRDLogQSOUploadDate:    "20250218",
+			HRDLogQSOUploadStatus:  "M",
+			AppFields: map[string]any{
+				"app_cqrlog_profile": "1|FM18aa|Home|K3|",
+			},
+		},
+	}
+
+	count, err := ImportADIFQSOs(ctx, qsos)
+	if err != nil {
+		t.Fatalf("ImportADIFQSOs failed: %v", err)
+	}
+
+	if count != 1 {
+		t.Fatalf("expected 1 QSO processed, got %d", count)
+	}
+
+	exported, err := ExportADIF(ctx, nil, nil)
+	if err != nil {
+		t.Fatalf("ExportADIF failed: %v", err)
+	}
+
+	if strings.Contains(strings.ToUpper(exported), "<APP_") {
+		t.Fatalf("did not expect APP_* fields in export, got %q", exported)
+	}
+
+	parser := utils.NewADIFParser()
+	if err := parser.ParseFile(strings.NewReader(exported)); err != nil {
+		t.Fatalf("failed to parse exported ADIF: %v", err)
+	}
+
+	if len(parser.QSOs) != 1 {
+		t.Fatalf("expected 1 exported QSO, got %d", len(parser.QSOs))
+	}
+
+	got := parser.QSOs[0]
+
+	assertEqual := func(field, gotValue, want string) {
+		t.Helper()
+
+		if gotValue != want {
+			t.Fatalf("expected %s to be %q, got %q", field, want, gotValue)
+		}
+	}
+
+	assertNotEmpty := func(field, gotValue string) {
+		t.Helper()
+
+		if gotValue == "" {
+			t.Fatalf("expected %s to be preserved", field)
+		}
+	}
+
+	assertEqual("qso_date_off", got.QSODateOff, "20250210")
+	assertEqual("time_off", got.TimeOff, "121015")
+	assertEqual("band_rx", got.BandRx, "20m")
+	assertNotEmpty("freq_rx", got.FreqRx)
+	assertEqual("cont", got.Cont, "NA")
+	assertEqual("cnty", got.Cnty, "CA,ALAMEDA")
+	assertEqual("pfx", got.Pfx, "K1")
+	assertNotEmpty("distance", got.Distance)
+	assertEqual("a_index", got.AIndex, "12")
+	assertEqual("k_index", got.KIndex, "3")
+	assertEqual("sfi", got.SFI, "74")
+	assertEqual("my_antenna", got.MyAntenna, "Dipole")
+	assertEqual("my_city", got.MyCity, "Fairfax")
+	assertEqual("my_country", got.MyCountry, "United States")
+	assertEqual("my_cq_zone", got.MyCQZone, "5")
+	assertEqual("my_dxcc", got.MyDXCC, "291")
+	assertEqual("my_itu_zone", got.MyITUZone, "8")
+	assertEqual("my_name", got.MyName, "Operator Name")
+	assertEqual("my_rig", got.MyRig, "K3")
+	assertEqual("notes", got.Notes, "portable op notes")
+	assertEqual("operator", got.Operator, "K1OWN")
+	assertEqual("qsl_rcvd_via", got.QSLRcvdVia, "E")
+	assertEqual("qsl_sent_via", got.QSLSentVia, "D")
+	assertEqual("qsl_via", got.QSLVia, "Bureau")
+	assertEqual("qslmsg", got.QSLMsg, "Please QSL")
+	assertEqual("qslmsg_rcvd", got.QSLMsgRcvd, "TNX card")
+	assertEqual("qslrdate", got.QSLRDate, "20250212")
+	assertEqual("qslsdate", got.QSLSDate, "20250211")
+	assertEqual("lotw_qslrdate", got.LotwQSLRDate, "20250214")
+	assertEqual("lotw_qslsdate", got.LotwQSLSDate, "20250213")
+	assertEqual("eqsl_ag", got.EqslAG, "Y")
+	assertEqual("eqsl_qsl_rcvd", string(got.EqslRcvd), string(utils.QslYes))
+	assertEqual("eqsl_qsl_sent", string(got.EqslSent), string(utils.QslYes))
+	assertEqual("eqsl_qslrdate", got.EqslQSLRDate, "20250216")
+	assertEqual("eqsl_qslsdate", got.EqslQSLSDate, "20250215")
+	assertEqual("clublog_qso_upload_date", got.ClublogQSOUploadDate, "20250217")
+	assertEqual("clublog_qso_upload_status", got.ClublogQSOUploadStatus, "Y")
+	assertEqual("hrdlog_qso_upload_date", got.HRDLogQSOUploadDate, "20250218")
+	assertEqual("hrdlog_qso_upload_status", got.HRDLogQSOUploadStatus, "M")
+
+	if len(got.AppFields) != 0 {
+		t.Fatalf("did not expect app fields in exported ADIF, got %+v", got.AppFields)
+	}
+}

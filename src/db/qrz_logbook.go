@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,11 +21,11 @@ import (
 )
 
 const (
-	qrzLogbookAPIEndpoint    = "https://logbook.qrz.com/api"
-	qrzLogbookUserAgent      = "Groundwave/1.0 (+https://huma.id)"
-	qrzLogbookFetchPageSize  = 250
-	qrzLogbookFetchMaxPages  = 200
-	qrzLogbookModSinceOffset = -7
+	qrzLogbookAPIEndpoint     = "https://logbook.qrz.com/api"
+	qrzLogbookUserAgentEnvVar = "QRZ_USERAGENT"
+	qrzLogbookFetchPageSize   = 250
+	qrzLogbookFetchMaxPages   = 200
+	qrzLogbookModSinceOffset  = -7
 )
 
 var qrzLogbookIDFieldRegex = regexp.MustCompile(`(?i)<APP_QRZLOG_LOGID:\d+>(\d+)`)
@@ -53,6 +54,11 @@ func SyncQRZLogbooks(ctx context.Context, apiKeys []string) (QRZLogbookSyncResul
 		return result, ErrNoQRZAPIKeysProvided
 	}
 
+	userAgent, err := qrzLogbookUserAgentHeader()
+	if err != nil {
+		return result, err
+	}
+
 	result.RequestedLogbooks = len(keys)
 
 	latestQSOTime, err := GetLatestQSOTime(ctx)
@@ -68,7 +74,7 @@ func SyncQRZLogbooks(ctx context.Context, apiKeys []string) (QRZLogbookSyncResul
 	client := &http.Client{Timeout: 45 * time.Second}
 
 	for idx, apiKey := range keys {
-		processed, syncErr := syncSingleQRZLogbook(ctx, client, apiKey, modSince)
+		processed, syncErr := syncSingleQRZLogbook(ctx, client, apiKey, modSince, userAgent)
 		if syncErr != nil {
 			result.FailedLogbooks++
 
@@ -109,14 +115,14 @@ func normalizeQRZAPIKeys(apiKeys []string) []string {
 	return normalized
 }
 
-func syncSingleQRZLogbook(ctx context.Context, client *http.Client, apiKey string, modSince string) (int, error) {
+func syncSingleQRZLogbook(ctx context.Context, client *http.Client, apiKey string, modSince string, userAgent string) (int, error) {
 	afterLogID := 0
 	processedTotal := 0
 
 	for range qrzLogbookFetchMaxPages {
 		option := buildQRZFetchOption(modSince, afterLogID)
 
-		response, err := fetchQRZLogbookPage(ctx, client, apiKey, option)
+		response, err := fetchQRZLogbookPage(ctx, client, apiKey, option, userAgent)
 		if err != nil {
 			return processedTotal, err
 		}
@@ -169,7 +175,7 @@ func buildQRZFetchOption(modSince string, afterLogID int) string {
 	return strings.Join(options, ",")
 }
 
-func fetchQRZLogbookPage(ctx context.Context, client *http.Client, apiKey string, option string) (*qrzLogbookFetchResponse, error) {
+func fetchQRZLogbookPage(ctx context.Context, client *http.Client, apiKey string, option string, userAgent string) (*qrzLogbookFetchResponse, error) {
 	form := url.Values{}
 	form.Set("KEY", apiKey)
 	form.Set("ACTION", "FETCH")
@@ -181,7 +187,7 @@ func fetchQRZLogbookPage(ctx context.Context, client *http.Client, apiKey string
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", qrzLogbookUserAgent)
+	req.Header.Set("User-Agent", userAgent)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -218,6 +224,15 @@ func fetchQRZLogbookPage(ctx context.Context, client *http.Client, apiKey string
 	}
 
 	return parsed, nil
+}
+
+func qrzLogbookUserAgentHeader() (string, error) {
+	userAgent := strings.TrimSpace(os.Getenv(qrzLogbookUserAgentEnvVar))
+	if userAgent == "" {
+		return "", ErrQRZUserAgentNotConfigured
+	}
+
+	return userAgent, nil
 }
 
 func parseQRZLogbookResponse(raw []byte) (*qrzLogbookFetchResponse, error) {

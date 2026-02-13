@@ -6,6 +6,8 @@ package routes
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -22,6 +24,8 @@ import (
 	"github.com/humaidq/groundwave/db"
 	"github.com/humaidq/groundwave/utils"
 )
+
+const qrzCallsignAutofillLimit = 40
 
 func populateQSLPageData(ctx context.Context, data template.Data) {
 	requests, err := db.ListOpenQSLCardRequests(ctx)
@@ -54,6 +58,140 @@ func populateQSLPageData(ctx context.Context, data template.Data) {
 func QSL(c flamego.Context, t template.Template, data template.Data) {
 	populateQSLPageData(c.Request().Context(), data)
 	t.HTML(http.StatusOK, "qsl")
+}
+
+// QSLCallsigns renders grouped callsign profile data for QSL records.
+func QSLCallsigns(c flamego.Context, t template.Template, data template.Data) {
+	ctx := c.Request().Context()
+
+	started := db.StartQRZCallsignProfileSyncInBackground(qrzCallsignAutofillLimit)
+	status := db.GetQRZCallsignBackgroundSyncStatus()
+
+	if started {
+		data["SyncInfo"] = "Started QRZ profile refresh in background"
+	} else if status.Running {
+		data["SyncInfo"] = "QRZ profile refresh is running in background"
+	}
+
+	if !status.Running && status.LastError != "" {
+		data["SyncWarning"] = "Last QRZ profile refresh failed: " + status.LastError
+	} else if !started && !status.Running && !status.LastFinished.IsZero() && status.LastResult.Updated > 0 {
+		data["SyncInfo"] = fmt.Sprintf("Last QRZ profile refresh updated %d callsign(s)", status.LastResult.Updated)
+	}
+
+	profiles, err := db.ListQSLCallsignProfiles(ctx)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return
+		}
+
+		logger.Error("Error loading grouped QSL callsigns", "error", err)
+
+		data["Error"] = "Failed to load callsign profiles"
+	} else {
+		data["CallsignProfiles"] = profiles
+	}
+
+	data["IsQSL"] = true
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "QSL", URL: "/qsl", IsCurrent: false},
+		{Name: "Callsigns", URL: "/qsl/callsigns", IsCurrent: true},
+	}
+
+	t.HTML(http.StatusOK, "qsl_callsigns")
+}
+
+// ViewQRZCallsign renders detailed QRZ profile data for a callsign.
+func ViewQRZCallsign(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+	encodedCallsign := strings.TrimSpace(c.Param("callsign"))
+	if encodedCallsign == "" {
+		SetErrorFlash(s, "Callsign is required")
+		c.Redirect("/qsl/callsigns", http.StatusSeeOther)
+
+		return
+	}
+
+	decodedCallsign, err := url.QueryUnescape(encodedCallsign)
+	if err != nil {
+		SetErrorFlash(s, "Invalid callsign")
+		c.Redirect("/qsl/callsigns", http.StatusSeeOther)
+
+		return
+	}
+
+	callsign := strings.ToUpper(strings.TrimSpace(decodedCallsign))
+	if callsign == "" {
+		SetErrorFlash(s, "Callsign is required")
+		c.Redirect("/qsl/callsigns", http.StatusSeeOther)
+
+		return
+	}
+
+	ctx := c.Request().Context()
+	profile, err := db.GetQSLCallsignProfileDetail(ctx, callsign)
+	if err != nil {
+		logger.Error("Error loading QRZ callsign profile detail", "callsign", callsign, "error", err)
+		data["Error"] = "Failed to load callsign profile"
+		profile = &db.QSLCallsignProfileDetail{Callsign: callsign}
+	}
+
+	qsos, err := db.GetQSOsByCallSign(ctx, callsign)
+	if err != nil {
+		logger.Error("Error fetching QSOs for call sign", "call_sign", callsign, "error", err)
+	} else {
+		data["QSOs"] = qsos
+	}
+
+	data["Profile"] = profile
+	data["QRZLink"] = fmt.Sprintf("https://www.qrz.com/db/%s", url.PathEscape(callsign))
+	data["IsQSL"] = true
+	data["Breadcrumbs"] = []BreadcrumbItem{
+		{Name: "QSL", URL: "/qsl", IsCurrent: false},
+		{Name: "Callsigns", URL: "/qsl/callsigns", IsCurrent: false},
+		{Name: callsign, URL: "", IsCurrent: true},
+	}
+
+	t.HTML(http.StatusOK, "qrz_callsign")
+}
+
+// SyncQRZCallsign refreshes QRZ profile data for a callsign.
+func SyncQRZCallsign(c flamego.Context, s session.Session) {
+	encodedCallsign := strings.TrimSpace(c.Param("callsign"))
+	if encodedCallsign == "" {
+		SetErrorFlash(s, "Callsign is required")
+		c.Redirect("/qsl/callsigns", http.StatusSeeOther)
+
+		return
+	}
+
+	decodedCallsign, err := url.QueryUnescape(encodedCallsign)
+	if err != nil {
+		SetErrorFlash(s, "Invalid callsign")
+		c.Redirect("/qsl/callsigns", http.StatusSeeOther)
+
+		return
+	}
+
+	callsign := strings.ToUpper(strings.TrimSpace(decodedCallsign))
+	if callsign == "" {
+		SetErrorFlash(s, "Callsign is required")
+		c.Redirect("/qsl/callsigns", http.StatusSeeOther)
+
+		return
+	}
+
+	if err := db.SyncQRZCallsignProfile(c.Request().Context(), callsign); err != nil {
+		logger.Error("Failed to sync QRZ callsign profile", "callsign", callsign, "error", err)
+		if errors.Is(err, db.ErrQRZXMLCredentialsNotConfigured) {
+			SetErrorFlash(s, "QRZ XML credentials are not configured")
+		} else {
+			SetErrorFlash(s, "Failed to sync QRZ profile")
+		}
+	} else {
+		SetSuccessFlash(s, "QRZ profile updated")
+	}
+
+	c.Redirect("/qrz/"+url.QueryEscape(callsign), http.StatusSeeOther)
 }
 
 // DismissQSLCardRequest hides a request card from the /qsl inbox.
@@ -121,6 +259,15 @@ func ViewQSO(c flamego.Context, t template.Template, data template.Data) {
 	data["QSO"] = qso
 	data["MapURL"] = mapURL
 
+	rawJSON, err := formatQSORawJSON(qso)
+	if err != nil {
+		logger.Error("Error formatting QSO raw JSON", "qso_id", qsoID, "error", err)
+
+		data["QSORawJSONError"] = "Failed to render raw QSO fields"
+	} else if rawJSON != "" {
+		data["QSORawJSON"] = rawJSON
+	}
+
 	qsoTimestamp := qsoTimestampUTC(qso.QSO)
 	if !qsoTimestamp.IsZero() {
 		encodedCallsign := url.QueryEscape(qso.Call)
@@ -133,6 +280,19 @@ func ViewQSO(c flamego.Context, t template.Template, data template.Data) {
 	}
 
 	t.HTML(http.StatusOK, "qso_view")
+}
+
+func formatQSORawJSON(detail *db.QSODetail) (string, error) {
+	if detail == nil {
+		return "", nil
+	}
+
+	payload, err := json.MarshalIndent(detail, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshal QSO raw JSON: %w", err)
+	}
+
+	return string(payload), nil
 }
 
 // generateMapIfNeeded creates a map if it doesn't already exist

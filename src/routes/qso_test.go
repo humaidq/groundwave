@@ -5,8 +5,11 @@ package routes
 
 import (
 	"regexp"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/humaidq/groundwave/db"
 )
 
 func TestParseADIFExportDate(t *testing.T) {
@@ -82,6 +85,53 @@ func TestBuildADIFFilename(t *testing.T) {
 
 		if !matched {
 			t.Fatalf("unexpected filename format: %s", filename)
+		}
+	})
+}
+
+func TestFormatQSORawJSON(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil detail", func(t *testing.T) {
+		t.Parallel()
+
+		raw, err := formatQSORawJSON(nil)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if raw != "" {
+			t.Fatalf("expected empty raw json, got %q", raw)
+		}
+	})
+
+	t.Run("renders fields", func(t *testing.T) {
+		t.Parallel()
+
+		detail := &db.QSODetail{
+			QSO: &db.QSO{
+				Call:    "A66H",
+				QSODate: time.Date(2026, time.March, 5, 0, 0, 0, 0, time.UTC),
+				TimeOn:  time.Date(2026, time.March, 5, 12, 34, 56, 0, time.UTC),
+				Mode:    "SSB",
+			},
+		}
+
+		raw, err := formatQSORawJSON(detail)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if !strings.Contains(raw, "\"Call\": \"A66H\"") {
+			t.Fatalf("expected call sign in raw json, got %q", raw)
+		}
+
+		if !strings.Contains(raw, "\"Band\": null") {
+			t.Fatalf("expected null band in raw json, got %q", raw)
+		}
+
+		if !strings.Contains(raw, "\"ContactName\": null") {
+			t.Fatalf("expected contact name in raw json, got %q", raw)
 		}
 	})
 }
