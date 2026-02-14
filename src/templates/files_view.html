@@ -31,6 +31,9 @@
   </div>
   <div class="page-header-actions">
     <a href="{{ .DownloadURL }}" class="btn" download="{{ .FileName }}">Download</a>
+    {{ if .CanEditFile }}
+    <a href="/files/edit?path={{ .CurrentPath | urlquery }}" class="btn">Edit</a>
+    {{ end }}
     {{ if .HasParent }}
     <a href="/files{{ if .ParentPath }}?path={{ .ParentPath | urlquery }}{{ end }}" class="btn">Up</a>
     {{ end }}

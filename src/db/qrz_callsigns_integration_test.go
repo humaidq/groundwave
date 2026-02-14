@@ -306,6 +306,13 @@ func TestListQSLCallsignProfiles(t *testing.T) {
 		Tier:      TierB,
 	})
 
+	noQSOCallsign := "C3CCC"
+	mustCreateContact(t, CreateContactInput{
+		NameGiven: "No QSO Contact",
+		CallSign:  &noQSOCallsign,
+		Tier:      TierC,
+	})
+
 	payload := map[string]any{
 		"xml_version": "1.34",
 		"session": map[string]string{

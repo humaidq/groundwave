@@ -1408,6 +1408,16 @@ code:not(pre code) {
   margin-top: 1rem;
 }
 
+.files-entry-actions {
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.files-entry-action-form {
+  margin: 0;
+}
+
 .file-viewer {
   margin-top: 1.5rem;
   padding: 1rem;
@@ -1451,6 +1461,35 @@ pre.file-text-block {
   font-size: 0.95rem;
 }
 
+.file-edit-form {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background-color: #f9f9f9;
+  border: 1px solid #ddd;
+}
+
+.file-edit-hint {
+  margin: 0 0 0.75rem;
+}
+
+textarea.file-edit-textarea {
+  min-height: 65vh;
+  resize: vertical;
+  white-space: pre;
+  word-break: normal;
+  font-family:
+    "SFMono-Regular", "Source Code Pro", "Consolas", "Liberation Mono",
+    monospace;
+  font-size: 0.95rem;
+}
+
+.file-edit-actions {
+  margin-top: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 @media only screen and (max-width: 780px) {
   .file-viewer {
     margin-left: -1.5rem;
@@ -1462,6 +1501,18 @@ pre.file-text-block {
 
   .file-viewer-frame {
     height: 65vh;
+  }
+
+  .file-edit-form {
+    margin-left: -1.5rem;
+    margin-right: -1.5rem;
+    padding: 0.6rem;
+    border-left: none;
+    border-right: none;
+  }
+
+  textarea.file-edit-textarea {
+    min-height: 55vh;
   }
 }
 
@@ -1831,6 +1882,7 @@ pre.file-text-block {
 /* Add Item Forms */
 .add-item-details {
   margin-top: 1rem;
+  margin-bottom: 1rem;
   border: 1px solid #e0e0e0;
   border-radius: 0;
   background-color: #fafafa;
@@ -4392,6 +4444,17 @@ pre.file-text-block {
   }
 
   pre.file-text-block {
+    background-color: #2c2d30;
+    border-color: #555;
+    color: #eee;
+  }
+
+  .file-edit-form {
+    background-color: #2c2d30;
+    border-color: #555;
+  }
+
+  textarea.file-edit-textarea {
     background-color: #2c2d30;
     border-color: #555;
     color: #eee;

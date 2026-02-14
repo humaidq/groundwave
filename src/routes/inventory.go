@@ -6,6 +6,8 @@ package routes
 
 import (
 	"net/http"
+	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -112,6 +114,11 @@ func ViewInventoryItem(c flamego.Context, s session.Session, t template.Template
 	data["Item"] = item
 	data["Comments"] = comments
 	data["Files"] = files
+
+	if filesURL, ok := inventoryFilesURL(item.InventoryID); ok {
+		data["InventoryFilesURL"] = filesURL
+	}
+
 	data["IsInventory"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "Inventory", URL: "/inventory", IsCurrent: false},
@@ -485,4 +492,84 @@ func sanitizeFilenameForHeader(filename string) string {
 	s = strings.ReplaceAll(s, "\n", "")
 
 	return s
+}
+
+func inventoryFilesURL(inventoryID string) (string, bool) {
+	relPath, ok := inventoryFilesRelativePath(inventoryID)
+	if !ok {
+		return "", false
+	}
+
+	return "/files?path=" + url.QueryEscape(relPath), true
+}
+
+func inventoryFilesRelativePath(inventoryID string) (string, bool) {
+	inventoryID = strings.TrimSpace(inventoryID)
+	if inventoryID == "" || strings.Contains(inventoryID, "..") ||
+		strings.Contains(inventoryID, "/") || strings.Contains(inventoryID, "\\") {
+		return "", false
+	}
+
+	config, err := db.GetWebDAVConfig()
+	if err != nil {
+		return "", false
+	}
+
+	if config.InvPath == "" || config.FilesPath == "" {
+		return "", false
+	}
+
+	invURL, err := url.Parse(config.InvPath)
+	if err != nil {
+		return "", false
+	}
+
+	filesURL, err := url.Parse(config.FilesPath)
+	if err != nil {
+		return "", false
+	}
+
+	if invURL.Host != "" && filesURL.Host != "" && !strings.EqualFold(invURL.Host, filesURL.Host) {
+		return "", false
+	}
+
+	invRoot := cleanWebDAVPath(invURL.Path)
+	filesRoot := cleanWebDAVPath(filesURL.Path)
+
+	var relativeRoot string
+
+	if filesRoot == "" {
+		relativeRoot = invRoot
+	} else if invRoot != filesRoot {
+		if !strings.HasPrefix(invRoot, filesRoot+"/") {
+			return "", false
+		}
+
+		relativeRoot = strings.TrimPrefix(invRoot, filesRoot+"/")
+	}
+
+	relativePath := inventoryID
+	if relativeRoot != "" {
+		relativePath = path.Join(relativeRoot, inventoryID)
+	}
+
+	if relativePath == "" || relativePath == "." || relativePath == ".." || strings.HasPrefix(relativePath, "../") {
+		return "", false
+	}
+
+	return relativePath, true
+}
+
+func cleanWebDAVPath(rawPath string) string {
+	trimmed := strings.TrimSpace(rawPath)
+	if trimmed == "" {
+		return ""
+	}
+
+	cleaned := path.Clean("/" + strings.Trim(trimmed, "/"))
+	if cleaned == "/" {
+		return ""
+	}
+
+	return strings.TrimPrefix(cleaned, "/")
 }

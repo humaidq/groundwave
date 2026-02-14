@@ -151,11 +151,161 @@ func TestWebDAVFilesUploadMoveDelete(t *testing.T) {
 		t.Fatalf("MoveFilesEntry move failed: %v", err)
 	}
 
-	if err := DeleteFilesEntry(testContext(), "archive/hello-renamed.txt"); err != nil {
-		t.Fatalf("DeleteFilesEntry failed: %v", err)
+	if err := DeleteFilesFile(testContext(), "archive/hello-renamed.txt"); err != nil {
+		t.Fatalf("DeleteFilesFile failed: %v", err)
 	}
 
-	if err := DeleteFilesEntry(testContext(), "archive/hello-renamed.txt"); !errors.Is(err, ErrWebDAVFilesEntryNotFound) {
+	if err := DeleteFilesFile(testContext(), "archive/hello-renamed.txt"); !errors.Is(err, ErrWebDAVFilesEntryNotFound) {
 		t.Fatalf("expected delete missing error, got %v", err)
+	}
+}
+
+func TestWebDAVFilesDirectoryCreateAndDelete(t *testing.T) {
+	resetDatabase(t)
+
+	server := newWebDAVTestServer(t)
+	defer server.close()
+
+	t.Setenv("WEBDAV_USERNAME", "")
+	t.Setenv("WEBDAV_PASSWORD", "")
+	t.Setenv("WEBDAV_INV_PATH", server.server.URL+"/inv")
+	t.Setenv("WEBDAV_FILES_PATH", server.server.URL+"/files")
+	t.Setenv("WEBDAV_ZK_PATH", server.server.URL+"/zk/index.org")
+
+	if err := CreateFilesDirectory(testContext(), "uploads/new-folder"); err != nil {
+		t.Fatalf("CreateFilesDirectory failed: %v", err)
+	}
+
+	if err := CreateFilesDirectory(testContext(), "uploads/new-folder"); !errors.Is(err, ErrWebDAVFilesEntryExists) {
+		t.Fatalf("expected directory exists error, got %v", err)
+	}
+
+	if err := CreateFilesDirectory(testContext(), "missing/new-folder"); !errors.Is(err, ErrWebDAVFilesEntryNotFound) {
+		t.Fatalf("expected missing parent error, got %v", err)
+	}
+
+	entries, err := ListFilesEntries(testContext(), "uploads")
+	if err != nil {
+		t.Fatalf("ListFilesEntries failed: %v", err)
+	}
+
+	foundDir := false
+
+	for _, entry := range entries {
+		if entry.Path == "uploads/new-folder" {
+			if !entry.IsDir {
+				t.Fatalf("expected uploads/new-folder to be a directory")
+			}
+
+			foundDir = true
+
+			break
+		}
+	}
+
+	if !foundDir {
+		t.Fatalf("expected uploads/new-folder to be listed")
+	}
+
+	content := []byte("nested")
+	if _, err := UploadFilesFile(testContext(), "uploads/new-folder/nested.txt", bytes.NewReader(content), int64(len(content))); err != nil {
+		t.Fatalf("UploadFilesFile failed: %v", err)
+	}
+
+	if err := DeleteFilesDirectory(testContext(), "uploads/new-folder"); !errors.Is(err, ErrWebDAVFilesDirectoryNotEmpty) {
+		t.Fatalf("expected non-empty directory error, got %v", err)
+	}
+
+	if err := DeleteFilesFile(testContext(), "uploads/new-folder/nested.txt"); err != nil {
+		t.Fatalf("DeleteFilesFile failed: %v", err)
+	}
+
+	if err := DeleteFilesDirectory(testContext(), "uploads/new-folder"); err != nil {
+		t.Fatalf("DeleteFilesDirectory failed: %v", err)
+	}
+
+	if err := DeleteFilesDirectory(testContext(), "uploads/new-folder"); !errors.Is(err, ErrWebDAVFilesEntryNotFound) {
+		t.Fatalf("expected directory not found error, got %v", err)
+	}
+
+	if _, err := UploadFilesFile(testContext(), "uploads/plain.txt", bytes.NewReader(content), int64(len(content))); err != nil {
+		t.Fatalf("UploadFilesFile failed: %v", err)
+	}
+
+	if err := DeleteFilesDirectory(testContext(), "uploads/plain.txt"); !errors.Is(err, ErrWebDAVFilesEntryNotDirectory) {
+		t.Fatalf("expected not-directory error, got %v", err)
+	}
+
+	if err := DeleteFilesFile(testContext(), "uploads"); !errors.Is(err, ErrWebDAVFilesEntryIsDirectory) {
+		t.Fatalf("expected is-directory error, got %v", err)
+	}
+}
+
+func TestWebDAVFilesUpdateWithOptimisticLocking(t *testing.T) {
+	resetDatabase(t)
+
+	server := newWebDAVTestServer(t)
+	defer server.close()
+
+	t.Setenv("WEBDAV_USERNAME", "")
+	t.Setenv("WEBDAV_PASSWORD", "")
+	t.Setenv("WEBDAV_INV_PATH", server.server.URL+"/inv")
+	t.Setenv("WEBDAV_FILES_PATH", server.server.URL+"/files")
+	t.Setenv("WEBDAV_ZK_PATH", server.server.URL+"/zk/index.org")
+
+	entries, err := ListFilesEntries(testContext(), "")
+	if err != nil {
+		t.Fatalf("ListFilesEntries failed: %v", err)
+	}
+
+	var readmeETag string
+
+	for _, entry := range entries {
+		if entry.Path == "readme.txt" {
+			readmeETag = entry.ETag
+			break
+		}
+	}
+
+	if readmeETag == "" {
+		t.Fatalf("expected readme.txt etag")
+	}
+
+	if err := UpdateFilesFile(testContext(), "readme.txt", []byte("updated"), readmeETag); err != nil {
+		t.Fatalf("UpdateFilesFile failed: %v", err)
+	}
+
+	body, _, err := FetchFilesFile(testContext(), "readme.txt")
+	if err != nil {
+		t.Fatalf("FetchFilesFile failed: %v", err)
+	}
+
+	if string(body) != "updated" {
+		t.Fatalf("unexpected updated contents: %q", string(body))
+	}
+
+	if err := UpdateFilesFile(testContext(), "readme.txt", []byte("stale write"), readmeETag); !errors.Is(err, ErrWebDAVFilesEntryConflict) {
+		t.Fatalf("expected optimistic-lock conflict, got %v", err)
+	}
+
+	body, _, err = FetchFilesFile(testContext(), "readme.txt")
+	if err != nil {
+		t.Fatalf("FetchFilesFile failed: %v", err)
+	}
+
+	if string(body) != "updated" {
+		t.Fatalf("expected stale write to be rejected, got %q", string(body))
+	}
+
+	if err := UpdateFilesFile(testContext(), "readme.txt", []byte("no etag"), " "); !errors.Is(err, ErrWebDAVFilesEntryETagRequired) {
+		t.Fatalf("expected missing-etag error, got %v", err)
+	}
+
+	if err := UpdateFilesFile(testContext(), "missing.txt", []byte("x"), readmeETag); !errors.Is(err, ErrWebDAVFilesEntryNotFound) {
+		t.Fatalf("expected not-found error, got %v", err)
+	}
+
+	if err := UpdateFilesFile(testContext(), "uploads", []byte("x"), readmeETag); !errors.Is(err, ErrWebDAVFilesEntryIsDirectory) {
+		t.Fatalf("expected is-directory error, got %v", err)
 	}
 }

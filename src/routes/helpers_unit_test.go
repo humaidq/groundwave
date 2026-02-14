@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -574,6 +575,100 @@ func TestInventoryHelperFunctions(t *testing.T) {
 	}
 }
 
+func TestInventoryFilesRelativePath(t *testing.T) {
+	tests := []struct {
+		name        string
+		inventoryID string
+		invPath     string
+		filesPath   string
+		want        string
+		wantOK      bool
+	}{
+		{
+			name:        "inventory nested under files",
+			inventoryID: "GW-00001",
+			invPath:     "https://webdav.alq.ae/mnt/humaid/files/inventory",
+			filesPath:   "https://webdav.alq.ae/mnt/humaid/files",
+			want:        "inventory/GW-00001",
+			wantOK:      true,
+		},
+		{
+			name:        "handles trailing slashes",
+			inventoryID: "GW-00002",
+			invPath:     "https://webdav.alq.ae/mnt/humaid/files/inventory/",
+			filesPath:   "https://webdav.alq.ae/mnt/humaid/files/",
+			want:        "inventory/GW-00002",
+			wantOK:      true,
+		},
+		{
+			name:        "same inventory and files root",
+			inventoryID: "GW-00003",
+			invPath:     "https://webdav.alq.ae/mnt/humaid/files",
+			filesPath:   "https://webdav.alq.ae/mnt/humaid/files",
+			want:        "GW-00003",
+			wantOK:      true,
+		},
+		{
+			name:        "inventory path not nested",
+			inventoryID: "GW-00004",
+			invPath:     "https://webdav.alq.ae/mnt/humaid/inventory",
+			filesPath:   "https://webdav.alq.ae/mnt/humaid/files",
+			wantOK:      false,
+		},
+		{
+			name:        "different hosts",
+			inventoryID: "GW-00005",
+			invPath:     "https://webdav-a.alq.ae/mnt/humaid/files/inventory",
+			filesPath:   "https://webdav-b.alq.ae/mnt/humaid/files",
+			wantOK:      false,
+		},
+		{
+			name:        "invalid inventory id",
+			inventoryID: "../etc/passwd",
+			invPath:     "https://webdav.alq.ae/mnt/humaid/files/inventory",
+			filesPath:   "https://webdav.alq.ae/mnt/humaid/files",
+			wantOK:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("WEBDAV_USERNAME", "")
+			t.Setenv("WEBDAV_PASSWORD", "")
+			t.Setenv("WEBDAV_ZK_PATH", "")
+			t.Setenv("WEBDAV_INV_PATH", tt.invPath)
+			t.Setenv("WEBDAV_FILES_PATH", tt.filesPath)
+
+			gotPath, ok := inventoryFilesRelativePath(tt.inventoryID)
+			if ok != tt.wantOK {
+				t.Fatalf("inventoryFilesRelativePath() ok = %v, want %v", ok, tt.wantOK)
+			}
+
+			if gotPath != tt.want {
+				t.Fatalf("inventoryFilesRelativePath() path = %q, want %q", gotPath, tt.want)
+			}
+
+			gotURL, urlOK := inventoryFilesURL(tt.inventoryID)
+			if urlOK != tt.wantOK {
+				t.Fatalf("inventoryFilesURL() ok = %v, want %v", urlOK, tt.wantOK)
+			}
+
+			if !tt.wantOK {
+				if gotURL != "" {
+					t.Fatalf("inventoryFilesURL() = %q, want empty", gotURL)
+				}
+
+				return
+			}
+
+			wantURL := "/files?path=" + url.QueryEscape(tt.want)
+			if gotURL != wantURL {
+				t.Fatalf("inventoryFilesURL() = %q, want %q", gotURL, wantURL)
+			}
+		})
+	}
+}
+
 func TestFilesHelperFunctions(t *testing.T) {
 	t.Parallel()
 
@@ -655,6 +750,85 @@ func TestFilesHelperFunctions(t *testing.T) {
 		if got := filesViewerType(filename); got != want {
 			t.Fatalf("filesViewerType(%q) = %q, want %q", filename, got, want)
 		}
+	}
+
+	for viewerType, want := range map[string]bool{"text": true, "markdown": true, "pdf": false, "unknown": false} {
+		if got := filesViewerTypeIsEditable(viewerType); got != want {
+			t.Fatalf("filesViewerTypeIsEditable(%q) = %v, want %v", viewerType, got, want)
+		}
+	}
+
+	for filename, want := range map[string]bool{"notes.txt": true, "README.MD": true, "photo.jpg": false, "archive.bin": true, "noext": true} {
+		if got := isFilesPlaintextFilename(filename); got != want {
+			t.Fatalf("isFilesPlaintextFilename(%q) = %v, want %v", filename, got, want)
+		}
+	}
+
+	viewerTypeFallbackTests := []struct {
+		filename string
+		content  []byte
+		want     string
+	}{
+		{filename: "config", content: []byte("PORT=8080\n"), want: "text"},
+		{filename: "blob.bin", content: []byte("hello world\n"), want: "text"},
+		{filename: "blob.bin", content: []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}, want: "unknown"},
+		{filename: "readme.md", content: []byte{0x89, 'P', 'N', 'G'}, want: "markdown"},
+		{filename: "empty", content: []byte{}, want: "text"},
+	}
+
+	for _, tt := range viewerTypeFallbackTests {
+		if got := filesViewerTypeWithContentFallback(tt.filename, tt.content); got != tt.want {
+			t.Fatalf("filesViewerTypeWithContentFallback(%q) = %q, want %q", tt.filename, got, tt.want)
+		}
+	}
+
+	for name, tt := range map[string]struct {
+		content []byte
+		want    bool
+	}{
+		"ascii":         {content: []byte("line one\nline two\n"), want: true},
+		"utf8":          {content: []byte{0xe2, 0x9c, 0x85, '\n'}, want: true},
+		"png signature": {content: []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}, want: false},
+	} {
+		if got := isFilesPlaintextContent(tt.content); got != tt.want {
+			t.Fatalf("isFilesPlaintextContent(%s) = %v, want %v", name, got, tt.want)
+		}
+	}
+
+	if got, ok := sanitizeFilesETag(` "abc" `); !ok || got != `"abc"` {
+		t.Fatalf("expected sanitized etag, got %q ok=%v", got, ok)
+	}
+
+	if _, ok := sanitizeFilesETag("\n"); ok {
+		t.Fatal("expected newline etag to be rejected")
+	}
+
+	if _, ok := sanitizeFilesETag("   "); ok {
+		t.Fatal("expected blank etag to be rejected")
+	}
+
+	if got := normalizeFilesPlaintextContentForCreate("line1\r\nline2"); got != "line1\nline2\n" {
+		t.Fatalf("unexpected normalized plaintext content: %q", got)
+	}
+
+	if got := normalizeFilesPlaintextContentForCreate("line1"); got != "line1\n" {
+		t.Fatalf("expected trailing newline for created content, got %q", got)
+	}
+
+	if got := normalizeFilesPlaintextContentForCreate(""); got != "" {
+		t.Fatalf("expected empty content to remain empty, got %q", got)
+	}
+
+	if got, preserve := maybeTrimFilesTrailingNewlineForEdit("line\n", true); got != "line" || !preserve {
+		t.Fatalf("expected trailing newline trimmed for edit, got %q preserve=%v", got, preserve)
+	}
+
+	if got, preserve := maybeTrimFilesTrailingNewlineForEdit("line", true); got != "line" || preserve {
+		t.Fatalf("expected unchanged content without trailing newline, got %q preserve=%v", got, preserve)
+	}
+
+	if got, preserve := maybeTrimFilesTrailingNewlineForEdit("line\n", false); got != "line\n" || preserve {
+		t.Fatalf("expected unchanged content when trim disabled, got %q preserve=%v", got, preserve)
 	}
 
 	for value, want := range map[string]bool{"1": true, "TRUE": true, "yes": true, "0": false, "": false} {

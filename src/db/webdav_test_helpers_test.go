@@ -5,6 +5,7 @@ package db
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -15,6 +16,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+)
+
+var (
+	errDestinationOutsidePrefix = errors.New("destination outside prefix")
+	errEmptyDestinationPath     = errors.New("empty destination path")
 )
 
 type webdavTestServer struct {
@@ -157,8 +163,10 @@ func (h *simpleWebDAVHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		handleGetFile(w, r, fsPath)
 	case http.MethodPut:
 		h.handlePut(w, r, fsPath)
+	case "MKCOL":
+		h.handleMkcol(w, fsPath)
 	case http.MethodDelete:
-		h.handleDelete(w, r, fsPath)
+		h.handleDelete(w, fsPath)
 	case "MOVE":
 		h.handleMove(w, r, fsPath)
 	default:
@@ -181,42 +189,108 @@ func (h *simpleWebDAVHandler) handlePut(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	ifMatch := strings.TrimSpace(r.Header.Get("If-Match"))
+	if ifMatch != "" {
+		info, err := os.Stat(fsPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				w.WriteHeader(http.StatusPreconditionFailed)
+				return
+			}
+
+			w.WriteHeader(http.StatusInternalServerError)
+
+			return
+		}
+
+		currentETag := fmt.Sprintf("\"%d\"", info.ModTime().UnixNano())
+		if ifMatch != "*" && ifMatch != currentETag {
+			w.WriteHeader(http.StatusPreconditionFailed)
+			return
+		}
+	}
+
 	parent := filepath.Dir(fsPath)
 	if _, err := os.Stat(parent); err != nil {
 		if os.IsNotExist(err) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
+
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
 	if err := os.WriteFile(fsPath, body, 0o600); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
 }
 
-func (h *simpleWebDAVHandler) handleDelete(w http.ResponseWriter, r *http.Request, fsPath string) {
+func (h *simpleWebDAVHandler) handleMkcol(w http.ResponseWriter, fsPath string) {
+	if _, err := os.Stat(fsPath); err == nil {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	} else if !os.IsNotExist(err) {
+		w.WriteHeader(http.StatusInternalServerError)
+
+		return
+	}
+
+	parent := filepath.Dir(fsPath)
+
+	info, err := os.Stat(parent)
+	if err != nil {
+		if os.IsNotExist(err) {
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
+
+		w.WriteHeader(http.StatusInternalServerError)
+
+		return
+	}
+
+	if !info.IsDir() {
+		w.WriteHeader(http.StatusConflict)
+		return
+	}
+
+	if err := os.Mkdir(fsPath, 0o750); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (h *simpleWebDAVHandler) handleDelete(w http.ResponseWriter, fsPath string) {
 	if _, err := os.Stat(fsPath); err != nil {
 		if os.IsNotExist(err) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
+
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
 	if err := os.RemoveAll(fsPath); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
@@ -241,7 +315,9 @@ func (h *simpleWebDAVHandler) handleMove(w http.ResponseWriter, r *http.Request,
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
+
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
@@ -262,7 +338,9 @@ func (h *simpleWebDAVHandler) handleMove(w http.ResponseWriter, r *http.Request,
 			w.WriteHeader(http.StatusConflict)
 			return
 		}
+
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
@@ -281,23 +359,25 @@ func (h *simpleWebDAVHandler) handleMove(w http.ResponseWriter, r *http.Request,
 func (h *simpleWebDAVHandler) resolveDestinationPath(destHeader string) (string, error) {
 	parsed, err := url.Parse(destHeader)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to parse destination header: %w", err)
 	}
 
 	pathValue := parsed.Path
 	if pathValue == "" {
 		pathValue = destHeader
 	}
+
 	pathValue = strings.TrimSuffix(pathValue, "/")
 
 	if !strings.HasPrefix(pathValue, h.prefix) {
-		return "", fmt.Errorf("destination outside prefix")
+		return "", errDestinationOutsidePrefix
 	}
 
 	relPath := strings.TrimPrefix(pathValue, h.prefix)
+
 	relPath = strings.TrimPrefix(relPath, "/")
 	if relPath == "" {
-		return "", fmt.Errorf("empty destination path")
+		return "", errEmptyDestinationPath
 	}
 
 	return filepath.Join(h.rootDir, relPath), nil
@@ -305,8 +385,12 @@ func (h *simpleWebDAVHandler) resolveDestinationPath(destHeader string) (string,
 
 func (h *simpleWebDAVHandler) ensureParentExists(destPath string) error {
 	parent := filepath.Dir(destPath)
-	_, err := os.Stat(parent)
-	return err
+
+	if _, err := os.Stat(parent); err != nil {
+		return fmt.Errorf("failed to stat destination parent path: %w", err)
+	}
+
+	return nil
 }
 
 type davMultiStatus struct {
@@ -343,10 +427,12 @@ func (h *simpleWebDAVHandler) handlePropFind(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	depth := strings.TrimSpace(r.Header.Get("Depth"))
+
 	entries := []davResponse{}
 	entries = append(entries, h.buildResponse(r.URL.Path, info))
 
-	if info.IsDir() {
+	if info.IsDir() && depth != "0" {
 		items, err := os.ReadDir(fsPath)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)

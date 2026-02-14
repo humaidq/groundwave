@@ -103,9 +103,14 @@ func newUnauthenticatedAccessTestApp() *flamego.Flame {
 		f.Post("/health/{profile_id}/followup/{followup_id}/result", handler)
 		f.Post("/health/{profile_id}/followup/{followup_id}/result/{id}/edit", handler)
 		f.Post("/health/{profile_id}/followup/{followup_id}/result/{id}/delete", handler)
+		f.Get("/files/edit", handler)
+		f.Post("/files/mkdir", handler)
+		f.Post("/files/new", handler)
+		f.Post("/files/edit", handler)
 		f.Post("/files/rename", handler)
 		f.Post("/files/move", handler)
 		f.Post("/files/delete", handler)
+		f.Post("/files/rmdir", handler)
 
 		f.Get("/zk", handler)
 		f.Get("/zk/random", handler)
@@ -163,9 +168,14 @@ func TestUnauthenticatedAccessRedirectsToLogin(t *testing.T) {
 		{name: "health result create", method: http.MethodPost, path: "/health/profile-1/followup/followup-1/result"},
 		{name: "health result update", method: http.MethodPost, path: "/health/profile-1/followup/followup-1/result/result-1/edit"},
 		{name: "health result delete", method: http.MethodPost, path: "/health/profile-1/followup/followup-1/result/result-1/delete"},
+		{name: "files mkdir", method: http.MethodPost, path: "/files/mkdir"},
+		{name: "files new", method: http.MethodPost, path: "/files/new"},
+		{name: "files edit", method: http.MethodGet, path: "/files/edit?path=docs/readme.md"},
+		{name: "files save", method: http.MethodPost, path: "/files/edit"},
 		{name: "files rename", method: http.MethodPost, path: "/files/rename"},
 		{name: "files move", method: http.MethodPost, path: "/files/move"},
 		{name: "files delete", method: http.MethodPost, path: "/files/delete"},
+		{name: "files rmdir", method: http.MethodPost, path: "/files/rmdir"},
 
 		{name: "zk root", method: http.MethodGet, path: "/zk"},
 		{name: "zk random", method: http.MethodGet, path: "/zk/random"},

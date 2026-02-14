@@ -128,9 +128,11 @@ func ViewQRZCallsign(c flamego.Context, s session.Session, t template.Template, 
 	}
 
 	ctx := c.Request().Context()
+
 	profile, err := db.GetQSLCallsignProfileDetail(ctx, callsign)
 	if err != nil {
 		logger.Error("Error loading QRZ callsign profile detail", "callsign", callsign, "error", err)
+
 		data["Error"] = "Failed to load callsign profile"
 		profile = &db.QSLCallsignProfileDetail{Callsign: callsign}
 	}
@@ -143,7 +145,7 @@ func ViewQRZCallsign(c flamego.Context, s session.Session, t template.Template, 
 	}
 
 	data["Profile"] = profile
-	data["QRZLink"] = fmt.Sprintf("https://www.qrz.com/db/%s", url.PathEscape(callsign))
+	data["QRZLink"] = "https://www.qrz.com/db/" + url.PathEscape(callsign)
 	data["IsQSL"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "QSL", URL: "/qsl", IsCurrent: false},
@@ -182,6 +184,7 @@ func SyncQRZCallsign(c flamego.Context, s session.Session) {
 
 	if err := db.SyncQRZCallsignProfile(c.Request().Context(), callsign); err != nil {
 		logger.Error("Failed to sync QRZ callsign profile", "callsign", callsign, "error", err)
+
 		if errors.Is(err, db.ErrQRZXMLCredentialsNotConfigured) {
 			SetErrorFlash(s, "QRZ XML credentials are not configured")
 		} else {

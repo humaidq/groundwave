@@ -1,0 +1,65 @@
+{{ template "head" . }}
+
+{{ if .Breadcrumbs }}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {{ range $i, $b := .Breadcrumbs }}
+    {{ if $i }}<span class="breadcrumb-separator">&gt;</span>{{ end }}
+    {{ if $b.IsCurrent }}
+      <span class="breadcrumb-current">{{ $b.Name }}</span>
+    {{ else }}
+      <a href="{{ $b.URL }}" class="breadcrumb-item">{{ $b.Name }}</a>
+    {{ end }}
+  {{ end }}
+</nav>
+{{ end }}
+
+<div class="page-header">
+  <div class="page-header-stack">
+    <h2>Edit {{ .FileName }}</h2>
+    <div class="page-header-meta">
+      <span class="muted-text">{{ .CurrentPathDisplay }}</span>
+      {{ if or (ne .FileSize 0) (not .FileModTime.IsZero) }}
+      <span class="muted-text">{{ formatFileSize .FileSize }}{{ if not .FileModTime.IsZero }} • {{ .FileModTime.Format "Jan 2, 2006" }}{{ end }}</span>
+      {{ end }}
+      {{ if .IsRestricted }}
+      <span class="status-badge status-restricted">Restricted</span>
+      {{ end }}
+      {{ if .IsAdminOnly }}
+      <span class="status-badge status-admin">Admin</span>
+      {{ end }}
+    </div>
+  </div>
+  <div class="page-header-actions">
+    <a href="/files/view?path={{ .CurrentPath | urlquery }}" class="btn">View</a>
+    {{ if .HasParent }}
+    <a href="/files{{ if .ParentPath }}?path={{ .ParentPath | urlquery }}{{ end }}" class="btn">Up</a>
+    {{ end }}
+    {{ if .ParentPath }}
+    <a href="/files" class="btn">Root</a>
+    {{ end }}
+  </div>
+</div>
+
+{{ if .Error }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Error</h5>
+  <p>{{ .Error }}</p>
+</div>
+{{ end }}
+
+<form method="POST" action="/files/edit" class="file-edit-form">
+  <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+  <input type="hidden" name="path" value="{{ .CurrentPath }}" />
+  <input type="hidden" name="etag" value="{{ .FileETag }}" />
+  {{ if .PreserveTrailingNewline }}
+  <input type="hidden" name="preserve_trailing_newline" value="1" />
+  {{ end }}
+  <p class="muted-text file-edit-hint">Save is blocked if this file changed after you loaded this page.</p>
+  <textarea name="content" class="form-item file-edit-textarea" rows="24" spellcheck="false" required>{{ .FileText }}</textarea>
+  <div class="file-edit-actions">
+    <button type="submit" class="btn">Save</button>
+    <a href="/files/view?path={{ .CurrentPath | urlquery }}" class="btn">Cancel</a>
+  </div>
+</form>
+
+{{ template "foot" . }}
