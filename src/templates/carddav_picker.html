@@ -152,7 +152,7 @@
             .catch(error => {
                 document.getElementById('loading').style.display = 'none';
                 const errorEl = document.getElementById('error');
-                errorEl.textContent = 'Error: ' + error.message + '. Make sure CardDAV environment variables are configured.';
+                errorEl.textContent = 'Error: Unable to load CardDAV contacts right now.';
                 errorEl.style.display = 'block';
             });
 

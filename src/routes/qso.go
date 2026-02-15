@@ -186,7 +186,7 @@ func SyncQRZCallsign(c flamego.Context, s session.Session) {
 		logger.Error("Failed to sync QRZ callsign profile", "callsign", callsign, "error", err)
 
 		if errors.Is(err, db.ErrQRZXMLCredentialsNotConfigured) {
-			SetErrorFlash(s, "QRZ XML credentials are not configured")
+			SetErrorFlash(s, "QRZ profile sync is unavailable")
 		} else {
 			SetErrorFlash(s, "Failed to sync QRZ profile")
 		}
@@ -485,7 +485,7 @@ func ImportADIF(c flamego.Context, s session.Session, t template.Template, data 
 func ImportQRZLogs(c flamego.Context, s session.Session) {
 	apiKeys := splitEnvList(os.Getenv("QRZ_API_KEY"))
 	if len(apiKeys) == 0 {
-		SetErrorFlash(s, "QRZ_API_KEY is not configured")
+		SetErrorFlash(s, "QRZ sync is unavailable")
 		c.Redirect("/qsl", http.StatusSeeOther)
 
 		return

@@ -122,7 +122,7 @@ func SetupForm(c flamego.Context, s session.Session, t template.Template, data t
 		if bootstrapToken == "" {
 			s.Delete(webauthnBootstrapAllowedKey)
 
-			data["Error"] = "BOOTSTRAP_TOKEN is not configured"
+			data["Error"] = "Setup is unavailable"
 
 			t.HTML(http.StatusForbidden, "setup")
 
@@ -226,7 +226,7 @@ func SetupStart(c flamego.Context, s session.Session, web *webauthn.WebAuthn) {
 
 		bootstrapToken := strings.TrimSpace(os.Getenv("BOOTSTRAP_TOKEN"))
 		if bootstrapToken == "" {
-			writeJSONError(c, http.StatusForbidden, "bootstrap token not configured")
+			writeJSONError(c, http.StatusForbidden, "setup is unavailable")
 			return
 		}
 	}

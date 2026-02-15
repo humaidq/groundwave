@@ -28,7 +28,7 @@ func HomeWikiIndex(c flamego.Context, s session.Session, t template.Template, da
 	note, err := db.GetHomeIndexNote(ctx)
 	if err != nil {
 		logger.Error("Error fetching home wiki index", "error", err)
-		SetErrorFlash(s, "Failed to load wiki. Please check your WEBDAV_HOME_PATH, WEBDAV_ZK_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables.")
+		SetErrorFlash(s, "Failed to load wiki")
 		c.Redirect("/", http.StatusSeeOther)
 
 		return
@@ -82,7 +82,7 @@ func ViewHomeWikiNote(c flamego.Context, s session.Session, t template.Template,
 	note, err := db.GetNoteByIDWithBasePath(ctx, noteID, "/home")
 	if err != nil {
 		logger.Error("Error fetching home wiki note", "note_id", noteID, "error", err)
-		SetErrorFlash(s, "Page not found: "+noteID)
+		SetErrorFlash(s, "Page not found")
 		c.Redirect("/home", http.StatusSeeOther)
 
 		return

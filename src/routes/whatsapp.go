@@ -71,7 +71,7 @@ func WhatsAppDisconnect(c flamego.Context, s session.Session) {
 
 	err := client.Logout()
 	if err != nil {
-		SetErrorFlash(s, "Failed to disconnect: "+err.Error())
+		SetErrorFlash(s, "Failed to disconnect WhatsApp")
 	} else {
 		SetSuccessFlash(s, "WhatsApp disconnected")
 	}

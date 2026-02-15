@@ -1400,7 +1400,7 @@ func MigrateToCardDAV(c flamego.Context, s session.Session) {
 	err := db.MigrateContactToCardDAV(c.Request().Context(), contactID)
 	if err != nil {
 		logger.Error("Error migrating contact to CardDAV", "contact_id", contactID, "error", err)
-		SetErrorFlash(s, "Failed to migrate to CardDAV: "+err.Error())
+		SetErrorFlash(s, "Failed to migrate contact")
 	} else {
 		logger.Info("Successfully migrated contact to CardDAV", "contact_id", contactID)
 		SetSuccessFlash(s, "Contact successfully migrated to CardDAV")

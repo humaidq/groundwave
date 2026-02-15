@@ -218,6 +218,10 @@ func ListFilesEntries(ctx context.Context, dirPath string) ([]WebDAVEntry, error
 
 	fileInfos, err := client.ReadDir(ctx, target, false)
 	if err != nil {
+		if isWebDAVNotFound(err) {
+			return nil, ErrWebDAVFilesEntryNotFound
+		}
+
 		return nil, fmt.Errorf("failed to list WebDAV directory: %w", err)
 	}
 
@@ -794,6 +798,10 @@ func dirHasMarker(ctx context.Context, client *webdav.Client, basePath string, d
 
 	fileInfos, err := client.ReadDir(ctx, target, false)
 	if err != nil {
+		if isWebDAVNotFound(err) {
+			return false, ErrWebDAVFilesEntryNotFound
+		}
+
 		return false, fmt.Errorf("failed to read webdav directory %q: %w", target, err)
 	}
 

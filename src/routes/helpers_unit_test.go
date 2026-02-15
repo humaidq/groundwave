@@ -836,6 +836,54 @@ func TestFilesHelperFunctions(t *testing.T) {
 			t.Fatalf("isDownloadRequested(%q) = %v, want %v", value, got, want)
 		}
 	}
+
+	for contentType, want := range map[string]bool{
+		"application/pdf":                   true,
+		"APPLICATION/PDF":                   true,
+		" application/pdf ; charset=utf-8 ": true,
+		"text/plain":                        false,
+		"":                                  false,
+	} {
+		if got := isPDFContentType(contentType); got != want {
+			t.Fatalf("isPDFContentType(%q) = %v, want %v", contentType, got, want)
+		}
+	}
+
+	for name, tt := range map[string]struct {
+		contentType       string
+		downloadRequested bool
+		want              string
+	}{
+		"pdf download uses binary content type": {
+			contentType:       "application/pdf",
+			downloadRequested: true,
+			want:              "application/octet-stream",
+		},
+		"pdf download with parameters uses binary content type": {
+			contentType:       " application/pdf; charset=utf-8 ",
+			downloadRequested: true,
+			want:              "application/octet-stream",
+		},
+		"pdf inline keeps pdf content type": {
+			contentType:       "application/pdf",
+			downloadRequested: false,
+			want:              "application/pdf",
+		},
+		"non pdf download keeps original content type": {
+			contentType:       "text/plain",
+			downloadRequested: true,
+			want:              "text/plain",
+		},
+		"blank content type falls back to binary": {
+			contentType:       "",
+			downloadRequested: false,
+			want:              "application/octet-stream",
+		},
+	} {
+		if got := fileResponseContentType(tt.contentType, tt.downloadRequested); got != tt.want {
+			t.Fatalf("fileResponseContentType(%s) = %q, want %q", name, got, tt.want)
+		}
+	}
 }
 
 func TestSessionAuthInfo(t *testing.T) {

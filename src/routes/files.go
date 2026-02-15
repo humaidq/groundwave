@@ -22,7 +22,20 @@ import (
 	"github.com/humaidq/groundwave/db"
 )
 
-const filesUploadMaxBytes = 50 << 20
+const (
+	filesUploadMaxBytes = 50 << 20
+
+	filesLoadErrorMessage      = "Failed to load files"
+	filesLoadFileErrorMessage  = "Failed to load file"
+	filesFolderNotFoundMessage = "Folder not found"
+	filesUploadErrorMessage    = "Failed to upload file"
+)
+
+var (
+	filesIsPathAdminOnlyFn  = db.IsFilesPathAdminOnly
+	filesIsPathRestrictedFn = db.IsFilesPathRestricted
+	filesListEntriesFn      = db.ListFilesEntries
+)
 
 // FilesList renders the WebDAV files listing page.
 func FilesList(c flamego.Context, s session.Session, t template.Template, data template.Data) {
@@ -55,11 +68,18 @@ func FilesList(c flamego.Context, s session.Session, t template.Template, data t
 
 	data["IsAdmin"] = isAdmin
 
-	adminOnly, err := db.IsFilesPathAdminOnly(ctx, relPath)
+	adminOnly, err := filesIsPathAdminOnlyFn(ctx, relPath)
 	if err != nil {
+		if relPath != "" && errors.Is(err, db.ErrWebDAVFilesEntryNotFound) {
+			SetErrorFlash(s, filesFolderNotFoundMessage)
+			c.Redirect("/files", http.StatusSeeOther)
+
+			return
+		}
+
 		logger.Error("Error checking WebDAV admin restriction", "path", relPath, "error", err)
 
-		data["Error"] = "Failed to load files. Please check your WEBDAV_FILES_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables."
+		data["Error"] = filesLoadErrorMessage
 		data["Entries"] = []db.WebDAVEntry{}
 
 		t.HTML(http.StatusOK, "files")
@@ -82,11 +102,18 @@ func FilesList(c flamego.Context, s session.Session, t template.Template, data t
 
 	data["IsAdminOnly"] = adminOnly
 
-	restricted, err := db.IsFilesPathRestricted(ctx, relPath)
+	restricted, err := filesIsPathRestrictedFn(ctx, relPath)
 	if err != nil {
+		if relPath != "" && errors.Is(err, db.ErrWebDAVFilesEntryNotFound) {
+			SetErrorFlash(s, filesFolderNotFoundMessage)
+			c.Redirect("/files", http.StatusSeeOther)
+
+			return
+		}
+
 		logger.Error("Error checking WebDAV restriction", "path", relPath, "error", err)
 
-		data["Error"] = "Failed to load files. Please check your WEBDAV_FILES_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables."
+		data["Error"] = filesLoadErrorMessage
 		data["Entries"] = []db.WebDAVEntry{}
 
 		t.HTML(http.StatusOK, "files")
@@ -108,11 +135,18 @@ func FilesList(c flamego.Context, s session.Session, t template.Template, data t
 		return
 	}
 
-	entries, err := db.ListFilesEntries(ctx, relPath)
+	entries, err := filesListEntriesFn(ctx, relPath)
 	if err != nil {
+		if relPath != "" && errors.Is(err, db.ErrWebDAVFilesEntryNotFound) {
+			SetErrorFlash(s, filesFolderNotFoundMessage)
+			c.Redirect("/files", http.StatusSeeOther)
+
+			return
+		}
+
 		logger.Error("Error listing WebDAV files", "path", relPath, "error", err)
 
-		data["Error"] = "Failed to load files. Please check your WEBDAV_FILES_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables."
+		data["Error"] = filesLoadErrorMessage
 		entries = []db.WebDAVEntry{}
 	}
 
@@ -120,7 +154,7 @@ func FilesList(c flamego.Context, s session.Session, t template.Template, data t
 		filtered := make([]db.WebDAVEntry, 0, len(entries))
 		for _, entry := range entries {
 			if entry.IsDir {
-				entryAdminOnly, err := db.IsFilesPathAdminOnly(ctx, entry.Path)
+				entryAdminOnly, err := filesIsPathAdminOnlyFn(ctx, entry.Path)
 				if err != nil {
 					logger.Error("Error checking admin-only marker", "path", entry.Path, "error", err)
 					continue
@@ -141,7 +175,7 @@ func FilesList(c flamego.Context, s session.Session, t template.Template, data t
 				continue
 			}
 
-			entryAdminOnly, err := db.IsFilesPathAdminOnly(ctx, entries[i].Path)
+			entryAdminOnly, err := filesIsPathAdminOnlyFn(ctx, entries[i].Path)
 			if err != nil {
 				logger.Error("Error checking admin-only marker", "path", entries[i].Path, "error", err)
 				continue
@@ -193,7 +227,7 @@ func FilesView(c flamego.Context, s session.Session, t template.Template, data t
 		dirPath = ""
 	}
 
-	adminOnly, err := db.IsFilesPathAdminOnly(ctx, dirPath)
+	adminOnly, err := filesIsPathAdminOnlyFn(ctx, dirPath)
 	if err != nil {
 		logger.Error("Error checking WebDAV admin restriction", "path", relPath, "error", err)
 		SetErrorFlash(s, "Failed to load file")
@@ -217,7 +251,7 @@ func FilesView(c flamego.Context, s session.Session, t template.Template, data t
 
 	data["IsAdminOnly"] = adminOnly
 
-	restricted, err := db.IsFilesPathRestricted(ctx, dirPath)
+	restricted, err := filesIsPathRestrictedFn(ctx, dirPath)
 	if err != nil {
 		logger.Error("Error checking WebDAV restriction", "path", relPath, "error", err)
 		SetErrorFlash(s, "Failed to load file")
@@ -240,11 +274,11 @@ func FilesView(c flamego.Context, s session.Session, t template.Template, data t
 		return
 	}
 
-	entries, err := db.ListFilesEntries(ctx, dirPath)
+	entries, err := filesListEntriesFn(ctx, dirPath)
 	if err != nil {
 		logger.Error("Error listing WebDAV files", "path", dirPath, "error", err)
 
-		data["Error"] = "Failed to load file. Please check your WEBDAV_FILES_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables."
+		data["Error"] = filesLoadFileErrorMessage
 		data["Entries"] = []db.WebDAVEntry{}
 
 		t.HTML(http.StatusOK, "files_view")
@@ -393,7 +427,7 @@ func FilesEditForm(c flamego.Context, s session.Session, t template.Template, da
 		return
 	}
 
-	entries, err := db.ListFilesEntries(ctx, dirPath)
+	entries, err := filesListEntriesFn(ctx, dirPath)
 	if err != nil {
 		logger.Error("Error listing WebDAV files", "path", dirPath, "error", err)
 		SetErrorFlash(s, "Failed to load file")
@@ -637,7 +671,7 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 		isAdmin = false
 	}
 
-	adminOnly, err := db.IsFilesPathAdminOnly(ctx, dirPath)
+	adminOnly, err := filesIsPathAdminOnlyFn(ctx, dirPath)
 	if err != nil {
 		logger.Error("Error checking WebDAV admin restriction", "path", relPath, "error", err)
 		SetErrorFlash(s, "Failed to load file")
@@ -659,7 +693,7 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 		return
 	}
 
-	restricted, err := db.IsFilesPathRestricted(ctx, dirPath)
+	restricted, err := filesIsPathRestrictedFn(ctx, dirPath)
 	if err != nil {
 		logger.Error("Error checking WebDAV restriction", "path", relPath, "error", err)
 		SetErrorFlash(s, "Failed to load file")
@@ -688,14 +722,23 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 
 	filename := sanitizeFilenameForHeader(path.Base(relPath))
 
+	downloadRequested := isDownloadRequested(c.Query("download"))
+
 	contentDisposition := "inline"
-	if isDownloadRequested(c.Query("download")) {
+	if downloadRequested {
 		contentDisposition = "attachment"
 	}
 
-	c.ResponseWriter().Header().Set("Content-Type", contentType)
-	c.ResponseWriter().Header().Set("Content-Disposition", contentDisposition+"; filename=\""+filename+"\"")
-	c.ResponseWriter().Header().Set("Content-Length", strconv.Itoa(len(fileData)))
+	responseContentType := fileResponseContentType(contentType, downloadRequested)
+
+	headers := c.ResponseWriter().Header()
+	headers.Set("Content-Type", responseContentType)
+	headers.Set("Content-Disposition", contentDisposition+"; filename=\""+filename+"\"")
+	headers.Set("Content-Length", strconv.Itoa(len(fileData)))
+
+	if downloadRequested {
+		headers.Set("X-Content-Type-Options", "nosniff")
+	}
 
 	c.ResponseWriter().WriteHeader(http.StatusOK)
 
@@ -734,7 +777,7 @@ func UploadFilesFile(c flamego.Context, s session.Session) {
 	adminOnly, restricted, err := filesPathRestrictions(ctx, relDir)
 	if err != nil {
 		logger.Error("Error checking WebDAV restriction", "path", relDir, "error", err)
-		SetErrorFlash(s, "Failed to upload file. Please check your WEBDAV_FILES_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables.")
+		SetErrorFlash(s, filesUploadErrorMessage)
 		c.Redirect(filesRedirectPath(relDir), http.StatusSeeOther)
 
 		return
@@ -956,7 +999,7 @@ func CreateFilesDirectory(c flamego.Context, s session.Session) {
 	c.Redirect(filesRedirectPath(relDir), http.StatusSeeOther)
 }
 
-// RenameFilesEntry renames a file within the same directory.
+// RenameFilesEntry renames a file or folder within the same directory.
 func RenameFilesEntry(c flamego.Context, s session.Session) {
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Error parsing rename form", "error", err)
@@ -968,24 +1011,49 @@ func RenameFilesEntry(c flamego.Context, s session.Session) {
 
 	relPath, ok := sanitizeFilesPath(c.Request().FormValue("path"))
 	if !ok || relPath == "" {
-		SetErrorFlash(s, "Invalid file path")
+		SetErrorFlash(s, "Invalid path")
 		c.Redirect("/files", http.StatusSeeOther)
 
 		return
 	}
 
-	newName, ok := sanitizeFilesName(c.Request().FormValue("new_name"))
-	if !ok {
-		SetErrorFlash(s, "Invalid file name")
-		c.Redirect("/files/view?path="+url.QueryEscape(relPath), http.StatusSeeOther)
+	ctx := c.Request().Context()
+
+	sourceEntry, entryFound, err := filesLookupEntry(ctx, relPath)
+	if err != nil {
+		logger.Error("Error loading WebDAV entry before rename", "path", relPath, "error", err)
+		SetErrorFlash(s, "Failed to rename entry")
+		c.Redirect(filesRedirectPath(parentFilesPath(relPath)), http.StatusSeeOther)
 
 		return
 	}
 
-	oldDir := path.Dir(relPath)
-	if oldDir == "." {
-		oldDir = ""
+	entryIsDir := entryFound && sourceEntry.IsDir
+
+	entryLabel := "file"
+	if entryIsDir {
+		entryLabel = "folder"
 	}
+
+	entryViewPath := "/files/view?path=" + url.QueryEscape(relPath)
+	if entryIsDir {
+		entryViewPath = filesRedirectPath(relPath)
+	}
+
+	newName, ok := sanitizeFilesName(c.Request().FormValue("new_name"))
+	if !ok {
+		if entryIsDir {
+			SetErrorFlash(s, "Invalid folder name")
+		} else {
+			SetErrorFlash(s, "Invalid file name")
+		}
+
+		c.Redirect(entryViewPath, http.StatusSeeOther)
+
+		return
+	}
+
+	oldDir := parentFilesPath(relPath)
 
 	destPath := newName
 	if oldDir != "" {
@@ -993,19 +1061,33 @@ func RenameFilesEntry(c flamego.Context, s session.Session) {
 	}
 
 	if destPath == relPath {
-		SetWarningFlash(s, "File name unchanged")
-		c.Redirect("/files/view?path="+url.QueryEscape(relPath), http.StatusSeeOther)
+		if entryIsDir {
+			SetWarningFlash(s, "Folder name unchanged")
+		} else {
+			SetWarningFlash(s, "File name unchanged")
+		}
+
+		c.Redirect(entryViewPath, http.StatusSeeOther)
 
 		return
 	}
 
-	ctx := c.Request().Context()
+	restrictionPath := oldDir
+	if entryIsDir {
+		restrictionPath = relPath
+	}
 
-	_, restricted, err := filesPathRestrictions(ctx, oldDir)
+	_, restricted, err := filesPathRestrictions(ctx, restrictionPath)
 	if err != nil {
-		logger.Error("Error checking WebDAV restriction", "path", oldDir, "error", err)
-		SetErrorFlash(s, "Failed to rename file")
-		c.Redirect("/files/view?path="+url.QueryEscape(relPath), http.StatusSeeOther)
+		logger.Error("Error checking WebDAV restriction", "path", restrictionPath, "error", err)
+
+		if entryIsDir {
+			SetErrorFlash(s, "Failed to rename folder")
+		} else {
+			SetErrorFlash(s, "Failed to rename file")
+		}
+
+		c.Redirect(entryViewPath, http.StatusSeeOther)
 
 		return
 	}
@@ -1016,18 +1098,33 @@ func RenameFilesEntry(c flamego.Context, s session.Session) {
 	}
 
 	if err := db.MoveFilesEntry(ctx, relPath, destPath); err != nil {
-		logger.Error("Error renaming WebDAV file", "path", relPath, "error", err)
+		logger.Error("Error renaming WebDAV entry", "path", relPath, "error", err)
 
 		switch {
 		case errors.Is(err, db.ErrWebDAVFilesEntryNotFound):
-			SetErrorFlash(s, "File not found")
+			if entryIsDir {
+				SetErrorFlash(s, "Folder not found")
+			} else {
+				SetErrorFlash(s, "File not found")
+			}
 		case errors.Is(err, db.ErrWebDAVFilesEntryExists):
-			SetErrorFlash(s, "A file with that name already exists")
+			if entryIsDir {
+				SetErrorFlash(s, "A folder with that name already exists")
+			} else {
+				SetErrorFlash(s, "A file with that name already exists")
+			}
 		default:
-			SetErrorFlash(s, "Failed to rename file")
+			SetErrorFlash(s, "Failed to rename "+entryLabel)
 		}
 
-		c.Redirect("/files/view?path="+url.QueryEscape(relPath), http.StatusSeeOther)
+		c.Redirect(entryViewPath, http.StatusSeeOther)
+
+		return
+	}
+
+	if entryIsDir {
+		SetSuccessFlash(s, "Folder renamed")
+		c.Redirect(filesRedirectPath(destPath), http.StatusSeeOther)
 
 		return
 	}
@@ -1036,7 +1133,7 @@ func RenameFilesEntry(c flamego.Context, s session.Session) {
 	c.Redirect("/files/view?path="+url.QueryEscape(destPath), http.StatusSeeOther)
 }
 
-// MoveFilesEntry moves a file to a different directory.
+// MoveFilesEntry moves a file or folder to a different directory.
 func MoveFilesEntry(c flamego.Context, s session.Session) {
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Error parsing move form", "error", err)
@@ -1048,24 +1145,44 @@ func MoveFilesEntry(c flamego.Context, s session.Session) {
 
 	relPath, ok := sanitizeFilesPath(c.Request().FormValue("path"))
 	if !ok || relPath == "" {
-		SetErrorFlash(s, "Invalid file path")
+		SetErrorFlash(s, "Invalid path")
 		c.Redirect("/files", http.StatusSeeOther)
 
 		return
 	}
 
-	targetDir, ok := sanitizeFilesPath(c.Request().FormValue("target_dir"))
-	if !ok {
-		SetErrorFlash(s, "Invalid destination path")
-		c.Redirect("/files/view?path="+url.QueryEscape(relPath), http.StatusSeeOther)
+	ctx := c.Request().Context()
+
+	sourceEntry, entryFound, err := filesLookupEntry(ctx, relPath)
+	if err != nil {
+		logger.Error("Error loading WebDAV entry before move", "path", relPath, "error", err)
+		SetErrorFlash(s, "Failed to move entry")
+		c.Redirect(filesRedirectPath(parentFilesPath(relPath)), http.StatusSeeOther)
 
 		return
 	}
 
-	sourceDir := path.Dir(relPath)
-	if sourceDir == "." {
-		sourceDir = ""
+	entryIsDir := entryFound && sourceEntry.IsDir
+
+	entryLabel := "file"
+	if entryIsDir {
+		entryLabel = "folder"
 	}
+
+	entryViewPath := "/files/view?path=" + url.QueryEscape(relPath)
+	if entryIsDir {
+		entryViewPath = filesRedirectPath(relPath)
+	}
+
+	targetDir, ok := sanitizeFilesPath(c.Request().FormValue("target_dir"))
+	if !ok {
+		SetErrorFlash(s, "Invalid destination path")
+		c.Redirect(entryViewPath, http.StatusSeeOther)
+
+		return
+	}
+
+	sourceDir := parentFilesPath(relPath)
 
 	fileName := path.Base(relPath)
 
@@ -1075,19 +1192,33 @@ func MoveFilesEntry(c flamego.Context, s session.Session) {
 	}
 
 	if destPath == relPath {
-		SetWarningFlash(s, "File already in that folder")
-		c.Redirect("/files/view?path="+url.QueryEscape(relPath), http.StatusSeeOther)
+		if entryIsDir {
+			SetWarningFlash(s, "Folder already in that location")
+		} else {
+			SetWarningFlash(s, "File already in that folder")
+		}
+
+		c.Redirect(entryViewPath, http.StatusSeeOther)
 
 		return
 	}
 
-	ctx := c.Request().Context()
+	sourceRestrictionPath := sourceDir
+	if entryIsDir {
+		sourceRestrictionPath = relPath
+	}
 
-	_, sourceRestricted, err := filesPathRestrictions(ctx, sourceDir)
+	_, sourceRestricted, err := filesPathRestrictions(ctx, sourceRestrictionPath)
 	if err != nil {
-		logger.Error("Error checking WebDAV restriction", "path", sourceDir, "error", err)
-		SetErrorFlash(s, "Failed to move file")
-		c.Redirect("/files/view?path="+url.QueryEscape(relPath), http.StatusSeeOther)
+		logger.Error("Error checking WebDAV restriction", "path", sourceRestrictionPath, "error", err)
+
+		if entryIsDir {
+			SetErrorFlash(s, "Failed to move folder")
+		} else {
+			SetErrorFlash(s, "Failed to move file")
+		}
+
+		c.Redirect(entryViewPath, http.StatusSeeOther)
 
 		return
 	}
@@ -1095,8 +1226,14 @@ func MoveFilesEntry(c flamego.Context, s session.Session) {
 	_, destRestricted, err := filesPathRestrictions(ctx, targetDir)
 	if err != nil {
 		logger.Error("Error checking WebDAV restriction", "path", targetDir, "error", err)
-		SetErrorFlash(s, "Failed to move file")
-		c.Redirect("/files/view?path="+url.QueryEscape(relPath), http.StatusSeeOther)
+
+		if entryIsDir {
+			SetErrorFlash(s, "Failed to move folder")
+		} else {
+			SetErrorFlash(s, "Failed to move file")
+		}
+
+		c.Redirect(entryViewPath, http.StatusSeeOther)
 
 		return
 	}
@@ -1107,18 +1244,33 @@ func MoveFilesEntry(c flamego.Context, s session.Session) {
 	}
 
 	if err := db.MoveFilesEntry(ctx, relPath, destPath); err != nil {
-		logger.Error("Error moving WebDAV file", "path", relPath, "error", err)
+		logger.Error("Error moving WebDAV entry", "path", relPath, "error", err)
 
 		switch {
 		case errors.Is(err, db.ErrWebDAVFilesEntryNotFound):
-			SetErrorFlash(s, "File not found")
+			if entryIsDir {
+				SetErrorFlash(s, "Folder not found")
+			} else {
+				SetErrorFlash(s, "File not found")
+			}
 		case errors.Is(err, db.ErrWebDAVFilesEntryExists):
-			SetErrorFlash(s, "A file with that name already exists")
+			if entryIsDir {
+				SetErrorFlash(s, "A folder with that name already exists")
+			} else {
+				SetErrorFlash(s, "A file with that name already exists")
+			}
 		default:
-			SetErrorFlash(s, "Failed to move file")
+			SetErrorFlash(s, "Failed to move "+entryLabel)
 		}
 
-		c.Redirect("/files/view?path="+url.QueryEscape(relPath), http.StatusSeeOther)
+		c.Redirect(entryViewPath, http.StatusSeeOther)
+
+		return
+	}
+
+	if entryIsDir {
+		SetSuccessFlash(s, "Folder moved")
+		c.Redirect(filesRedirectPath(destPath), http.StatusSeeOther)
 
 		return
 	}
@@ -1314,6 +1466,24 @@ func parentFilesPath(relPath string) string {
 	return parent
 }
 
+func filesLookupEntry(ctx context.Context, relPath string) (db.WebDAVEntry, bool, error) {
+	dirPath := parentFilesPath(relPath)
+	entryName := path.Base(relPath)
+
+	entries, err := filesListEntriesFn(ctx, dirPath)
+	if err != nil {
+		return db.WebDAVEntry{}, false, fmt.Errorf("failed to list files entries: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.Name == entryName {
+			return entry, true, nil
+		}
+	}
+
+	return db.WebDAVEntry{}, false, nil
+}
+
 func filesRedirectPath(relPath string) string {
 	if relPath == "" {
 		return "/files"
@@ -1378,12 +1548,12 @@ func sanitizeFilesName(raw string) (string, bool) {
 }
 
 func filesPathRestrictions(ctx context.Context, dirPath string) (bool, bool, error) {
-	adminOnly, err := db.IsFilesPathAdminOnly(ctx, dirPath)
+	adminOnly, err := filesIsPathAdminOnlyFn(ctx, dirPath)
 	if err != nil {
 		return false, false, fmt.Errorf("failed to check files admin-only restriction: %w", err)
 	}
 
-	restricted, err := db.IsFilesPathRestricted(ctx, dirPath)
+	restricted, err := filesIsPathRestrictedFn(ctx, dirPath)
 	if err != nil {
 		return false, false, fmt.Errorf("failed to check files break-glass restriction: %w", err)
 	}
@@ -1507,4 +1677,26 @@ func maybeTrimFilesTrailingNewlineForEdit(raw string, trim bool) (string, bool) 
 func isDownloadRequested(value string) bool {
 	value = strings.TrimSpace(strings.ToLower(value))
 	return value == "1" || value == "true" || value == "yes"
+}
+
+func isPDFContentType(contentType string) bool {
+	contentType = strings.TrimSpace(strings.ToLower(contentType))
+	if idx := strings.Index(contentType, ";"); idx >= 0 {
+		contentType = strings.TrimSpace(contentType[:idx])
+	}
+
+	return contentType == "application/pdf"
+}
+
+func fileResponseContentType(contentType string, downloadRequested bool) string {
+	contentType = strings.TrimSpace(contentType)
+	if contentType == "" {
+		return "application/octet-stream"
+	}
+
+	if downloadRequested && isPDFContentType(contentType) {
+		return "application/octet-stream"
+	}
+
+	return contentType
 }

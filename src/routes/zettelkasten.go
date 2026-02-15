@@ -180,7 +180,7 @@ func ZettelkastenIndex(c flamego.Context, s session.Session, t template.Template
 	note, err := db.GetIndexNote(ctx)
 	if err != nil {
 		logger.Error("Error fetching zettelkasten index", "error", err)
-		SetErrorFlash(s, "Failed to load zettelkasten. Please check your WEBDAV_ZK_PATH, WEBDAV_USERNAME, and WEBDAV_PASSWORD environment variables.")
+		SetErrorFlash(s, "Failed to load zettelkasten")
 		c.Redirect("/", http.StatusSeeOther)
 
 		return
@@ -250,7 +250,7 @@ func ViewZKNote(c flamego.Context, s session.Session, t template.Template, data 
 	note, err := db.GetNoteByID(ctx, noteID)
 	if err != nil {
 		logger.Error("Error fetching note", "note_id", noteID, "error", err)
-		SetErrorFlash(s, "Note not found: "+noteID)
+		SetErrorFlash(s, "Note not found")
 		c.Redirect("/zk", http.StatusSeeOther)
 
 		return

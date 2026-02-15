@@ -443,10 +443,24 @@ func DownloadInventoryFile(c flamego.Context, s session.Session, _ template.Temp
 		return
 	}
 
+	downloadRequested := isDownloadRequested(c.Query("download"))
+
+	contentDisposition := "inline"
+	if downloadRequested {
+		contentDisposition = "attachment"
+	}
+
+	responseContentType := fileResponseContentType(contentType, downloadRequested)
+
 	// Set headers and serve file
-	c.ResponseWriter().Header().Set("Content-Type", contentType)
-	c.ResponseWriter().Header().Set("Content-Disposition", "inline; filename=\""+sanitizeFilenameForHeader(filename)+"\"")
-	c.ResponseWriter().Header().Set("Content-Length", strconv.Itoa(len(fileData)))
+	headers := c.ResponseWriter().Header()
+	headers.Set("Content-Type", responseContentType)
+	headers.Set("Content-Disposition", contentDisposition+"; filename=\""+sanitizeFilenameForHeader(filename)+"\"")
+	headers.Set("Content-Length", strconv.Itoa(len(fileData)))
+
+	if downloadRequested {
+		headers.Set("X-Content-Type-Options", "nosniff")
+	}
 
 	c.ResponseWriter().WriteHeader(http.StatusOK)
 

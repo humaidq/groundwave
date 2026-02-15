@@ -1408,6 +1408,10 @@ code:not(pre code) {
   margin-top: 1rem;
 }
 
+.files-folder-manage {
+  margin-top: 1.5rem;
+}
+
 .files-entry-actions {
   margin-top: 0.75rem;
   display: flex;

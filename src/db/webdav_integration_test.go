@@ -309,3 +309,28 @@ func TestWebDAVFilesUpdateWithOptimisticLocking(t *testing.T) {
 		t.Fatalf("expected is-directory error, got %v", err)
 	}
 }
+
+func TestWebDAVFilesMissingDirectoryReturnsNotFound(t *testing.T) {
+	resetDatabase(t)
+
+	server := newWebDAVTestServer(t)
+	defer server.close()
+
+	t.Setenv("WEBDAV_USERNAME", "")
+	t.Setenv("WEBDAV_PASSWORD", "")
+	t.Setenv("WEBDAV_INV_PATH", server.server.URL+"/inv")
+	t.Setenv("WEBDAV_FILES_PATH", server.server.URL+"/files")
+	t.Setenv("WEBDAV_ZK_PATH", server.server.URL+"/zk/index.org")
+
+	if _, err := ListFilesEntries(testContext(), "missing"); !errors.Is(err, ErrWebDAVFilesEntryNotFound) {
+		t.Fatalf("expected missing directory error from ListFilesEntries, got %v", err)
+	}
+
+	if _, err := IsFilesPathRestricted(testContext(), "missing"); !errors.Is(err, ErrWebDAVFilesEntryNotFound) {
+		t.Fatalf("expected missing directory error from IsFilesPathRestricted, got %v", err)
+	}
+
+	if _, err := IsFilesPathAdminOnly(testContext(), "missing"); !errors.Is(err, ErrWebDAVFilesEntryNotFound) {
+		t.Fatalf("expected missing directory error from IsFilesPathAdminOnly, got %v", err)
+	}
+}
