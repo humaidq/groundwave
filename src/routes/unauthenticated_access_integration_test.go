@@ -6,6 +6,7 @@ package routes
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/flamego/flamego"
@@ -204,8 +205,14 @@ func TestUnauthenticatedAccessRedirectsToLogin(t *testing.T) {
 				t.Fatalf("expected status %d, got %d", http.StatusFound, rec.Code)
 			}
 
-			if got := rec.Header().Get("Location"); got != "/login" {
-				t.Fatalf("expected redirect to /login, got %q", got)
+			wantNext := "/contacts"
+			if tc.method == http.MethodGet || tc.method == http.MethodHead {
+				wantNext = sanitizeNextPath(tc.path)
+			}
+
+			wantLocation := "/login?next=" + url.QueryEscape(wantNext)
+			if got := rec.Header().Get("Location"); got != wantLocation {
+				t.Fatalf("expected redirect to %q, got %q", wantLocation, got)
 			}
 		})
 	}

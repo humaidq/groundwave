@@ -24,7 +24,8 @@
     data-webauthn-login
     data-start-url="/webauthn/login/start"
     data-finish-url="/webauthn/login/finish"
-    data-redirect-url="/"
+    data-redirect-url="{{ .Next }}"
+    data-next-path="{{ .Next }}"
   >Authenticate</button>
 </div>
 <p class="muted-text" data-webauthn-support></p>

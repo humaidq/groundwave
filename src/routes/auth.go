@@ -6,6 +6,8 @@ package routes
 
 import (
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/flamego/flamego"
 	"github.com/flamego/session"
@@ -14,13 +16,19 @@ import (
 
 // LoginForm renders the login page
 func LoginForm(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+	next := sanitizeNextPath(c.Query("next"))
+	if strings.TrimSpace(c.Query("next")) == "" {
+		next = "/"
+	}
+
 	authenticated, ok := s.Get("authenticated").(bool)
 	if ok && authenticated {
-		c.Redirect("/", http.StatusSeeOther)
+		c.Redirect(next, http.StatusSeeOther)
 		return
 	}
 
 	data["HeaderOnly"] = true
+	data["Next"] = next
 
 	t.HTML(http.StatusOK, "login")
 }
@@ -41,8 +49,14 @@ func Logout(s session.Session, c flamego.Context) {
 func RequireAuth(s session.Session, c flamego.Context) {
 	authenticated, ok := s.Get("authenticated").(bool)
 	if !ok || !authenticated {
-		logAccessDenied(c, s, "not_authenticated", http.StatusFound, "/login")
-		c.Redirect("/login")
+		next := sanitizeNextPath(c.Request().Header.Get("Referer"))
+		if c.Request().Method == http.MethodGet || c.Request().Method == http.MethodHead {
+			next = sanitizeNextPath(c.Request().URL.RequestURI())
+		}
+
+		redirectURL := "/login?next=" + url.QueryEscape(next)
+		logAccessDenied(c, s, "not_authenticated", http.StatusFound, "/login", "next", next)
+		c.Redirect(redirectURL)
 
 		return
 	}

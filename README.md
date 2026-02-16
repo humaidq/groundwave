@@ -34,6 +34,9 @@ The following environment variables are used by the application:
   - Default: `development`
   - In `production`, auth session cookies are marked `Secure`
   - This value is also propagated to Flamego's runtime environment
+- `POW_DIFFICULTY` - Proof-of-work difficulty (leading zero bits) for new sessions
+  - Default: `20`
+  - Valid range: `8` to `28` (values are clamped into this range)
 - `AUTH_USERNAME` - Username for login
 - `AUTH_PASSWORD_HASH` - Bcrypt hash for login password
 - `CARDDAV_URL` - URL of the CardDAV server

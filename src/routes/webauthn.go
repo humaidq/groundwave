@@ -446,7 +446,12 @@ func PasskeyLoginFinish(c flamego.Context, s session.Session, store session.Stor
 	setAuthenticatedSession(s, waUser.user)
 	s.Delete(webauthnLoginSessionKey)
 
-	writeJSON(c, map[string]string{"redirect": "/"})
+	next := sanitizeNextPath(c.Query("next"))
+	if strings.TrimSpace(c.Query("next")) == "" {
+		next = "/"
+	}
+
+	writeJSON(c, map[string]string{"redirect": next})
 }
 
 // PasskeyRegistrationStart begins registration for an additional passkey.

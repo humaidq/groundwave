@@ -1,0 +1,39 @@
+{{ template "head" . }}
+
+<div class="page-header">
+  <h2>Checking Browser</h2>
+</div>
+
+<p>
+  Calculating a proof-of-work challenge before continuing. This will take a few seconds.
+</p>
+
+<div class="alert alert-red hidden" data-pow-error>
+  <h5 class="alert-title">Error</h5>
+  <p data-pow-error-message></p>
+</div>
+
+<div class="alert alert-green hidden" data-pow-success>
+  <h5 class="alert-title">Verified</h5>
+  <p data-pow-success-message></p>
+</div>
+
+<div
+  class="pow-panel"
+  data-pow-panel
+  data-verify-url="/pow/verify"
+  data-challenge="{{ .PoWChallenge }}"
+  data-difficulty="{{ .PoWDifficulty }}"
+  data-expires-at="{{ .PoWExpiresAt }}"
+>
+  <div class="pow-progress" aria-hidden="true">
+    <div class="pow-progress-bar" data-pow-progress-bar style="width: 0%"></div>
+  </div>
+  <p class="muted-text" data-pow-progress-text>0%</p>
+</div>
+
+<p class="muted-text" data-pow-status>Ready.</p>
+
+<script src="/pow.js" defer></script>
+
+{{ template "foot" . }}

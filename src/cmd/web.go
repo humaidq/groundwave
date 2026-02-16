@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -128,6 +129,19 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	if err := os.Setenv("DATABASE_URL", databaseURL); err != nil {
 		return fmt.Errorf("failed to set DATABASE_URL: %w", err)
 	}
+
+	powDifficulty := routes.DefaultProofOfWorkDifficulty
+
+	if rawDifficulty := strings.TrimSpace(os.Getenv("POW_DIFFICULTY")); rawDifficulty != "" {
+		parsedDifficulty, parseErr := strconv.Atoi(rawDifficulty)
+		if parseErr != nil {
+			return fmt.Errorf("invalid POW_DIFFICULTY %q: %w", rawDifficulty, parseErr)
+		}
+
+		powDifficulty = parsedDifficulty
+	}
+
+	powConfig := routes.ProofOfWorkConfig{Difficulty: powDifficulty}
 
 	// Initialize database connection
 	appLogger.Info("Connecting to database")
@@ -443,6 +457,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	f.Use(flamego.Static(flamego.StaticOptions{
 		Directory: "maps",
 	}))
+	f.Use(routes.RequireProofOfWork(powConfig))
 
 	// Public routes (no authentication required)
 	f.Get("/security.txt", func(c flamego.Context) {
@@ -452,8 +467,10 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		c.Redirect("https://huma.id/.well-known/security.txt", http.StatusMovedPermanently)
 	})
 	f.Get("/login", routes.LoginForm)
+	f.Get("/pow", routes.PowForm(powConfig))
 	f.Get("/setup", routes.SetupForm)
 	f.Group("", func() {
+		f.Post("/pow/verify", routes.PowVerify(powConfig))
 		f.Post("/webauthn/login/start", routes.PasskeyLoginStart)
 		f.Post("/webauthn/login/finish", routes.PasskeyLoginFinish)
 		f.Post("/webauthn/setup/start", routes.SetupStart)

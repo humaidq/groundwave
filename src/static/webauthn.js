@@ -255,6 +255,11 @@
         var startUrl = button.getAttribute("data-start-url");
         var finishUrl = button.getAttribute("data-finish-url");
         var redirectUrl = button.getAttribute("data-redirect-url");
+        var nextPath = button.getAttribute("data-next-path") || "";
+        var finishWithNext = finishUrl;
+        if (nextPath) {
+          finishWithNext += "?next=" + encodeURIComponent(nextPath);
+        }
         return postJSON(startUrl, {}).then(function(options) {
           decodeRequestOptions(options);
           var publicKey = options.publicKey || options;
@@ -264,7 +269,7 @@
             mediation: mediation,
           });
         }).then(function(credential) {
-          return postJSON(finishUrl, serializeCredential(credential));
+          return postJSON(finishWithNext, serializeCredential(credential));
         }).then(function(result) {
           var destination = result.redirect || redirectUrl || "/";
           window.location.assign(destination);

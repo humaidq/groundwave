@@ -265,7 +265,7 @@ func TestBreakGlassRoutesRequireAuthentication(t *testing.T) {
 			f := newWebAuthnHandlerPathTestApp(s)
 
 			rec := performWebAuthnPOST(f, path)
-			assertRedirectResponse(t, rec, http.StatusFound, "/login")
+			assertRedirectResponse(t, rec, http.StatusFound, "/login?next=%2Fcontacts")
 		})
 	}
 }
