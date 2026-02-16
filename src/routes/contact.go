@@ -322,6 +322,30 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 	data["TierLower"] = strings.ToLower(string(contact.Tier))
 	data["CardDAVContact"] = contact.CardDAVContact
 
+	if !contact.IsService {
+		activeExchangeLink, err := db.GetActiveContactExchangeLink(c.Request().Context(), contactID)
+		if err != nil {
+			logger.Error("Error fetching active contact exchange link", "contact_id", contactID, "error", err)
+		} else if activeExchangeLink != nil {
+			exchangeURL := buildExternalURL(c.Request(), "/xc/"+activeExchangeLink.Token)
+
+			qrCode, qrErr := generateQRCodeBase64(exchangeURL)
+			if qrErr != nil {
+				logger.Error("Error generating contact exchange QR code", "contact_id", contactID, "error", qrErr)
+			}
+
+			data["ContactExchange"] = ContactExchangeInfo{
+				URL:            exchangeURL,
+				QRCode:         qrCode,
+				ExpiresAt:      activeExchangeLink.ExpiresAt,
+				ExpiresIn:      formatDuration(time.Until(activeExchangeLink.ExpiresAt)),
+				CollectPhone:   activeExchangeLink.CollectPhone,
+				CollectEmail:   activeExchangeLink.CollectEmail,
+				AdditionalNote: activeExchangeLink.AdditionalNote,
+			}
+		}
+	}
+
 	if !contact.IsService && sensitiveAccess {
 		currentYear := time.Now().UTC().Year()
 		start := isoWeekStart(currentYear - 4)
@@ -654,6 +678,14 @@ func EditContactForm(c flamego.Context, s session.Session, t template.Template, 
 	data["Contact"] = contact
 	data["ContactName"] = contact.NameDisplay
 
+	meContact, err := db.GetMeContact(c.Request().Context())
+	if err != nil {
+		logger.Error("Error fetching me-contact", "error", err)
+	} else if meContact != nil {
+		data["CurrentMeContactID"] = meContact.ID.String()
+		data["CurrentMeContactName"] = meContact.NameDisplay
+	}
+
 	data["IsContacts"] = true
 	if contact.IsService {
 		data["Breadcrumbs"] = []BreadcrumbItem{
@@ -745,6 +777,27 @@ func UpdateContact(c flamego.Context, s session.Session, _ template.Template, da
 		c.Redirect("/contact/"+contactID+"/edit", http.StatusSeeOther)
 
 		return
+	}
+
+	isMe := isPrimaryChecked(form.Get("is_me"))
+	if isMe {
+		err = db.SetContactAsMe(c.Request().Context(), contactID)
+		if err != nil {
+			logger.Error("Error setting me-contact", "contact_id", contactID, "error", err)
+			SetErrorFlash(s, "Failed to update \"Me\" contact setting")
+			c.Redirect("/contact/"+contactID+"/edit", http.StatusSeeOther)
+
+			return
+		}
+	} else {
+		err = db.ClearContactAsMe(c.Request().Context(), contactID)
+		if err != nil {
+			logger.Error("Error clearing me-contact", "contact_id", contactID, "error", err)
+			SetErrorFlash(s, "Failed to update \"Me\" contact setting")
+			c.Redirect("/contact/"+contactID+"/edit", http.StatusSeeOther)
+
+			return
+		}
 	}
 
 	// If contact is linked to CardDAV, push the update

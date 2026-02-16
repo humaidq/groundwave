@@ -73,6 +73,20 @@
     {{ end }}
   </div>
 
+  <div class="form-group">
+    <label class="checkbox-label">
+      <input type="checkbox" name="is_me" {{ if .Contact.IsMe }}checked{{ end }}>
+      This is me
+    </label>
+    <small class="muted-text">Used for the vCard download shown in secure contact exchange links.</small>
+    {{ if and .CurrentMeContactID (ne .CurrentMeContactID .Contact.ID.String) }}
+    <small class="muted-text">
+      Currently marked as me: <a href="/contact/{{ .CurrentMeContactID }}">{{ .CurrentMeContactName }}</a>.
+      Saving with this checked will replace it.
+    </small>
+    {{ end }}
+  </div>
+
   {{ if not .Contact.IsService }}
   <div class="form-group">
     <label for="call_sign" class="item-title">Amateur Radio Call Sign</label>

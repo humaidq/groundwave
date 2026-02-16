@@ -86,6 +86,7 @@ type Contact struct {
 	Tier            Tier       `db:"tier"`
 	CallSign        *string    `db:"call_sign"`
 	IsService       bool       `db:"is_service"`
+	IsMe            bool       `db:"is_me"`
 	CardDAVUUID     *string    `db:"carddav_uuid"`
 	CreatedAt       time.Time  `db:"created_at"`
 	UpdatedAt       time.Time  `db:"updated_at"`

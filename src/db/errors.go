@@ -28,6 +28,10 @@ var (
 	ErrChatEntryNotFound   = errors.New("chat entry not found")
 	ErrNoteContentEmpty    = errors.New("note content cannot be empty")
 	ErrNoteNotFound        = errors.New("note not found")
+	ErrContactNotFound     = errors.New("contact not found")
+
+	ErrContactExchangeLinkInvalid       = errors.New("contact exchange link is invalid")
+	ErrContactExchangeCollectFieldEmpty = errors.New("contact exchange requires at least one field")
 
 	ErrInvalidUserID    = errors.New("invalid user ID")
 	ErrInvalidCreatorID = errors.New("invalid creator ID")

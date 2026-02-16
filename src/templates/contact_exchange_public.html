@@ -1,0 +1,71 @@
+{{ template "head" . }}
+
+{{ if .Error }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Unavailable</h5>
+  <p>{{ .Error }}</p>
+</div>
+{{ else }}
+<h2>Hello {{ .ContactName }}!</h2>
+
+{{ if .Success }}
+<div class="alert alert-green">
+  <h5 class="alert-title">Thanks!</h5>
+  <p>I updated your contact info on my phone.</p>
+  {{ if .SkippedPhoneDuplicate }}<p>I already had that phone number.</p>{{ end }}
+  {{ if .SkippedEmailDuplicate }}<p>I already had that email address.</p>{{ end }}
+</div>
+{{ else }}
+
+<form method="POST" action="{{ .ExchangePath }}">
+  <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+
+  {{ if .CollectPhone }}
+  <div class="form-group">
+    <label for="phone"><strong>Phone Number{{ if .RequirePhone }} <span class="required">*</span>{{ end }}</strong></label>
+    {{ if .ExistingPhones }}
+    <div class="muted-text">I have:</div>
+    <ul>
+      {{ range .ExistingPhones }}
+      <li>{{ . }}</li>
+      {{ end }}
+    </ul>
+    <small class="muted-text">Add another number only if needed.</small>
+    {{ else }}
+    <small class="muted-text">I don't have your phone number.</small>
+    {{ end }}
+    <input type="tel" id="phone" name="phone" class="form-item" placeholder="e.g., +971 50 123 4567" value="{{ .FormPhone }}" {{ if .RequirePhone }}required{{ end }}>
+  </div>
+  {{ end }}
+
+  {{ if .CollectEmail }}
+  <div class="form-group">
+    <label for="email"><strong>Email Address{{ if .RequireEmail }} <span class="required">*</span>{{ end }}</strong></label>
+    {{ if .ExistingEmails }}
+    <div class="muted-text">I have:</div>
+    <ul>
+      {{ range .ExistingEmails }}
+      <li>{{ . }}</li>
+      {{ end }}
+    </ul>
+    <small class="muted-text">Add another email only if needed.</small>
+    {{ else }}
+    <small class="muted-text">I don't have your email address</small>
+    {{ end }}
+    <input type="email" id="email" name="email" class="form-item" placeholder="e.g., person@example.ae" value="{{ .FormEmail }}" {{ if .RequireEmail }}required{{ end }}>
+  </div>
+  {{ end }}
+
+  <button type="submit" class="btn btn-block">Share</button>
+</form>
+{{ end }}
+
+
+{{ if .MeVCFPath }}
+<h3>Save my contact card</h3>
+Click here:
+    <a href="{{ .MeVCFPath }}">save my info in your contacts</a>.
+{{ end }}
+{{ end }}
+
+{{ template "foot" . }}

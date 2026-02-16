@@ -581,6 +581,66 @@
   <div class="detail-section">
     <a href="/contacts" class="btn">← Back to Contacts</a>
   </div>
+
+  {{ if not .Contact.IsService }}
+  <div class="detail-section">
+    <h3>Contact Exchange</h3>
+
+    <details class="add-item-details">
+      <summary class="add-item-summary">+ Generate Secure Link</summary>
+      <form method="POST" action="/contact/{{ .Contact.ID }}/xc" class="add-item-form">
+        <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+        <div class="add-item-field">
+          <label class="checkbox-label">
+            <input type="checkbox" name="collect_phone" checked>
+            Collect phone number
+          </label>
+        </div>
+        <div class="add-item-field">
+          <label class="checkbox-label">
+            <input type="checkbox" name="collect_email" checked>
+            Collect email address
+          </label>
+        </div>
+        <div class="add-item-field">
+          <label for="contact-exchange-additional-note"><strong>Additional Note</strong></label>
+          <input type="text" id="contact-exchange-additional-note" name="additional_note" class="form-item" placeholder="e.g., X University" value="{{ if .ContactExchange }}{{ .ContactExchange.AdditionalNote }}{{ end }}">
+        </div>
+        <button type="submit" class="btn">Generate Secure Link</button>
+      </form>
+    </details>
+
+    {{ if .ContactExchange }}
+    <div class="list-card" style="margin-top: 1rem;">
+      <div class="list-card-title">Active Link</div>
+      <div class="list-card-meta">
+        <a href="{{ .ContactExchange.URL }}" target="_blank" rel="noopener">{{ .ContactExchange.URL }}</a>
+      </div>
+      <div class="list-card-meta">
+        <span class="muted-text" title="{{ .ContactExchange.ExpiresAt.Format "Jan 2, 2006 15:04" }}">Expires {{ .ContactExchange.ExpiresIn }}</span>
+      </div>
+      <div class="list-card-meta">
+        <span class="muted-text">
+          Collecting:
+          {{ if .ContactExchange.CollectPhone }}phone{{ end }}
+          {{ if and .ContactExchange.CollectPhone .ContactExchange.CollectEmail }} and {{ end }}
+          {{ if .ContactExchange.CollectEmail }}email{{ end }}
+        </span>
+      </div>
+      {{ if .ContactExchange.AdditionalNote }}
+      <div class="list-card-meta">
+        <span class="muted-text">Additional note: {{ .ContactExchange.AdditionalNote }}</span>
+      </div>
+      {{ end }}
+      {{ if .ContactExchange.QRCode }}
+      <div class="qr-container">
+        <img src="data:image/png;base64,{{ .ContactExchange.QRCode }}" alt="Secure contact request QR code" class="qr-code" />
+      </div>
+      {{ end }}
+    </div>
+    {{ end }}
+  </div>
+  {{ end }}
 </div>
 
 <script>

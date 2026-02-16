@@ -433,7 +433,7 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 			id, name_given, name_additional, name_family,
 			name_display, nickname, organization, title, role, birthday, anniversary,
 			gender, timezone, geo_lat, geo_lon, language, photo_url,
-			tier, call_sign, is_service, carddav_uuid, created_at, updated_at,
+			tier, call_sign, is_service, is_me, carddav_uuid, created_at, updated_at,
 			last_auto_contact
 		FROM contacts
 		WHERE id = $1
@@ -460,6 +460,7 @@ func GetContact(ctx context.Context, id string) (*ContactDetail, error) {
 		&contact.Tier,
 		&contact.CallSign,
 		&contact.IsService,
+		&contact.IsMe,
 		&contact.CardDAVUUID,
 		&contact.CreatedAt,
 		&contact.UpdatedAt,
