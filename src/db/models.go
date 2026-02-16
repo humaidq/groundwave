@@ -698,10 +698,25 @@ type InventoryItem struct {
 	Location       *string         `db:"location"`
 	Description    *string         `db:"description"`
 	Status         InventoryStatus `db:"status"`
+	ItemType       *string         `db:"item_type"`
 	InspectionDate *time.Time      `db:"inspection_date"`
 	InspectionDue  bool            `db:"inspection_due"`
-	CreatedAt      time.Time       `db:"created_at"`
-	UpdatedAt      time.Time       `db:"updated_at"`
+	Tags           []InventoryTag
+	CreatedAt      time.Time `db:"created_at"`
+	UpdatedAt      time.Time `db:"updated_at"`
+}
+
+// InventoryTag represents a tag that can be applied to inventory items.
+type InventoryTag struct {
+	ID        uuid.UUID `db:"id"`
+	Name      string    `db:"name"`
+	CreatedAt time.Time `db:"created_at"`
+}
+
+// InventoryTagWithUsage represents an inventory tag with usage count.
+type InventoryTagWithUsage struct {
+	InventoryTag
+	UsageCount int `db:"usage_count"`
 }
 
 // InventoryComment represents a comment on an inventory item

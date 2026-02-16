@@ -54,6 +54,18 @@
     </div>
 
     <div class="form-group">
+      <label for="item_type" class="item-title">Type</label>
+      <div class="autocomplete-container">
+        <input type="text" name="item_type" id="item_type" class="form-item" autocomplete="off"
+               value="{{ if .Item.ItemType }}{{ .Item.ItemType }}{{ end }}"
+               placeholder="e.g., appliance, networking, cable/adapter"
+               pattern="[a-z0-9._:/-]+( [a-z0-9._:/-]+)*"
+               title="Lowercase letters, numbers, spaces, and ._:/- characters only">
+        <div class="autocomplete-dropdown" id="item-type-dropdown"></div>
+      </div>
+    </div>
+
+    <div class="form-group">
       <label for="status" class="item-title">Status</label>
       <select name="status" id="status" class="form-item">
         {{ $currentStatus := .Item.Status }}
@@ -79,8 +91,14 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   var locations = [{{ range $i, $loc := .Locations }}{{ if $i }}, {{ end }}"{{ $loc }}"{{ end }}];
+  var itemTypes = [{{ range $i, $type := .ItemTypes }}{{ if $i }}, {{ end }}"{{ $type }}"{{ end }}];
+
   if (locations.length > 0) {
     initAutocomplete('#location', locations);
+  }
+
+  if (itemTypes.length > 0) {
+    initAutocomplete('#item_type', itemTypes);
   }
 });
 </script>

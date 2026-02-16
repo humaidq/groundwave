@@ -51,6 +51,32 @@
     </div>
 
     <div class="form-group">
+      <label for="item_type" class="item-title">Type</label>
+      <div class="autocomplete-container">
+        <input type="text" name="item_type" id="item_type" class="form-item" autocomplete="off"
+               value="{{ if .FormData }}{{ .FormData.Get "item_type" }}{{ end }}"
+               placeholder="e.g., appliance, networking, cable/adapter"
+               pattern="[a-z0-9._:/-]+( [a-z0-9._:/-]+)*"
+               title="Lowercase letters, numbers, spaces, and ._:/- characters only">
+        <div class="autocomplete-dropdown" id="item-type-dropdown"></div>
+      </div>
+      <p class="help-text">Single value. No predefined list.</p>
+    </div>
+
+    <div class="form-group">
+      <label for="tag" class="item-title">Tag</label>
+      <div class="autocomplete-container">
+        <input type="text" name="tag" id="tag" class="form-item" autocomplete="off"
+               value="{{ if .FormData }}{{ .FormData.Get "tag" }}{{ end }}"
+               placeholder="e.g., critical, has battery"
+               pattern="[a-z0-9._:/-]+( [a-z0-9._:/-]+)*"
+               title="Lowercase letters, numbers, spaces, and ._:/- characters only">
+        <div class="autocomplete-dropdown" id="tag-dropdown"></div>
+      </div>
+      <p class="help-text">Optional first tag. You can add more after creating the item.</p>
+    </div>
+
+    <div class="form-group">
       <label for="status" class="item-title">Status</label>
       <select name="status" id="status" class="form-item">
         {{ range .StatusOptions }}
@@ -77,8 +103,19 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   var locations = [{{ range $i, $loc := .Locations }}{{ if $i }}, {{ end }}"{{ $loc }}"{{ end }}];
+  var itemTypes = [{{ range $i, $type := .ItemTypes }}{{ if $i }}, {{ end }}"{{ $type }}"{{ end }}];
+  var tagNames = [{{ range $i, $t := .AllTags }}{{ if $i }}, {{ end }}"{{ $t.Name }}"{{ end }}];
+
   if (locations.length > 0) {
     initAutocomplete('#location', locations);
+  }
+
+  if (itemTypes.length > 0) {
+    initAutocomplete('#item_type', itemTypes);
+  }
+
+  if (tagNames.length > 0) {
+    initAutocomplete('#tag', tagNames);
   }
 });
 </script>

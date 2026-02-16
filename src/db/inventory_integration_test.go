@@ -4,6 +4,7 @@
 package db
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -17,9 +18,10 @@ func TestInventoryLifecycle(t *testing.T) {
 
 	location := "Warehouse"
 	description := "Test item"
+	itemType := "appliance"
 	inspection := time.Now().UTC().AddDate(0, 0, 7)
 
-	inventoryID, err := CreateInventoryItem(ctx, "Test Item", &location, &description, InventoryStatusActive, &inspection)
+	inventoryID, err := CreateInventoryItem(ctx, "Test Item", &location, &description, InventoryStatusActive, &itemType, &inspection)
 	if err != nil {
 		t.Fatalf("CreateInventoryItem failed: %v", err)
 	}
@@ -51,11 +53,16 @@ func TestInventoryLifecycle(t *testing.T) {
 		t.Fatalf("expected name Test Item, got %q", item.Name)
 	}
 
+	if item.ItemType == nil || *item.ItemType != itemType {
+		t.Fatalf("expected item type %q, got %#v", itemType, item.ItemType)
+	}
+
 	newLocation := "Lab"
 	newDescription := "Updated"
+	newType := "networking"
 
 	newInspection := time.Now().UTC().AddDate(0, 0, 14)
-	if err := UpdateInventoryItem(ctx, inventoryID, "Updated Item", &newLocation, &newDescription, InventoryStatusStored, &newInspection); err != nil {
+	if err := UpdateInventoryItem(ctx, inventoryID, "Updated Item", &newLocation, &newDescription, InventoryStatusStored, &newType, &newInspection); err != nil {
 		t.Fatalf("UpdateInventoryItem failed: %v", err)
 	}
 
@@ -104,15 +111,15 @@ func TestInventoryErrors(t *testing.T) {
 
 	ctx := testContext()
 
-	if _, err := CreateInventoryItem(ctx, "", nil, nil, "", nil); err == nil {
+	if _, err := CreateInventoryItem(ctx, "", nil, nil, "", nil, nil); err == nil {
 		t.Fatalf("expected error for missing inventory name")
 	}
 
-	if err := UpdateInventoryItem(ctx, "missing", "", nil, nil, InventoryStatusActive, nil); err == nil {
+	if err := UpdateInventoryItem(ctx, "missing", "", nil, nil, InventoryStatusActive, nil, nil); err == nil {
 		t.Fatalf("expected error for missing name on update")
 	}
 
-	if err := UpdateInventoryItem(ctx, "missing", "Name", nil, nil, InventoryStatusActive, nil); err == nil {
+	if err := UpdateInventoryItem(ctx, "missing", "Name", nil, nil, InventoryStatusActive, nil, nil); err == nil {
 		t.Fatalf("expected error for missing inventory item")
 	}
 
@@ -136,14 +143,15 @@ func TestUpdateInventoryItemPreservesAndClearsOptionalFields(t *testing.T) {
 
 	location := "Shelf A"
 	description := "HF transceiver"
+	itemType := "computing"
 	inspectionDate := time.Date(2026, time.March, 10, 0, 0, 0, 0, time.UTC)
 
-	inventoryID, err := CreateInventoryItem(ctx, "Radio", &location, &description, InventoryStatusActive, &inspectionDate)
+	inventoryID, err := CreateInventoryItem(ctx, "Radio", &location, &description, InventoryStatusActive, &itemType, &inspectionDate)
 	if err != nil {
 		t.Fatalf("CreateInventoryItem failed: %v", err)
 	}
 
-	if err := UpdateInventoryItem(ctx, inventoryID, "Radio Updated", &location, &description, InventoryStatusStored, &inspectionDate); err != nil {
+	if err := UpdateInventoryItem(ctx, inventoryID, "Radio Updated", &location, &description, InventoryStatusStored, &itemType, &inspectionDate); err != nil {
 		t.Fatalf("UpdateInventoryItem preserve/update failed: %v", err)
 	}
 
@@ -164,7 +172,11 @@ func TestUpdateInventoryItemPreservesAndClearsOptionalFields(t *testing.T) {
 		t.Fatalf("expected inspection_date %s to remain set, got %#v", inspectionDate.Format("2006-01-02"), updatedItem.InspectionDate)
 	}
 
-	if err := UpdateInventoryItem(ctx, inventoryID, "Radio Updated", nil, nil, InventoryStatusStored, nil); err != nil {
+	if updatedItem.ItemType == nil || *updatedItem.ItemType != itemType {
+		t.Fatalf("expected item_type %q to remain set, got %#v", itemType, updatedItem.ItemType)
+	}
+
+	if err := UpdateInventoryItem(ctx, inventoryID, "Radio Updated", nil, nil, InventoryStatusStored, nil, nil); err != nil {
 		t.Fatalf("UpdateInventoryItem explicit clear failed: %v", err)
 	}
 
@@ -183,5 +195,126 @@ func TestUpdateInventoryItemPreservesAndClearsOptionalFields(t *testing.T) {
 
 	if clearedItem.InspectionDate != nil {
 		t.Fatalf("expected inspection_date to be cleared, got %#v", clearedItem.InspectionDate)
+	}
+
+	if clearedItem.ItemType != nil {
+		t.Fatalf("expected item_type to be cleared, got %#v", clearedItem.ItemType)
+	}
+}
+
+func TestInventoryTypeAndTagFilters(t *testing.T) {
+	resetDatabase(t)
+
+	ctx := testContext()
+
+	networkingType := "networking"
+	toolType := "tool"
+	consumableType := "consumable"
+
+	routerID, err := CreateInventoryItem(ctx, "Router", nil, nil, InventoryStatusActive, &networkingType, nil)
+	if err != nil {
+		t.Fatalf("CreateInventoryItem router failed: %v", err)
+	}
+
+	drillID, err := CreateInventoryItem(ctx, "Drill", nil, nil, InventoryStatusStored, &toolType, nil)
+	if err != nil {
+		t.Fatalf("CreateInventoryItem drill failed: %v", err)
+	}
+
+	batteryID, err := CreateInventoryItem(ctx, "Battery", nil, nil, InventoryStatusActive, &consumableType, nil)
+	if err != nil {
+		t.Fatalf("CreateInventoryItem battery failed: %v", err)
+	}
+
+	if err := AddTagToInventoryItem(ctx, routerID, "critical"); err != nil {
+		t.Fatalf("AddTagToInventoryItem router critical failed: %v", err)
+	}
+
+	if err := AddTagToInventoryItem(ctx, routerID, "outdoor"); err != nil {
+		t.Fatalf("AddTagToInventoryItem router outdoor failed: %v", err)
+	}
+
+	if err := AddTagToInventoryItem(ctx, drillID, "critical"); err != nil {
+		t.Fatalf("AddTagToInventoryItem drill critical failed: %v", err)
+	}
+
+	if err := AddTagToInventoryItem(ctx, batteryID, "warranty"); err != nil {
+		t.Fatalf("AddTagToInventoryItem battery warranty failed: %v", err)
+	}
+
+	typeFilter := " networking "
+
+	typedItems, err := ListInventoryItemsWithFilters(ctx, InventoryListOptions{ItemType: &typeFilter})
+	if err != nil {
+		t.Fatalf("ListInventoryItemsWithFilters type failed: %v", err)
+	}
+
+	if len(typedItems) != 1 || typedItems[0].InventoryID != routerID {
+		t.Fatalf("expected router item for type filter, got %#v", typedItems)
+	}
+
+	allTags, err := ListAllInventoryTags(ctx)
+	if err != nil {
+		t.Fatalf("ListAllInventoryTags failed: %v", err)
+	}
+
+	tagIDsByName := map[string]string{}
+	for _, tag := range allTags {
+		tagIDsByName[tag.Name] = tag.ID.String()
+	}
+
+	criticalTagID, ok := tagIDsByName["critical"]
+	if !ok {
+		t.Fatal("missing critical tag id")
+	}
+
+	outdoorTagID, ok := tagIDsByName["outdoor"]
+	if !ok {
+		t.Fatal("missing outdoor tag id")
+	}
+
+	statusFilter := InventoryStatusActive
+
+	criticalActiveItems, err := ListInventoryItemsWithFilters(ctx, InventoryListOptions{
+		Status: &statusFilter,
+		TagIDs: []string{criticalTagID},
+	})
+	if err != nil {
+		t.Fatalf("ListInventoryItemsWithFilters status+tag failed: %v", err)
+	}
+
+	if len(criticalActiveItems) != 1 || criticalActiveItems[0].InventoryID != routerID {
+		t.Fatalf("expected only active critical router item, got %#v", criticalActiveItems)
+	}
+
+	andFiltered, err := ListInventoryItemsWithFilters(ctx, InventoryListOptions{TagIDs: []string{criticalTagID, outdoorTagID}})
+	if err != nil {
+		t.Fatalf("ListInventoryItemsWithFilters multi-tag failed: %v", err)
+	}
+
+	if len(andFiltered) != 1 || andFiltered[0].InventoryID != routerID {
+		t.Fatalf("expected only router to match both tags, got %#v", andFiltered)
+	}
+}
+
+func TestInventoryTypeAndTagValidation(t *testing.T) {
+	resetDatabase(t)
+
+	ctx := testContext()
+
+	invalidType := "tool&fixture"
+	if _, err := CreateInventoryItem(ctx, "Bad Type Item", nil, nil, InventoryStatusActive, &invalidType, nil); !errors.Is(err, ErrInventoryTypeInvalid) {
+		t.Fatalf("expected ErrInventoryTypeInvalid, got %v", err)
+	}
+
+	validType := "tool"
+
+	inventoryID, err := CreateInventoryItem(ctx, "Calibrator", nil, nil, InventoryStatusActive, &validType, nil)
+	if err != nil {
+		t.Fatalf("CreateInventoryItem failed: %v", err)
+	}
+
+	if err := AddTagToInventoryItem(ctx, inventoryID, "needs&calibration"); !errors.Is(err, ErrInventoryTagNameInvalid) {
+		t.Fatalf("expected ErrInventoryTagNameInvalid, got %v", err)
 	}
 }

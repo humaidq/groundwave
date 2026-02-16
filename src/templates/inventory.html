@@ -27,10 +27,10 @@
 {{ end }}
 
 <div class="tag-filter-section">
-  <form method="GET" action="/inventory" class="tag-filter-form">
+  <form method="GET" action="/inventory" class="tag-filter-form inventory-filter-form">
     <div class="tag-dropdown-container">
       <button type="button" class="btn tag-dropdown-toggle" id="statusDropdownToggle">
-        <span class="dropdown-label">Filter by Status</span>
+        <span class="dropdown-label">Status</span>
         {{ if .StatusFilter }}
         <span class="tag-count-badge">1</span>
         {{ end }}
@@ -42,6 +42,10 @@
           <span class="dropdown-title">Filter by status</span>
         </div>
         <div class="tag-dropdown-list">
+          <label class="tag-checkbox-item">
+            <input type="radio" name="status" value=""{{ if eq .StatusFilter "" }} checked{{ end }}>
+            <span class="tag-checkbox-label">All statuses</span>
+          </label>
           {{ range .StatusOptions }}
           <label class="tag-checkbox-item">
             <input type="radio" name="status" value="{{ .Value }}"{{ if eq $.StatusFilter .Value }} checked{{ end }}>
@@ -49,32 +53,92 @@
           </label>
           {{ end }}
         </div>
-        <div class="tag-dropdown-footer">
-          <button type="submit" class="btn">Apply</button>
-          <a href="/inventory" class="btn">Clear</a>
+      </div>
+    </div>
+
+    <div class="autocomplete-container inventory-filter-type">
+      <input type="text" name="type" id="typeFilterInput" class="form-item" autocomplete="off"
+             value="{{ .TypeFilter }}" placeholder="Filter by type"
+             pattern="[a-z0-9._:/-]+( [a-z0-9._:/-]+)*"
+             title="Lowercase letters, numbers, spaces, and ._:/- characters only">
+      <div class="autocomplete-dropdown" id="type-filter-dropdown"></div>
+    </div>
+
+    {{ if .AllTags }}
+    <div class="tag-dropdown-container">
+      <button type="button" class="btn tag-dropdown-toggle" id="tagDropdownToggle">
+        <span class="dropdown-label">Tags</span>
+        {{ if .SelectedTags }}
+        <span class="tag-count-badge">{{ len .SelectedTags }}</span>
+        {{ end }}
+        <span class="dropdown-arrow">▼</span>
+      </button>
+
+      <div class="tag-dropdown-menu" id="tagDropdownMenu">
+        <div class="tag-dropdown-header">
+          <span class="dropdown-title">Filter by tags</span>
+        </div>
+        <div class="tag-dropdown-list">
+          {{ range .AllTags }}
+          <label class="tag-checkbox-item">
+            <input type="checkbox" name="tag" value="{{ .ID }}"
+              {{- range $.SelectedTags }}{{- if eq . $.ID }} checked{{- end }}{{- end }}>
+            <span class="tag-checkbox-label">{{ .Name }}</span>
+            <span class="tag-checkbox-count">{{ .UsageCount }}</span>
+          </label>
+          {{ end }}
         </div>
       </div>
     </div>
+    {{ end }}
+
+    <button type="submit" class="btn">Apply</button>
+    <a href="/inventory" class="btn">Clear</a>
   </form>
 </div>
 
 <script>
 (function() {
-  const toggle = document.getElementById('statusDropdownToggle');
-  const menu = document.getElementById('statusDropdownMenu');
+  const statusToggle = document.getElementById('statusDropdownToggle');
+  const statusMenu = document.getElementById('statusDropdownMenu');
+  const tagToggle = document.getElementById('tagDropdownToggle');
+  const tagMenu = document.getElementById('tagDropdownMenu');
 
-  if (toggle && menu) {
-    toggle.addEventListener('click', function(e) {
+  if (statusToggle && statusMenu) {
+    statusToggle.addEventListener('click', function(e) {
       e.preventDefault();
-      menu.classList.toggle('show');
-    });
-
-    document.addEventListener('click', function(e) {
-      if (!toggle.contains(e.target) && !menu.contains(e.target)) {
-        menu.classList.remove('show');
+      statusMenu.classList.toggle('show');
+      if (tagMenu) {
+        tagMenu.classList.remove('show');
       }
     });
   }
+
+  if (tagToggle && tagMenu) {
+    tagToggle.addEventListener('click', function(e) {
+      e.preventDefault();
+      tagMenu.classList.toggle('show');
+      if (statusMenu) {
+        statusMenu.classList.remove('show');
+      }
+    });
+  }
+
+  document.addEventListener('click', function(e) {
+    if (statusToggle && statusMenu && !statusToggle.contains(e.target) && !statusMenu.contains(e.target)) {
+      statusMenu.classList.remove('show');
+    }
+    if (tagToggle && tagMenu && !tagToggle.contains(e.target) && !tagMenu.contains(e.target)) {
+      tagMenu.classList.remove('show');
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', function() {
+    var itemTypes = [{{ range $i, $type := .ItemTypes }}{{ if $i }}, {{ end }}"{{ $type }}"{{ end }}];
+    if (itemTypes.length > 0) {
+      initAutocomplete('#typeFilterInput', itemTypes);
+    }
+  });
 })();
 </script>
 
@@ -89,8 +153,9 @@
         <span class="inventory-id">{{ .InventoryID }}</span> - {{ .Name }}
         {{ if ne .Status "active" }}<span class="status-badge status-{{ .Status }}">{{ inventoryStatusLabel .Status }}</span>{{ end }}
         {{ if .InspectionDue }}<span class="status-badge status-inspection_due">Inspection Due</span>{{ end }}
+        {{ with .ItemType }}<span class="tag-badge">{{ . }}</span>{{ end }}
       </div>
-      {{ if or .Location .Description .InspectionDate }}
+      {{ if or .Location .Description .InspectionDate .Tags }}
       <div class="list-card-meta">
         {{ with .Location }}
         <span class="list-card-location">📍 {{ . }}</span>
@@ -101,6 +166,16 @@
         {{ with .InspectionDate }}
         <span class="list-card-description">Inspection: {{ .Format "Jan 2, 2006" }}</span>
         {{ end }}
+        {{ if .Tags }}
+        <div class="tag-badges">
+          {{ range .Tags }}
+          <a href="/inventory?tag={{ .ID }}" class="tag-badge"
+             onclick="event.stopPropagation(); event.preventDefault(); window.location.href='/inventory?tag={{ .ID }}';">
+            {{ .Name }}
+          </a>
+          {{ end }}
+        </div>
+        {{ end }}
       </div>
       {{ end }}
     </a>
@@ -108,7 +183,7 @@
   {{ end }}
 </div>
 {{ else }}
-<p class="empty-state">No inventory items yet.{{ if .IsAdmin }} <a href="/inventory/new">Add your first item</a>.{{ end }}</p>
+<p class="empty-state">No inventory items found.{{ if .IsAdmin }} <a href="/inventory/new">Add your first item</a>.{{ end }}</p>
 {{ end }}
 
 {{ if .Items }}

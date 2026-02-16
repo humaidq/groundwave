@@ -5,6 +5,7 @@
 package routes
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"path"
@@ -26,20 +27,30 @@ func InventoryList(c flamego.Context, s session.Session, t template.Template, da
 
 	// Get status filter from query parameter
 	statusFilter := c.Query("status")
+	typeFilter := getOptionalInventoryLabelString(c.Query("type"))
+	tagIDs := c.QueryStrings("tag")
 
-	var (
-		items []db.InventoryItem
-		err   error
-	)
-
-	if statusFilter != "" {
-		items, err = db.ListInventoryItems(ctx, db.InventoryStatus(statusFilter))
-	} else {
-		items, err = db.ListInventoryItems(ctx)
+	opts := db.InventoryListOptions{
+		ItemType: typeFilter,
+		TagIDs:   tagIDs,
 	}
 
+	if statusFilter != "" {
+		status := db.InventoryStatus(statusFilter)
+		opts.Status = &status
+	}
+
+	items, err := db.ListInventoryItemsWithFilters(ctx, opts)
 	if err != nil {
 		logger.Error("Error fetching inventory items", "error", err)
+
+		if errors.Is(err, db.ErrInventoryTypeInvalid) {
+			SetErrorFlash(s, "Invalid type filter")
+			c.Redirect("/inventory", http.StatusSeeOther)
+
+			return
+		}
+
 		SetErrorFlash(s, "Failed to load inventory items")
 		c.Redirect("/", http.StatusSeeOther)
 
@@ -49,7 +60,33 @@ func InventoryList(c flamego.Context, s session.Session, t template.Template, da
 	data["Items"] = items
 	data["IsInventory"] = true
 	data["StatusFilter"] = statusFilter
+
+	data["TypeFilter"] = ""
+	if typeFilter != nil {
+		data["TypeFilter"] = *typeFilter
+	}
+
+	data["SelectedTags"] = tagIDs
 	data["StatusOptions"] = getInventoryStatusOptions()
+
+	types, err := db.GetDistinctInventoryTypes(ctx)
+	if err != nil {
+		logger.Error("Error fetching inventory types", "error", err)
+
+		data["ItemTypes"] = []string{}
+	} else {
+		data["ItemTypes"] = types
+	}
+
+	tags, err := db.ListAllInventoryTags(ctx)
+	if err != nil {
+		logger.Error("Error fetching inventory tags", "error", err)
+
+		data["AllTags"] = []db.InventoryTagWithUsage{}
+	} else {
+		data["AllTags"] = tags
+	}
+
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "Inventory", URL: "/inventory", IsCurrent: true},
 	}
@@ -111,9 +148,17 @@ func ViewInventoryItem(c flamego.Context, s session.Session, t template.Template
 		files = webdavFiles
 	}
 
+	allTags, err := db.ListAllInventoryTags(ctx)
+	if err != nil {
+		logger.Error("Error fetching inventory tags", "error", err)
+
+		allTags = []db.InventoryTagWithUsage{}
+	}
+
 	data["Item"] = item
 	data["Comments"] = comments
 	data["Files"] = files
+	data["AllTags"] = allTags
 
 	if filesURL, ok := inventoryFilesURL(item.InventoryID); ok {
 		data["InventoryFilesURL"] = filesURL
@@ -159,7 +204,23 @@ func NewInventoryItemForm(c flamego.Context, t template.Template, data template.
 		locations = []string{} // Continue with empty list
 	}
 
+	itemTypes, err := db.GetDistinctInventoryTypes(ctx)
+	if err != nil {
+		logger.Error("Error fetching inventory types", "error", err)
+
+		itemTypes = []string{}
+	}
+
+	allTags, err := db.ListAllInventoryTags(ctx)
+	if err != nil {
+		logger.Error("Error fetching inventory tags", "error", err)
+
+		allTags = []db.InventoryTagWithUsage{}
+	}
+
 	data["Locations"] = locations
+	data["ItemTypes"] = itemTypes
+	data["AllTags"] = allTags
 	data["StatusOptions"] = getInventoryStatusOptions()
 	data["IsInventory"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
@@ -192,6 +253,8 @@ func CreateInventoryItem(c flamego.Context, s session.Session, _ template.Templa
 
 	location := getOptionalString(form.Get("location"))
 	description := getOptionalString(form.Get("description"))
+	itemType := getOptionalInventoryLabelString(form.Get("item_type"))
+	initialTag := strings.TrimSpace(form.Get("tag"))
 
 	status := db.InventoryStatus(form.Get("status"))
 	if status == "" {
@@ -221,13 +284,28 @@ func CreateInventoryItem(c flamego.Context, s session.Session, _ template.Templa
 	ctx := c.Request().Context()
 
 	// Create item
-	inventoryID, err := db.CreateInventoryItem(ctx, name, location, description, status, inspectionDate)
+	inventoryID, err := db.CreateInventoryItem(ctx, name, location, description, status, itemType, inspectionDate)
 	if err != nil {
 		logger.Error("Error creating inventory item", "error", err)
+
+		if errors.Is(err, db.ErrInventoryTypeInvalid) {
+			SetErrorFlash(s, "Invalid type value")
+			c.Redirect("/inventory/new", http.StatusSeeOther)
+
+			return
+		}
+
 		SetErrorFlash(s, "Failed to create inventory item")
 		c.Redirect("/inventory/new", http.StatusSeeOther)
 
 		return
+	}
+
+	if initialTag != "" {
+		err = db.AddTagToInventoryItem(ctx, inventoryID, initialTag)
+		if err != nil {
+			logger.Error("Error adding initial inventory tag", "inventory_id", inventoryID, "error", err)
+		}
 	}
 
 	// Redirect to view page with success message
@@ -257,8 +335,16 @@ func EditInventoryItemForm(c flamego.Context, s session.Session, t template.Temp
 		locations = []string{}
 	}
 
+	itemTypes, err := db.GetDistinctInventoryTypes(ctx)
+	if err != nil {
+		logger.Error("Error fetching inventory types", "error", err)
+
+		itemTypes = []string{}
+	}
+
 	data["Item"] = item
 	data["Locations"] = locations
+	data["ItemTypes"] = itemTypes
 	data["StatusOptions"] = getInventoryStatusOptions()
 	data["IsInventory"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
@@ -294,6 +380,7 @@ func UpdateInventoryItem(c flamego.Context, s session.Session, _ template.Templa
 
 	location := getOptionalString(form.Get("location"))
 	description := getOptionalString(form.Get("description"))
+	itemType := getOptionalInventoryLabelString(form.Get("item_type"))
 	status := db.InventoryStatus(form.Get("status"))
 
 	// Validate status if provided
@@ -321,8 +408,16 @@ func UpdateInventoryItem(c flamego.Context, s session.Session, _ template.Templa
 
 	ctx := c.Request().Context()
 
-	if err := db.UpdateInventoryItem(ctx, inventoryID, name, location, description, status, inspectionDate); err != nil {
+	if err := db.UpdateInventoryItem(ctx, inventoryID, name, location, description, status, itemType, inspectionDate); err != nil {
 		logger.Error("Error updating inventory item", "error", err)
+
+		if errors.Is(err, db.ErrInventoryTypeInvalid) {
+			SetErrorFlash(s, "Invalid type value")
+			c.Redirect("/inventory/"+inventoryID+"/edit", http.StatusSeeOther)
+
+			return
+		}
+
 		SetErrorFlash(s, "Failed to update inventory item")
 		c.Redirect("/inventory/"+inventoryID+"/edit", http.StatusSeeOther)
 
@@ -418,6 +513,66 @@ func DeleteInventoryComment(c flamego.Context, s session.Session, _ template.Tem
 	c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
 }
 
+// AddInventoryTag handles adding a tag to an inventory item.
+func AddInventoryTag(c flamego.Context, s session.Session, _ template.Template, _ template.Data) {
+	inventoryID := c.Param("id")
+	if inventoryID == "" {
+		SetErrorFlash(s, "Inventory ID is required")
+		c.Redirect("/inventory", http.StatusSeeOther)
+
+		return
+	}
+
+	if err := c.Request().ParseForm(); err != nil {
+		logger.Error("Error parsing inventory tag form", "inventory_id", inventoryID, "error", err)
+		SetErrorFlash(s, "Failed to parse form data")
+		c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
+
+		return
+	}
+
+	tagName := strings.TrimSpace(c.Request().Form.Get("tag_name"))
+	if tagName == "" {
+		c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
+
+		return
+	}
+
+	err := db.AddTagToInventoryItem(c.Request().Context(), inventoryID, tagName)
+	if err != nil {
+		logger.Error("Error adding inventory tag", "inventory_id", inventoryID, "error", err)
+
+		if errors.Is(err, db.ErrInventoryTagNameInvalid) {
+			SetErrorFlash(s, "Invalid tag value")
+		} else {
+			SetErrorFlash(s, "Failed to add tag")
+		}
+	}
+
+	c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
+}
+
+// RemoveInventoryTag handles removing a tag from an inventory item.
+func RemoveInventoryTag(c flamego.Context, s session.Session, _ template.Template, _ template.Data) {
+	inventoryID := c.Param("id")
+	tagID := c.Param("tag_id")
+
+	if inventoryID == "" || tagID == "" {
+		SetErrorFlash(s, "Inventory ID and tag ID are required")
+		c.Redirect("/inventory", http.StatusSeeOther)
+
+		return
+	}
+
+	err := db.RemoveTagFromInventoryItem(c.Request().Context(), inventoryID, tagID)
+	if err != nil {
+		logger.Error("Error removing inventory tag", "inventory_id", inventoryID, "tag_id", tagID, "error", err)
+		SetErrorFlash(s, "Failed to remove tag")
+	}
+
+	c.Redirect("/inventory/"+inventoryID, http.StatusSeeOther)
+}
+
 // DownloadInventoryFile proxies a file download from WebDAV
 func DownloadInventoryFile(c flamego.Context, s session.Session, _ template.Template, _ template.Data) {
 	inventoryID := c.Param("id")
@@ -477,6 +632,15 @@ func getOptionalString(val string) *string {
 	}
 
 	return &trimmed
+}
+
+func getOptionalInventoryLabelString(val string) *string {
+	normalized := strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(val)), " "))
+	if normalized == "" {
+		return nil
+	}
+
+	return &normalized
 }
 
 // isValidFilename checks for path traversal attempts in filenames

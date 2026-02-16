@@ -537,6 +537,14 @@ func TestInventoryHelperFunctions(t *testing.T) {
 		t.Fatalf("unexpected optional string: %#v", got)
 	}
 
+	if got := getOptionalInventoryLabelString("  needs   calibration "); got == nil || *got != "needs calibration" {
+		t.Fatalf("unexpected optional inventory label string: %#v", got)
+	}
+
+	if got := getOptionalInventoryLabelString("  "); got != nil {
+		t.Fatalf("expected nil optional inventory label string, got %v", *got)
+	}
+
 	if !isValidFilename("manual.pdf") {
 		t.Fatal("expected normal filename to be valid")
 	}

@@ -34,6 +34,8 @@ var (
 	ErrInvalidProfileID = errors.New("invalid profile ID")
 
 	ErrNameRequired                = errors.New("name is required")
+	ErrInventoryTypeInvalid        = errors.New("inventory type is invalid")
+	ErrInventoryTagNameInvalid     = errors.New("inventory tag name is invalid")
 	ErrCommentContentEmpty         = errors.New("comment content cannot be empty")
 	ErrInventoryItemNotFound       = errors.New("inventory item not found")
 	ErrCommentNotFound             = errors.New("comment not found")

@@ -2741,7 +2741,19 @@ textarea.file-edit-textarea {
 .tag-filter-form {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.inventory-filter-type {
+  min-width: 220px;
+}
+
+@media only screen and (max-width: 780px) {
+  .inventory-filter-form .inventory-filter-type {
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 .tag-dropdown-container {

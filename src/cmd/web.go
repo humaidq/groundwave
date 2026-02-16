@@ -663,6 +663,8 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 			f.Post("/inventory/new", routes.CreateInventoryItem)
 			f.Post("/inventory/{id}/edit", routes.UpdateInventoryItem)
 			f.Post("/inventory/{id}/delete", routes.DeleteInventoryItem)
+			f.Post("/inventory/{id}/tag", routes.AddInventoryTag)
+			f.Post("/inventory/{id}/tag/{tag_id}/delete", routes.RemoveInventoryTag)
 			f.Post("/inventory/{id}/comment", routes.AddInventoryComment)
 			f.Post("/inventory/{id}/comment/{comment_id}/delete", routes.DeleteInventoryComment)
 			f.Post("/health/new", routes.CreateHealthProfile)
