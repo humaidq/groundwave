@@ -135,3 +135,47 @@ func TestBuildContactVCardIncludesAdditionalNote(t *testing.T) {
 		t.Fatalf("expected NOTE field value %q, got %q", "X University", got)
 	}
 }
+
+func TestBuildContactVCardIncludesContactURLs(t *testing.T) {
+	t.Parallel()
+
+	contact := &db.ContactDetail{
+		Contact: db.Contact{NameDisplay: "John Doe"},
+		URLs: []db.ContactURL{
+			{URL: "https://example.test", URLType: db.URLWebsite},
+			{URL: "https://github.com/johndoe", URLType: db.URLGitHub},
+			{URL: "   ", URLType: db.URLOther},
+		},
+	}
+
+	vCardBytes, err := buildContactVCard(contact, "")
+	if err != nil {
+		t.Fatalf("buildContactVCard failed: %v", err)
+	}
+
+	card, err := vcard.NewDecoder(bytes.NewReader(vCardBytes)).Decode()
+	if err != nil {
+		t.Fatalf("failed to decode generated vcard: %v", err)
+	}
+
+	urlFields := card[vcard.FieldURL]
+	if len(urlFields) != 2 {
+		t.Fatalf("expected 2 URL fields in generated vcard, got %d", len(urlFields))
+	}
+
+	if got := urlFields[0].Value; got != "https://example.test" {
+		t.Fatalf("expected first URL value %q, got %q", "https://example.test", got)
+	}
+
+	if got := urlFields[0].Params.Get(vcard.ParamType); got != "website" {
+		t.Fatalf("expected first URL TYPE %q, got %q", "website", got)
+	}
+
+	if got := urlFields[1].Value; got != "https://github.com/johndoe" {
+		t.Fatalf("expected second URL value %q, got %q", "https://github.com/johndoe", got)
+	}
+
+	if got := urlFields[1].Params.Get(vcard.ParamType); got != "github" {
+		t.Fatalf("expected second URL TYPE %q, got %q", "github", got)
+	}
+}

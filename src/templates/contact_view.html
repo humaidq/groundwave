@@ -27,7 +27,7 @@
     {{ end }}
     <div class="contact-title-block">
       <h2>{{ .Contact.NameDisplay }}</h2>
-      {{ if .Contact.URLs }}
+      {{ if and .Contact.URLs (not .Contact.IsMe) }}
       <div class="contact-social-links">
         {{ range .Contact.URLs }}
         <a href="{{ .URL }}" target="_blank" rel="noopener" class="contact-social-link" aria-label="{{ if .Description }}{{ .Description }}{{ else }}{{ urlIconLabel .URLType }}{{ end }}" title="{{ if .Description }}{{ .Description }}{{ else }}{{ urlIconLabel .URLType }}{{ end }}">
@@ -58,7 +58,7 @@
   <div class="detail-section">
     <div class="detail-meta">
       {{ if not .Contact.IsService }}
-      {{ if .SensitiveAccess }}
+      {{ if and .SensitiveAccess (not .Contact.IsMe) }}
       <span class="contact-tier tier-{{ .TierLower }}">{{ .Contact.Tier }}</span>
       <a href="/contact/{{ .Contact.ID }}/chats" class="btn ml-half">Chats</a>
       {{ end }}
@@ -92,14 +92,14 @@
     {{ end }}
   </div>
 
-  {{ if .SensitiveAccess }}
+  {{ if and .SensitiveAccess (not .Contact.IsMe) }}
   <div class="detail-section">
     <h3>Tags</h3>
     {{ if .Contact.Tags }}
     <div class="tag-pills">
       {{ range .Contact.Tags }}
       <div class="tag-pill">
-        <a href="/contacts?tag={{ .ID }}" class="tag-pill-link">
+        <a href="/contacts?q=tag:{{ .Name | urlquery }}" class="tag-pill-link">
           <span class="tag-pill-name">{{ .Name }}</span>
         </a>
         <form method="POST" action="/contact/{{ $.Contact.ID }}/tag/{{ .ID }}/delete" class="tag-pill-delete-form" onsubmit="return confirm('Remove this tag?');">
@@ -290,6 +290,7 @@
   </div>
   {{ end }}
 
+  {{ if not .Contact.IsMe }}
   <div class="detail-section">
     <h3>Email Addresses</h3>
     {{ if .Contact.Emails }}
@@ -354,7 +355,9 @@
       </form>
     </details>
   </div>
+  {{ end }}
 
+  {{ if not .Contact.IsMe }}
   <div class="detail-section">
     <h3>Phone Numbers</h3>
     {{ if .Contact.Phones }}
@@ -425,6 +428,7 @@
       </form>
     </details>
   </div>
+  {{ end }}
 
   {{ if .Contact.Addresses }}
   <div class="detail-section">
@@ -446,6 +450,7 @@
   </div>
   {{ end }}
 
+  {{ if not .Contact.IsMe }}
   <div class="detail-section">
     <h3>Links & Social Media</h3>
     {{ if .Contact.URLs }}
@@ -506,6 +511,7 @@
       </form>
     </details>
   </div>
+  {{ end }}
 
   {{ if and .SensitiveAccess .ZKLinks }}
   <div class="detail-section">
@@ -582,7 +588,7 @@
     <a href="/contacts" class="btn">← Back to Contacts</a>
   </div>
 
-  {{ if not .Contact.IsService }}
+  {{ if and (not .Contact.IsService) (not .Contact.IsMe) }}
   <div class="detail-section">
     <h3>Contact Exchange</h3>
 

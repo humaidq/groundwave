@@ -79,7 +79,7 @@
     <div class="tag-pills">
       {{ range .Item.Tags }}
       <div class="tag-pill">
-        <a href="/inventory?tag={{ .ID }}" class="tag-pill-link">
+        <a href="/inventory?q=tag:{{ .Name | urlquery }}" class="tag-pill-link">
           <span class="tag-pill-name">{{ .Name }}</span>
         </a>
         {{ if $.IsAdmin }}

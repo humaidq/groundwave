@@ -504,6 +504,138 @@ func TestContactPrimaryEmailPhoneBehavior(t *testing.T) {
 	}
 }
 
+func TestContactSearchQuerySyntax(t *testing.T) {
+	resetDatabase(t)
+
+	ctx := testContext()
+
+	aliEmail := "ali@example.com"
+	aliPhone := "+971500000001"
+	aliCallSign := "A6ALI"
+	aliID := mustCreateContact(t, CreateContactInput{
+		NameGiven: "Ali",
+		Email:     &aliEmail,
+		Phone:     &aliPhone,
+		CallSign:  &aliCallSign,
+		Tier:      TierC,
+	})
+
+	noraID := mustCreateContact(t, CreateContactInput{
+		NameGiven: "Nora",
+		CallSign:  stringPtr("A61NR"),
+		Tier:      TierC,
+	})
+
+	omarID := mustCreateContact(t, CreateContactInput{
+		NameGiven: "Omar",
+		CallSign:  stringPtr("A62OM"),
+		Tier:      TierB,
+	})
+
+	serviceID := mustCreateContact(t, CreateContactInput{
+		NameGiven:    "University Help Desk",
+		Organization: stringPtr("University Services"),
+		IsService:    true,
+		Tier:         TierC,
+	})
+
+	if err := AddTagToContact(ctx, aliID, "family"); err != nil {
+		t.Fatalf("AddTagToContact family failed: %v", err)
+	}
+
+	if err := AddTagToContact(ctx, aliID, "university"); err != nil {
+		t.Fatalf("AddTagToContact university failed: %v", err)
+	}
+
+	if err := AddTagToContact(ctx, noraID, "university"); err != nil {
+		t.Fatalf("AddTagToContact nora university failed: %v", err)
+	}
+
+	if err := AddTagToContact(ctx, omarID, "family"); err != nil {
+		t.Fatalf("AddTagToContact omar family failed: %v", err)
+	}
+
+	if err := AddTagToContact(ctx, serviceID, "university"); err != nil {
+		t.Fatalf("AddTagToContact service university failed: %v", err)
+	}
+
+	if err := LinkCardDAV(ctx, aliID, "carddav-ali"); err != nil {
+		t.Fatalf("LinkCardDAV failed: %v", err)
+	}
+
+	filtered, err := ListContactsWithFilters(ctx, ContactListOptions{
+		SearchQuery: "tier:c tag:university ali",
+		IsService:   false,
+	})
+	if err != nil {
+		t.Fatalf("ListContactsWithFilters search failed: %v", err)
+	}
+
+	if len(filtered) != 1 || filtered[0].ID != aliID {
+		t.Fatalf("expected only Ali for tier/tag/text query, got %#v", filtered)
+	}
+
+	withAllTags, err := ListContactsWithFilters(ctx, ContactListOptions{
+		SearchQuery: "tag:family tag:university",
+		IsService:   false,
+	})
+	if err != nil {
+		t.Fatalf("ListContactsWithFilters multi-tag search failed: %v", err)
+	}
+
+	if len(withAllTags) != 1 || withAllTags[0].ID != aliID {
+		t.Fatalf("expected only Ali to match both tags, got %#v", withAllTags)
+	}
+
+	callSignWildcard, err := ListContactsWithFilters(ctx, ContactListOptions{
+		SearchQuery: "callsign:a6*",
+		IsService:   false,
+	})
+	if err != nil {
+		t.Fatalf("ListContactsWithFilters wildcard callsign failed: %v", err)
+	}
+
+	if len(callSignWildcard) != 3 {
+		t.Fatalf("expected 3 contacts matching callsign wildcard, got %d", len(callSignWildcard))
+	}
+
+	hasCardDAV, err := ListContactsWithFilters(ctx, ContactListOptions{
+		SearchQuery: "has:carddav",
+		IsService:   false,
+	})
+	if err != nil {
+		t.Fatalf("ListContactsWithFilters has:carddav failed: %v", err)
+	}
+
+	if len(hasCardDAV) != 1 || hasCardDAV[0].ID != aliID {
+		t.Fatalf("expected only Ali for has:carddav, got %#v", hasCardDAV)
+	}
+
+	missingEmail, err := ListContactsWithFilters(ctx, ContactListOptions{
+		SearchQuery: "-has:email",
+		IsService:   false,
+	})
+	if err != nil {
+		t.Fatalf("ListContactsWithFilters -has:email failed: %v", err)
+	}
+
+	if len(missingEmail) != 2 {
+		t.Fatalf("expected 2 contacts missing email, got %d", len(missingEmail))
+	}
+
+	serviceFiltered, err := ListContactsWithFilters(ctx, ContactListOptions{
+		SearchQuery: "tag:university",
+		IsService:   true,
+	})
+	if err != nil {
+		t.Fatalf("ListContactsWithFilters service search failed: %v", err)
+	}
+
+	if len(serviceFiltered) != 1 || serviceFiltered[0].ID != serviceID {
+		t.Fatalf("expected service contact to be searchable with tag query, got %#v", serviceFiltered)
+	}
+}
+
 func TestUpdateContactLinksQSOs(t *testing.T) {
 	resetDatabase(t)
 

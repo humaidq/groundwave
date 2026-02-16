@@ -80,7 +80,22 @@
 {{ end }}
 
 {{ if .QSOs }}
-<input type="text" id="qslSearch" placeholder="Search by call sign, country, mode, or band..." class="search-input">
+<form method="GET" action="/qsl" class="search-form">
+  <input type="text" name="q" placeholder="Search" value="{{ .SearchQuery }}" class="form-item">
+</form>
+
+<details class="search-syntax-help muted-text">
+  <summary class="search-syntax-toggle">
+    <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
+    <span>Search syntax</span>
+  </summary>
+  <p class="search-syntax-examples">
+    <span>Try:</span>
+    <code>callsign:a6*</code>,
+    <code>band:20m</code>,
+    <code>oman cw</code>
+  </p>
+</details>
 
 <p class="muted-text qso-count">Total QSOs: {{ len .QSOs }}</p>
 
@@ -104,31 +119,6 @@
   <h5 class="alert-title">No QSOs Yet</h5>
   <p>You haven't imported any QSOs yet. Use "Sync QRZ" or "Import ADIF" above to bring in your logbook.</p>
 </div>
-{{ end }}
-
-{{ if .QSOs }}
-<script>
-(function() {
-  const searchInput = document.getElementById('qslSearch');
-  const qslList = document.getElementById('qslList');
-  const entries = qslList.getElementsByClassName('list-card');
-
-  if (searchInput && entries) {
-    searchInput.addEventListener('input', function(e) {
-      const searchTerm = e.target.value.toLowerCase();
-
-      Array.from(entries).forEach(function(entry) {
-        const text = entry.textContent.toLowerCase();
-        if (text.includes(searchTerm)) {
-          entry.style.display = '';
-        } else {
-          entry.style.display = 'none';
-        }
-      });
-    });
-  }
-})();
-</script>
 {{ end }}
 
 {{ template "foot" . }}

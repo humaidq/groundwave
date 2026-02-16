@@ -15,7 +15,11 @@
 
 <div class="page-header">
   <h2>Contacts</h2>
-  <div class="page-header-actions">
+  <div class="page-header-actions contacts-header-actions">
+    {{ if not .SensitiveAccess }}
+    <a href="/break-glass?next=/contacts" class="btn">Unlock Sensitive View</a>
+    {{ end }}
+    <a href="/tags" class="btn">Manage Tags</a>
     <a href="/overdue" class="btn">Overdue{{ if .OverdueCount }} ({{ .OverdueCount }}){{ end }}</a>
     <a href="/service-contacts" class="btn">Service Contacts</a>
     <a href="/bulk-contact-log" class="btn">Bulk Contact Log</a>
@@ -31,132 +35,24 @@
 {{end}}
 
 <div class="tag-filter-section">
-  {{ if not .SensitiveAccess }}
-  <a href="/break-glass?next=/contacts" class="btn">Unlock Sensitive View</a>
-  {{ end }}
   <form method="GET" action="/contacts" class="tag-filter-form">
-    {{ if .AllTags }}
-    <div class="tag-dropdown-container">
-      <button type="button" class="btn tag-dropdown-toggle" id="tagDropdownToggle">
-        <span class="dropdown-label">Filter by Tags</span>
-        {{ if .SelectedTags }}
-        <span class="tag-count-badge">{{ len .SelectedTags }}</span>
-        {{ end }}
-        <span class="dropdown-arrow">▼</span>
-      </button>
-
-      <div class="tag-dropdown-menu" id="tagDropdownMenu">
-        <div class="tag-dropdown-header">
-          <span class="dropdown-title">Filter by tags</span>
-        </div>
-        <div class="tag-dropdown-list">
-          {{ range .AllTags }}
-          <label class="tag-checkbox-item">
-            <input type="checkbox" name="tag" value="{{ .ID }}"
-              {{- range $.SelectedTags }}{{- if eq . $.ID }} checked{{- end }}{{- end }}>
-            <span class="tag-checkbox-label">{{ .Name }}</span>
-            <span class="tag-checkbox-count">{{ .UsageCount }}</span>
-          </label>
-          {{ end }}
-        </div>
-        <div class="tag-dropdown-footer">
-          <button type="submit" class="btn">Apply</button>
-          <a href="/contacts" class="btn">Clear</a>
-        </div>
-      </div>
-    </div>
-    {{ end }}
-
-    <div class="tag-dropdown-container">
-      <button type="button" class="btn tag-dropdown-toggle" id="filterDropdownToggle">
-        <span class="dropdown-label">Data Filters</span>
-        {{ if .ActiveFilters }}
-        <span class="tag-count-badge">{{ len .ActiveFilters }}</span>
-        {{ end }}
-        <span class="dropdown-arrow">▼</span>
-      </button>
-
-      <div class="tag-dropdown-menu" id="filterDropdownMenu">
-        <div class="tag-dropdown-header">
-          <span class="dropdown-title">Filter by data</span>
-        </div>
-        <div class="tag-dropdown-list">
-          <label class="tag-checkbox-item">
-            <input type="checkbox" name="filter" value="no_phone"
-              {{ if contains .ActiveFilters "no_phone" }}checked{{ end }}>
-            <span class="tag-checkbox-label">No phone number</span>
-          </label>
-          <label class="tag-checkbox-item">
-            <input type="checkbox" name="filter" value="no_email"
-              {{ if contains .ActiveFilters "no_email" }}checked{{ end }}>
-            <span class="tag-checkbox-label">No email address</span>
-          </label>
-          <label class="tag-checkbox-item">
-            <input type="checkbox" name="filter" value="no_carddav"
-              {{ if contains .ActiveFilters "no_carddav" }}checked{{ end }}>
-            <span class="tag-checkbox-label">Not linked to CardDAV</span>
-          </label>
-          <label class="tag-checkbox-item">
-            <input type="checkbox" name="filter" value="no_linkedin"
-              {{ if contains .ActiveFilters "no_linkedin" }}checked{{ end }}>
-            <span class="tag-checkbox-label">No LinkedIn</span>
-          </label>
-        </div>
-        <div class="tag-dropdown-footer">
-          <button type="submit" class="btn">Apply</button>
-          <a href="/contacts" class="btn">Clear</a>
-        </div>
-      </div>
-    </div>
-
-    {{ if .AllTags }}
-    <a href="/tags" class="btn ml-half">Manage Tags</a>
-    {{ end }}
+    <input type="text" name="q" placeholder="Search" value="{{ .SearchQuery }}" class="form-item">
   </form>
+
+  <details class="search-syntax-help muted-text">
+    <summary class="search-syntax-toggle">
+      <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
+      <span>Search syntax</span>
+    </summary>
+    <p class="search-syntax-examples">
+      <span>Try:</span>
+      <code>tier:c tag:university ali</code>,
+      <code>callsign:a6*</code>,
+      <code>has:carddav</code>,
+      <code>-has:email</code>
+    </p>
+  </details>
 </div>
-
-<script>
-(function() {
-  // Tag dropdown toggle
-  const tagToggle = document.getElementById('tagDropdownToggle');
-  const tagMenu = document.getElementById('tagDropdownMenu');
-
-  if (tagToggle && tagMenu) {
-    tagToggle.addEventListener('click', function(e) {
-      e.preventDefault();
-      tagMenu.classList.toggle('show');
-      // Close filter menu when opening tag menu
-      const filterMenu = document.getElementById('filterDropdownMenu');
-      if (filterMenu) filterMenu.classList.remove('show');
-    });
-  }
-
-  // Filter dropdown toggle
-  const filterToggle = document.getElementById('filterDropdownToggle');
-  const filterMenu = document.getElementById('filterDropdownMenu');
-
-  if (filterToggle && filterMenu) {
-    filterToggle.addEventListener('click', function(e) {
-      e.preventDefault();
-      filterMenu.classList.toggle('show');
-      // Close tag menu when opening filter menu
-      if (tagMenu) tagMenu.classList.remove('show');
-    });
-  }
-
-  // Close dropdowns when clicking outside
-  document.addEventListener('click', function(e) {
-    if (tagToggle && tagMenu && !tagToggle.contains(e.target) && !tagMenu.contains(e.target)) {
-      tagMenu.classList.remove('show');
-    }
-    if (filterToggle && filterMenu && !filterToggle.contains(e.target) && !filterMenu.contains(e.target)) {
-      filterMenu.classList.remove('show');
-    }
-  });
-})();
-</script>
-
-<input type="text" id="contactSearch" placeholder="Search contacts..." class="search-input">
 
 {{ if .Contacts }}
 <div id="contactList">
@@ -214,8 +110,8 @@
               {{ if .Tags }}
               <div class="tag-badges">
                 {{ range .Tags }}
-                <a href="/contacts?tag={{ .ID }}" class="tag-badge"
-                   onclick="event.stopPropagation(); event.preventDefault(); window.location.href='/contacts?tag={{ .ID }}';">
+                <a href="/contacts?q=tag:{{ .Name | urlquery }}" class="tag-badge"
+                   onclick="event.stopPropagation(); event.preventDefault(); window.location.href='/contacts?q=tag:{{ .Name | urlquery }}';">
                   {{ .Name }}
                 </a>
                 {{ end }}
@@ -234,49 +130,5 @@
 {{ else }}
 <p class="muted-text">No contacts found. <a href="/contact/new">Add your first contact</a>.</p>
 {{ end }}
-
-<script>
-(function() {
-  const searchInput = document.getElementById('contactSearch');
-  const contactList = document.getElementById('contactList');
-
-  if (searchInput && contactList) {
-    const entries = contactList.getElementsByClassName('list-card');
-
-    function matchesFuzzy(text, query) {
-      const trimmed = query.trim();
-      if (!trimmed) {
-        return true;
-      }
-
-      const tokens = trimmed.split(/\s+/);
-      let index = 0;
-      for (let i = 0; i < tokens.length; i++) {
-        const token = tokens[i];
-        const nextIndex = text.indexOf(token, index);
-        if (nextIndex === -1) {
-          return false;
-        }
-        index = nextIndex + token.length;
-      }
-
-      return true;
-    }
-
-    searchInput.addEventListener('input', function(e) {
-      const searchTerm = e.target.value.toLowerCase();
-
-      Array.from(entries).forEach(function(entry) {
-        const text = entry.textContent.toLowerCase();
-        if (matchesFuzzy(text, searchTerm)) {
-          entry.style.display = '';
-        } else {
-          entry.style.display = 'none';
-        }
-      });
-    });
-  }
-})();
-</script>
 
 {{ template "foot" . }}

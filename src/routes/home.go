@@ -122,24 +122,8 @@ func Home(c flamego.Context, s session.Session, t template.Template, data templa
 	data["SensitiveAccess"] = sensitiveAccess
 	data["IsContacts"] = true
 
-	// Get tag filter from URL query
-	tagIDs := c.QueryStrings("tag")
-
-	// Get data filters from URL query
-	filterStrs := c.QueryStrings("filter")
-
-	var (
-		filters       []db.ContactFilter
-		activeFilters []string
-	)
-
-	for _, f := range filterStrs {
-		filter := db.ContactFilter(f)
-		if db.ValidContactFilters[filter] {
-			filters = append(filters, filter)
-			activeFilters = append(activeFilters, f)
-		}
-	}
+	// Get search query from URL.
+	searchQuery := strings.TrimSpace(c.Query("q"))
 
 	var (
 		contacts []db.ContactListItem
@@ -148,8 +132,7 @@ func Home(c flamego.Context, s session.Session, t template.Template, data templa
 
 	// Use ListContactsWithFilters to handle locked-mode sorting
 	opts := db.ContactListOptions{
-		Filters:        filters,
-		TagIDs:         tagIDs,
+		SearchQuery:    searchQuery,
 		IsService:      false,
 		AlphabeticSort: !sensitiveAccess, // Sort alphabetically when locked
 	}
@@ -163,17 +146,7 @@ func Home(c flamego.Context, s session.Session, t template.Template, data templa
 		data["Contacts"] = contacts
 	}
 
-	// Fetch all tags for the filter UI
-	allTags, err := db.ListAllTags(ctx)
-	if err != nil {
-		logger.Error("Error fetching tags", "error", err)
-	} else {
-		data["AllTags"] = allTags
-		data["SelectedTags"] = tagIDs
-	}
-
-	// Pass active filters to template
-	data["ActiveFilters"] = activeFilters
+	data["SearchQuery"] = searchQuery
 
 	// Get overdue contacts count for the button
 	overdueContacts, err := db.GetOverdueContacts(ctx)

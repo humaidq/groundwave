@@ -28,63 +28,24 @@
 </div>
 {{end}}
 
-{{ if .AllTags }}
 <div class="tag-filter-section">
   <form method="GET" action="/service-contacts" class="tag-filter-form">
-    <div class="tag-dropdown-container">
-      <button type="button" class="btn tag-dropdown-toggle" id="tagDropdownToggle">
-        <span class="dropdown-label">Filter by Tags</span>
-        {{ if .SelectedTags }}
-        <span class="tag-count-badge">{{ len .SelectedTags }}</span>
-        {{ end }}
-        <span class="dropdown-arrow">▼</span>
-      </button>
-
-      <div class="tag-dropdown-menu" id="tagDropdownMenu">
-        <div class="tag-dropdown-header">
-          <span class="dropdown-title">Filter by tags</span>
-        </div>
-        <div class="tag-dropdown-list">
-          {{ range .AllTags }}
-          <label class="tag-checkbox-item">
-            <input type="checkbox" name="tag" value="{{ .ID }}"
-              {{- range $.SelectedTags }}{{- if eq . $.ID }} checked{{- end }}{{- end }}>
-            <span class="tag-checkbox-label">{{ .Name }}</span>
-            <span class="tag-checkbox-count">{{ .UsageCount }}</span>
-          </label>
-          {{ end }}
-        </div>
-        <div class="tag-dropdown-footer">
-          <button type="submit" class="btn">Apply</button>
-          <a href="/service-contacts" class="btn">Clear</a>
-        </div>
-      </div>
-    </div>
+    <input type="text" name="q" placeholder="Search" value="{{ .SearchQuery }}" class="form-item">
   </form>
+
+  <details class="search-syntax-help muted-text">
+    <summary class="search-syntax-toggle">
+      <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
+      <span>Search syntax</span>
+    </summary>
+    <p class="search-syntax-examples">
+      <span>Try:</span>
+      <code>tag:university support</code>,
+      <code>has:phone</code>,
+      <code>-has:email</code>
+    </p>
+  </details>
 </div>
-
-<script>
-(function() {
-  const toggle = document.getElementById('tagDropdownToggle');
-  const menu = document.getElementById('tagDropdownMenu');
-
-  if (toggle && menu) {
-    toggle.addEventListener('click', function(e) {
-      e.preventDefault();
-      menu.classList.toggle('show');
-    });
-
-    document.addEventListener('click', function(e) {
-      if (!toggle.contains(e.target) && !menu.contains(e.target)) {
-        menu.classList.remove('show');
-      }
-    });
-  }
-})();
-</script>
-{{ end }}
-
-<input type="text" id="serviceSearch" placeholder="Search services..." class="search-input">
 
 {{ if .ServiceContacts }}
 <div class="list-card-list" id="serviceList">
@@ -114,8 +75,8 @@
               {{ if .Tags }}
               <div class="tag-badges">
                 {{ range .Tags }}
-                <a href="/service-contacts?tag={{ .ID }}" class="tag-badge"
-                   onclick="event.stopPropagation(); event.preventDefault(); window.location.href='/service-contacts?tag={{ .ID }}';">
+                <a href="/service-contacts?q=tag:{{ .Name | urlquery }}" class="tag-badge"
+                   onclick="event.stopPropagation(); event.preventDefault(); window.location.href='/service-contacts?q=tag:{{ .Name | urlquery }}';">
                   {{ .Name }}
                 </a>
                 {{ end }}
@@ -131,68 +92,5 @@
 {{ else }}
 <p class="muted-text">No service contacts found. <a href="/contact/new?is_service=true">Add your first service contact</a>.</p>
 {{ end }}
-
-<script>
-(function() {
-  const searchInput = document.getElementById('serviceSearch');
-  const serviceList = document.getElementById('serviceList');
-
-  if (searchInput && serviceList) {
-    const entries = Array.from(serviceList.getElementsByClassName('list-card'));
-    const headers = Array.from(serviceList.getElementsByClassName('service-group-header'));
-
-    function matchesFuzzy(text, query) {
-      const trimmed = query.trim();
-      if (!trimmed) {
-        return true;
-      }
-
-      const tokens = trimmed.split(/\s+/);
-      let index = 0;
-      for (let i = 0; i < tokens.length; i++) {
-        const token = tokens[i];
-        const nextIndex = text.indexOf(token, index);
-        if (nextIndex === -1) {
-          return false;
-        }
-        index = nextIndex + token.length;
-      }
-
-      return true;
-    }
-
-    searchInput.addEventListener('input', function(e) {
-      const searchTerm = e.target.value.toLowerCase();
-
-      if (!searchTerm) {
-        // Show all
-        entries.forEach(entry => entry.style.display = '');
-        headers.forEach(header => header.style.display = '');
-        return;
-      }
-
-      // Track which organizations have visible entries
-      const visibleOrgs = new Set();
-
-      entries.forEach(function(entry) {
-        const text = entry.textContent.toLowerCase();
-        if (matchesFuzzy(text, searchTerm)) {
-          entry.style.display = '';
-          const org = entry.getAttribute('data-org');
-          if (org) visibleOrgs.add(org);
-        } else {
-          entry.style.display = 'none';
-        }
-      });
-
-      // Show/hide headers based on whether their org has visible entries
-      headers.forEach(function(header) {
-        const orgName = header.textContent;
-        header.style.display = visibleOrgs.has(orgName) ? '' : 'none';
-      });
-    });
-  }
-})();
-</script>
 
 {{ template "foot" . }}

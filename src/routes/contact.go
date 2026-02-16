@@ -1700,26 +1700,19 @@ func RemoveTag(c flamego.Context) {
 func ListServiceContacts(c flamego.Context, t template.Template, data template.Data) {
 	ctx := c.Request().Context()
 
-	// Get tag filter from URL query
-	tagIDs := c.QueryStrings("tag")
+	searchQuery := strings.TrimSpace(c.Query("q"))
 
 	var (
 		contacts []db.ContactListItem
 		err      error
 	)
 
-	// Use ListContactsWithFilters if tags are specified
-
-	if len(tagIDs) > 0 {
-		opts := db.ContactListOptions{
-			TagIDs:    tagIDs,
-			IsService: true,
-		}
-		contacts, err = db.ListContactsWithFilters(ctx, opts)
-	} else {
-		contacts, err = db.ListServiceContacts(ctx)
+	opts := db.ContactListOptions{
+		SearchQuery: searchQuery,
+		IsService:   true,
 	}
 
+	contacts, err = db.ListContactsWithFilters(ctx, opts)
 	if err != nil {
 		logger.Error("Error fetching service contacts", "error", err)
 
@@ -1728,14 +1721,7 @@ func ListServiceContacts(c flamego.Context, t template.Template, data template.D
 		data["ServiceContacts"] = contacts
 	}
 
-	// Fetch all tags for the filter UI
-	allTags, err := db.ListAllTags(ctx)
-	if err != nil {
-		logger.Error("Error fetching tags", "error", err)
-	} else {
-		data["AllTags"] = allTags
-		data["SelectedTags"] = tagIDs
-	}
+	data["SearchQuery"] = searchQuery
 
 	data["IsServiceContacts"] = true
 	data["IsContacts"] = true

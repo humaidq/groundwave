@@ -494,3 +494,64 @@ func TestExportADIFPreservesStandardMetadataWithoutAppFields(t *testing.T) {
 		t.Fatalf("did not expect app fields in exported ADIF, got %+v", got.AppFields)
 	}
 }
+
+func TestQSOListSearchQuerySyntax(t *testing.T) {
+	resetDatabase(t)
+
+	ctx := testContext()
+
+	qsos := []utils.QSO{
+		{
+			Call:    "A65RW",
+			QSODate: "20250201",
+			TimeOn:  "101500",
+			Band:    "20m",
+			Mode:    "SSB",
+			Country: "United Arab Emirates",
+		},
+		{
+			Call:    "A44MN",
+			QSODate: "20250202",
+			TimeOn:  "111500",
+			Band:    "40m",
+			Mode:    "CW",
+			Country: "Oman",
+		},
+	}
+
+	count, err := ImportADIFQSOs(ctx, qsos)
+	if err != nil {
+		t.Fatalf("ImportADIFQSOs failed: %v", err)
+	}
+
+	if count != 2 {
+		t.Fatalf("expected 2 QSOs processed, got %d", count)
+	}
+
+	callSignFiltered, err := ListQSOsWithFilters(ctx, QSOListOptions{SearchQuery: "callsign:a6*"})
+	if err != nil {
+		t.Fatalf("ListQSOsWithFilters callsign wildcard failed: %v", err)
+	}
+
+	if len(callSignFiltered) != 1 || callSignFiltered[0].Call != "A65RW" {
+		t.Fatalf("expected only A65RW for callsign wildcard, got %#v", callSignFiltered)
+	}
+
+	bandFiltered, err := ListQSOsWithFilters(ctx, QSOListOptions{SearchQuery: "band:40m"})
+	if err != nil {
+		t.Fatalf("ListQSOsWithFilters band failed: %v", err)
+	}
+
+	if len(bandFiltered) != 1 || bandFiltered[0].Call != "A44MN" {
+		t.Fatalf("expected only A44MN for band filter, got %#v", bandFiltered)
+	}
+
+	combined, err := ListQSOsWithFilters(ctx, QSOListOptions{SearchQuery: "callsign:a6* band:20m"})
+	if err != nil {
+		t.Fatalf("ListQSOsWithFilters combined failed: %v", err)
+	}
+
+	if len(combined) != 1 || combined[0].Call != "A65RW" {
+		t.Fatalf("expected only A65RW for combined query, got %#v", combined)
+	}
+}

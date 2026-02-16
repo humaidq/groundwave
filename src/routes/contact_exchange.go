@@ -574,6 +574,25 @@ func buildContactVCard(contact *db.ContactDetail, additionalNote string) ([]byte
 		card.SetValue(vcard.FieldNote, trimmedAdditionalNote)
 	}
 
+	for _, contactURL := range contact.URLs {
+		value := strings.TrimSpace(contactURL.URL)
+		if value == "" {
+			continue
+		}
+
+		params := vcard.Params{}
+		urlType := strings.TrimSpace(string(contactURL.URLType))
+
+		if urlType != "" {
+			params.Set(vcard.ParamType, strings.ToLower(urlType))
+		}
+
+		card.Add(vcard.FieldURL, &vcard.Field{
+			Value:  value,
+			Params: params,
+		})
+	}
+
 	for _, email := range contact.Emails {
 		value := strings.TrimSpace(email.Email)
 		if value == "" {

@@ -102,10 +102,62 @@ type QSODetail struct {
 	ContactCallSign *string `db:"contact_call_sign"`
 }
 
+// QSOListOptions holds filtering options for QSO list queries.
+type QSOListOptions struct {
+	SearchQuery string
+}
+
 // ListQSOs returns all QSOs sorted by date/time (most recent first)
 func ListQSOs(ctx context.Context) ([]QSOListItem, error) {
+	return ListQSOsWithFilters(ctx, QSOListOptions{})
+}
+
+// ListQSOsWithFilters returns QSOs matching provided filters.
+func ListQSOsWithFilters(ctx context.Context, opts QSOListOptions) ([]QSOListItem, error) {
 	if pool == nil {
 		return nil, ErrDatabaseConnectionNotInitialized
+	}
+
+	var (
+		whereClauses = make([]string, 0, 8)
+		args         = make([]any, 0, 8)
+	)
+
+	argNum := 1
+
+	parsed := parseSearchQuery(opts.SearchQuery)
+
+	for _, callSign := range parsed.callSignExact {
+		whereClauses = append(whereClauses, fmt.Sprintf("UPPER(call) = UPPER($%d)", argNum))
+		args = append(args, callSign)
+		argNum++
+	}
+
+	for _, callSignPattern := range parsed.callSignLike {
+		whereClauses = append(whereClauses, fmt.Sprintf("UPPER(call) LIKE UPPER($%d)", argNum))
+		args = append(args, callSignPattern)
+		argNum++
+	}
+
+	for _, band := range parsed.bands {
+		whereClauses = append(whereClauses, fmt.Sprintf("LOWER(band) = LOWER($%d)", argNum))
+		args = append(args, band)
+		argNum++
+	}
+
+	for _, term := range parsed.freeTerms {
+		whereClauses = append(whereClauses, fmt.Sprintf(`(
+			call ILIKE $%d OR
+			COALESCE(country, '') ILIKE $%d OR
+			mode ILIKE $%d OR
+			COALESCE(band, '') ILIKE $%d OR
+			COALESCE(name, '') ILIKE $%d OR
+			COALESCE(qth, '') ILIKE $%d OR
+			COALESCE(state, '') ILIKE $%d OR
+			COALESCE(gridsquare, '') ILIKE $%d
+		)`, argNum, argNum, argNum, argNum, argNum, argNum, argNum, argNum))
+		args = append(args, "%"+term+"%")
+		argNum++
 	}
 
 	query := `
@@ -124,10 +176,15 @@ func ListQSOs(ctx context.Context) ([]QSOListItem, error) {
 			state,
 			gridsquare
 		FROM qsos
-		ORDER BY qso_date DESC, time_on DESC
 	`
 
-	rows, err := pool.Query(ctx, query)
+	if len(whereClauses) > 0 {
+		query += " WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	query += " ORDER BY qso_date DESC, time_on DESC"
+
+	rows, err := pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query QSOs: %w", err)
 	}

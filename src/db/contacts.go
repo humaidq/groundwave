@@ -55,6 +55,7 @@ var ValidContactFilters = map[ContactFilter]bool{
 type ContactListOptions struct {
 	Filters        []ContactFilter
 	TagIDs         []string
+	SearchQuery    string
 	IsService      bool
 	AlphabeticSort bool // When true, sort alphabetically instead of by tier
 }
@@ -156,8 +157,8 @@ func ListContactsWithFilters(ctx context.Context, opts ContactListOptions) ([]Co
 	}
 
 	var (
-		whereClauses []string
-		args         []interface{}
+		whereClauses = make([]string, 0, 12)
+		args         = make([]interface{}, 0, 12)
 	)
 
 	argNum := 1
@@ -194,6 +195,95 @@ func ListContactsWithFilters(ctx context.Context, opts ContactListOptions) ([]Co
 				HAVING COUNT(DISTINCT tag_id) = $%d
 			)`, argNum, argNum+1))
 		args = append(args, opts.TagIDs, len(opts.TagIDs))
+		argNum += 2
+	}
+
+	parsed := parseSearchQuery(opts.SearchQuery)
+
+	if len(parsed.tiers) > 0 {
+		tierValues := make([]string, 0, len(parsed.tiers))
+		for _, tier := range parsed.tiers {
+			tierValues = append(tierValues, string(tier))
+		}
+
+		whereClauses = append(whereClauses, fmt.Sprintf("c.tier::text = ANY($%d::text[])", argNum))
+		args = append(args, tierValues)
+		argNum++
+	}
+
+	if len(parsed.tagNames) > 0 {
+		whereClauses = append(whereClauses, fmt.Sprintf(
+			`c.id IN (
+				SELECT ct.contact_id
+				FROM contact_tags ct
+				INNER JOIN tags t ON t.id = ct.tag_id
+				WHERE lower(t.name) = ANY($%d::text[])
+				GROUP BY ct.contact_id
+				HAVING COUNT(DISTINCT lower(t.name)) = $%d
+			)`, argNum, argNum+1))
+		args = append(args, parsed.tagNames, len(parsed.tagNames))
+		argNum += 2
+	}
+
+	for _, callSign := range parsed.callSignExact {
+		whereClauses = append(whereClauses, fmt.Sprintf("UPPER(c.call_sign) = UPPER($%d)", argNum))
+		args = append(args, callSign)
+		argNum++
+	}
+
+	for _, callSignPattern := range parsed.callSignLike {
+		whereClauses = append(whereClauses, fmt.Sprintf("UPPER(c.call_sign) LIKE UPPER($%d)", argNum))
+		args = append(args, callSignPattern)
+		argNum++
+	}
+
+	for _, hasTarget := range parsed.hasTargets {
+		switch hasTarget {
+		case "carddav":
+			whereClauses = append(whereClauses, "c.carddav_uuid IS NOT NULL")
+		case "email":
+			whereClauses = append(whereClauses,
+				"EXISTS (SELECT 1 FROM contact_emails WHERE contact_id = c.id)")
+		case "phone":
+			whereClauses = append(whereClauses,
+				"EXISTS (SELECT 1 FROM contact_phones WHERE contact_id = c.id)")
+		case "linkedin":
+			whereClauses = append(whereClauses,
+				"EXISTS (SELECT 1 FROM contact_urls WHERE contact_id = c.id AND url_type = 'linkedin')")
+		}
+	}
+
+	for _, missingTarget := range parsed.missing {
+		switch missingTarget {
+		case "carddav":
+			whereClauses = append(whereClauses, "c.carddav_uuid IS NULL")
+		case "email":
+			whereClauses = append(whereClauses,
+				"NOT EXISTS (SELECT 1 FROM contact_emails WHERE contact_id = c.id)")
+		case "phone":
+			whereClauses = append(whereClauses,
+				"NOT EXISTS (SELECT 1 FROM contact_phones WHERE contact_id = c.id)")
+		case "linkedin":
+			whereClauses = append(whereClauses,
+				"NOT EXISTS (SELECT 1 FROM contact_urls WHERE contact_id = c.id AND url_type = 'linkedin')")
+		}
+	}
+
+	for _, term := range parsed.freeTerms {
+		whereClauses = append(whereClauses, fmt.Sprintf(`(
+			c.name_display ILIKE $%d OR
+			COALESCE(c.organization, '') ILIKE $%d OR
+			COALESCE(c.title, '') ILIKE $%d OR
+			COALESCE(c.call_sign, '') ILIKE $%d OR
+			EXISTS (
+				SELECT 1
+				FROM contact_tags ct
+				INNER JOIN tags t ON t.id = ct.tag_id
+				WHERE ct.contact_id = c.id AND t.name ILIKE $%d
+			)
+		)`, argNum, argNum, argNum, argNum, argNum))
+		args = append(args, "%"+term+"%")
+		argNum++
 	}
 
 	// Build ORDER BY based on service status and alphabetic sort option

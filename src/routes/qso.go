@@ -27,7 +27,7 @@ import (
 
 const qrzCallsignAutofillLimit = 40
 
-func populateQSLPageData(ctx context.Context, data template.Data) {
+func populateQSLPageData(ctx context.Context, data template.Data, searchQuery string) {
 	requests, err := db.ListOpenQSLCardRequests(ctx)
 	if err != nil {
 		logger.Error("Error fetching QSL card requests", "error", err)
@@ -37,7 +37,7 @@ func populateQSLPageData(ctx context.Context, data template.Data) {
 		data["QSLCardRequests"] = requests
 	}
 
-	qsos, err := db.ListQSOs(ctx)
+	qsos, err := db.ListQSOsWithFilters(ctx, db.QSOListOptions{SearchQuery: searchQuery})
 	if err != nil {
 		logger.Error("Error fetching QSOs", "error", err)
 
@@ -48,6 +48,8 @@ func populateQSLPageData(ctx context.Context, data template.Data) {
 		data["QSOs"] = qsos
 	}
 
+	data["SearchQuery"] = searchQuery
+
 	data["IsQSL"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "QSL", URL: "/qsl", IsCurrent: true},
@@ -56,7 +58,8 @@ func populateQSLPageData(ctx context.Context, data template.Data) {
 
 // QSL renders the QSL contacts list
 func QSL(c flamego.Context, t template.Template, data template.Data) {
-	populateQSLPageData(c.Request().Context(), data)
+	searchQuery := strings.TrimSpace(c.Query("q"))
+	populateQSLPageData(c.Request().Context(), data, searchQuery)
 	t.HTML(http.StatusOK, "qsl")
 }
 
@@ -416,7 +419,7 @@ func ImportADIF(c flamego.Context, s session.Session, t template.Template, data 
 		logger.Error("Error parsing form", "error", err)
 
 		data["Error"] = "Failed to parse upload form"
-		populateQSLPageData(c.Request().Context(), data)
+		populateQSLPageData(c.Request().Context(), data, "")
 		t.HTML(http.StatusBadRequest, "qsl")
 
 		return
@@ -428,7 +431,7 @@ func ImportADIF(c flamego.Context, s session.Session, t template.Template, data 
 		logger.Error("Error getting file", "error", err)
 
 		data["Error"] = "No file uploaded or invalid file"
-		populateQSLPageData(c.Request().Context(), data)
+		populateQSLPageData(c.Request().Context(), data, "")
 		t.HTML(http.StatusBadRequest, "qsl")
 
 		return
@@ -449,7 +452,7 @@ func ImportADIF(c flamego.Context, s session.Session, t template.Template, data 
 	if err != nil {
 		logger.Error("Error parsing ADIF file", "error", err)
 		data["Error"] = "Failed to parse ADIF file: " + err.Error()
-		populateQSLPageData(c.Request().Context(), data)
+		populateQSLPageData(c.Request().Context(), data, "")
 		t.HTML(http.StatusBadRequest, "qsl")
 
 		return
@@ -462,7 +465,7 @@ func ImportADIF(c flamego.Context, s session.Session, t template.Template, data 
 	if err != nil {
 		logger.Error("Error importing QSOs", "error", err)
 		data["Error"] = "Failed to import QSOs: " + err.Error()
-		populateQSLPageData(c.Request().Context(), data)
+		populateQSLPageData(c.Request().Context(), data, "")
 		t.HTML(http.StatusInternalServerError, "qsl")
 
 		return

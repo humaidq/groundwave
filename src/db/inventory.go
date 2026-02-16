@@ -21,9 +21,10 @@ var inventoryLabelPattern = regexp.MustCompile(`^[a-z0-9._:/-]+( [a-z0-9._:/-]+)
 
 // InventoryListOptions holds filtering options for inventory list queries.
 type InventoryListOptions struct {
-	Status   *InventoryStatus
-	ItemType *string
-	TagIDs   []string
+	Status      *InventoryStatus
+	ItemType    *string
+	TagIDs      []string
+	SearchQuery string
 }
 
 // ListInventoryItems returns inventory items ordered by inspection due first, then newest.
@@ -46,8 +47,8 @@ func ListInventoryItemsWithFilters(ctx context.Context, opts InventoryListOption
 	}
 
 	var (
-		whereClauses []string
-		args         []any
+		whereClauses = make([]string, 0, 10)
+		args         = make([]any, 0, 10)
 	)
 
 	argNum := 1
@@ -81,6 +82,56 @@ func ListInventoryItemsWithFilters(ctx context.Context, opts InventoryListOption
 				HAVING COUNT(DISTINCT tag_id) = $%d
 			)`, argNum, argNum+1))
 		args = append(args, opts.TagIDs, len(opts.TagIDs))
+		argNum += 2
+	}
+
+	parsed := parseSearchQuery(opts.SearchQuery)
+
+	for _, category := range parsed.categories {
+		normalizedCategory, err := normalizeInventoryTypeValue(category)
+		if err != nil {
+			return nil, err
+		}
+
+		if normalizedCategory == "" {
+			continue
+		}
+
+		whereClauses = append(whereClauses, fmt.Sprintf("i.item_type = $%d", argNum))
+		args = append(args, normalizedCategory)
+		argNum++
+	}
+
+	if len(parsed.tagNames) > 0 {
+		whereClauses = append(whereClauses, fmt.Sprintf(
+			`i.id IN (
+				SELECT iit.item_id
+				FROM inventory_item_tags iit
+				INNER JOIN inventory_tags t ON t.id = iit.tag_id
+				WHERE lower(t.name) = ANY($%d::text[])
+				GROUP BY iit.item_id
+				HAVING COUNT(DISTINCT lower(t.name)) = $%d
+			)`, argNum, argNum+1))
+		args = append(args, parsed.tagNames, len(parsed.tagNames))
+		argNum += 2
+	}
+
+	for _, term := range parsed.freeTerms {
+		whereClauses = append(whereClauses, fmt.Sprintf(`(
+			i.inventory_id ILIKE $%d OR
+			i.name ILIKE $%d OR
+			COALESCE(i.location, '') ILIKE $%d OR
+			COALESCE(i.description, '') ILIKE $%d OR
+			COALESCE(i.item_type, '') ILIKE $%d OR
+			EXISTS (
+				SELECT 1
+				FROM inventory_item_tags iit
+				INNER JOIN inventory_tags t ON t.id = iit.tag_id
+				WHERE iit.item_id = i.id AND t.name ILIKE $%d
+			)
+		)`, argNum, argNum, argNum, argNum, argNum, argNum))
+		args = append(args, "%"+term+"%")
+		argNum++
 	}
 
 	query := `

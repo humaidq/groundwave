@@ -671,8 +671,8 @@ pre {
 }
 
 code:not(pre code) {
-  background-color: #1e1e1e;
-  color: #d4d4d4;
+  background-color: #f5f5f5;
+  color: #111;
   border-radius: 0;
   font-size: 1rem;
   padding: 0.2em;
@@ -1966,8 +1966,19 @@ textarea.file-edit-textarea {
 
 .page-header-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
+  justify-content: flex-end;
+}
+
+.contacts-header-actions {
+  max-width: 66%;
+}
+
+.page-header-actions .btn,
+.page-header-actions button {
+  white-space: nowrap;
 }
 
 .item-delete-form {
@@ -2226,17 +2237,23 @@ textarea.file-edit-textarea {
   }
 
   .page-header-actions {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
     width: 100%;
+  }
+
+  .contacts-header-actions {
+    max-width: none;
   }
 
   .page-header-actions .btn,
   .page-header-actions .inline-form {
-    width: 100%;
+    width: auto;
   }
 
   .page-header-actions button {
-    width: 100%;
+    width: auto;
   }
 
   .contacts-list {
@@ -2743,6 +2760,34 @@ textarea.file-edit-textarea {
   align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.search-syntax-help {
+  margin-top: 0.5rem;
+  font-size: 0.9em;
+}
+
+.search-syntax-help > summary {
+  list-style: none;
+}
+
+.search-syntax-help > summary::-webkit-details-marker {
+  display: none;
+}
+
+.search-syntax-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+
+.search-syntax-help[open] .search-syntax-toggle {
+  margin-bottom: 0.3rem;
+}
+
+.search-syntax-examples {
+  margin: 0;
 }
 
 .inventory-filter-type {
@@ -4036,6 +4081,16 @@ textarea.file-edit-textarea {
   textarea, input, select {
     background-color: #434449;
     border-color: #666;
+    color: #efefef;
+  }
+
+  pre {
+    background-color: #2d2e31;
+    color: #efefef;
+  }
+
+  code:not(pre code) {
+    background-color: #2d2e31;
     color: #efefef;
   }
 

@@ -25,31 +25,15 @@ import (
 func InventoryList(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	ctx := c.Request().Context()
 
-	// Get status filter from query parameter
-	statusFilter := c.Query("status")
-	typeFilter := getOptionalInventoryLabelString(c.Query("type"))
-	tagIDs := c.QueryStrings("tag")
+	searchQuery := strings.TrimSpace(c.Query("q"))
 
 	opts := db.InventoryListOptions{
-		ItemType: typeFilter,
-		TagIDs:   tagIDs,
-	}
-
-	if statusFilter != "" {
-		status := db.InventoryStatus(statusFilter)
-		opts.Status = &status
+		SearchQuery: searchQuery,
 	}
 
 	items, err := db.ListInventoryItemsWithFilters(ctx, opts)
 	if err != nil {
 		logger.Error("Error fetching inventory items", "error", err)
-
-		if errors.Is(err, db.ErrInventoryTypeInvalid) {
-			SetErrorFlash(s, "Invalid type filter")
-			c.Redirect("/inventory", http.StatusSeeOther)
-
-			return
-		}
 
 		SetErrorFlash(s, "Failed to load inventory items")
 		c.Redirect("/", http.StatusSeeOther)
@@ -59,33 +43,7 @@ func InventoryList(c flamego.Context, s session.Session, t template.Template, da
 
 	data["Items"] = items
 	data["IsInventory"] = true
-	data["StatusFilter"] = statusFilter
-
-	data["TypeFilter"] = ""
-	if typeFilter != nil {
-		data["TypeFilter"] = *typeFilter
-	}
-
-	data["SelectedTags"] = tagIDs
-	data["StatusOptions"] = getInventoryStatusOptions()
-
-	types, err := db.GetDistinctInventoryTypes(ctx)
-	if err != nil {
-		logger.Error("Error fetching inventory types", "error", err)
-
-		data["ItemTypes"] = []string{}
-	} else {
-		data["ItemTypes"] = types
-	}
-
-	tags, err := db.ListAllInventoryTags(ctx)
-	if err != nil {
-		logger.Error("Error fetching inventory tags", "error", err)
-
-		data["AllTags"] = []db.InventoryTagWithUsage{}
-	} else {
-		data["AllTags"] = tags
-	}
+	data["SearchQuery"] = searchQuery
 
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "Inventory", URL: "/inventory", IsCurrent: true},

@@ -318,3 +318,65 @@ func TestInventoryTypeAndTagValidation(t *testing.T) {
 		t.Fatalf("expected ErrInventoryTagNameInvalid, got %v", err)
 	}
 }
+
+func TestInventorySearchQuerySyntax(t *testing.T) {
+	resetDatabase(t)
+
+	ctx := testContext()
+
+	applianceType := "appliance"
+	networkType := "networking"
+
+	kettleID, err := CreateInventoryItem(ctx, "Kitchen Kettle", nil, stringPtr("Stainless steel kettle"), InventoryStatusActive, &applianceType, nil)
+	if err != nil {
+		t.Fatalf("CreateInventoryItem kettle failed: %v", err)
+	}
+
+	routerID, err := CreateInventoryItem(ctx, "Field Router", nil, nil, InventoryStatusActive, &networkType, nil)
+	if err != nil {
+		t.Fatalf("CreateInventoryItem router failed: %v", err)
+	}
+
+	if err := AddTagToInventoryItem(ctx, kettleID, "appliance"); err != nil {
+		t.Fatalf("AddTagToInventoryItem kettle appliance failed: %v", err)
+	}
+
+	if err := AddTagToInventoryItem(ctx, kettleID, "critical"); err != nil {
+		t.Fatalf("AddTagToInventoryItem kettle critical failed: %v", err)
+	}
+
+	if err := AddTagToInventoryItem(ctx, routerID, "critical"); err != nil {
+		t.Fatalf("AddTagToInventoryItem router critical failed: %v", err)
+	}
+
+	if err := AddTagToInventoryItem(ctx, routerID, "outdoor"); err != nil {
+		t.Fatalf("AddTagToInventoryItem router outdoor failed: %v", err)
+	}
+
+	byCategory, err := ListInventoryItemsWithFilters(ctx, InventoryListOptions{SearchQuery: "category:appliance"})
+	if err != nil {
+		t.Fatalf("ListInventoryItemsWithFilters category query failed: %v", err)
+	}
+
+	if len(byCategory) != 1 || byCategory[0].InventoryID != kettleID {
+		t.Fatalf("expected only kettle for category filter, got %#v", byCategory)
+	}
+
+	byTags, err := ListInventoryItemsWithFilters(ctx, InventoryListOptions{SearchQuery: "tag:critical tag:outdoor"})
+	if err != nil {
+		t.Fatalf("ListInventoryItemsWithFilters tag query failed: %v", err)
+	}
+
+	if len(byTags) != 1 || byTags[0].InventoryID != routerID {
+		t.Fatalf("expected only router for two-tag query, got %#v", byTags)
+	}
+
+	byText, err := ListInventoryItemsWithFilters(ctx, InventoryListOptions{SearchQuery: "kettle"})
+	if err != nil {
+		t.Fatalf("ListInventoryItemsWithFilters text query failed: %v", err)
+	}
+
+	if len(byText) != 1 || byText[0].InventoryID != kettleID {
+		t.Fatalf("expected only kettle for text query, got %#v", byText)
+	}
+}
