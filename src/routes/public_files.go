@@ -23,6 +23,8 @@ var (
 	publicFilesFetchFn = db.FetchPublicFile
 )
 
+const maxPublicFilesPathDecodePasses = 8
+
 // PublicFilesView renders a public file viewer from WEBDAV_PUBLIC_PATH.
 func PublicFilesView(c flamego.Context, t template.Template, data template.Data) {
 	relPath, ok := sanitizePublicFilesPath(c.Param("path"))
@@ -222,18 +224,28 @@ func sanitizePublicFilesPath(raw string) (string, bool) {
 		return "", false
 	}
 
-	decoded, err := url.PathUnescape(raw)
-	if err == nil {
-		raw = decoded
-	}
-
-	if strings.Contains(raw, "\\") {
+	decoded, ok := decodePublicFilesPath(raw)
+	if !ok {
 		return "", false
 	}
 
-	raw = strings.TrimPrefix(raw, "/")
+	if strings.Contains(decoded, "\\") {
+		return "", false
+	}
 
-	segments := strings.Split(raw, "/")
+	if strings.IndexFunc(decoded, isPublicFilesPathControlRune) >= 0 {
+		return "", false
+	}
+
+	if strings.HasPrefix(decoded, "/") || strings.HasSuffix(decoded, "/") {
+		return "", false
+	}
+
+	if strings.Contains(decoded, "//") {
+		return "", false
+	}
+
+	segments := strings.Split(decoded, "/")
 	cleaned := make([]string, 0, len(segments))
 
 	for _, segment := range segments {
@@ -241,16 +253,15 @@ func sanitizePublicFilesPath(raw string) (string, bool) {
 			return "", false
 		}
 
-		decodedSegment, err := url.PathUnescape(segment)
-		if err == nil {
-			segment = decodedSegment
-		}
-
 		if segment == "" || segment == "." || segment == ".." {
 			return "", false
 		}
 
 		if strings.HasPrefix(segment, ".") {
+			return "", false
+		}
+
+		if strings.IndexFunc(segment, isPublicFilesPathControlRune) >= 0 {
 			return "", false
 		}
 
@@ -262,6 +273,35 @@ func sanitizePublicFilesPath(raw string) (string, bool) {
 	}
 
 	return strings.Join(cleaned, "/"), true
+}
+
+func decodePublicFilesPath(raw string) (string, bool) {
+	decoded := raw
+
+	// Decode repeatedly to collapse nested encodings such as %252f.
+	for i := 0; i < maxPublicFilesPathDecodePasses && strings.Contains(decoded, "%"); i++ {
+		next, err := url.PathUnescape(decoded)
+		if err != nil {
+			return "", false
+		}
+
+		if next == decoded {
+			break
+		}
+
+		decoded = next
+	}
+
+	// Any remaining percent is rejected to avoid ambiguous path handling.
+	if strings.Contains(decoded, "%") {
+		return "", false
+	}
+
+	return decoded, true
+}
+
+func isPublicFilesPathControlRune(r rune) bool {
+	return r < 0x20 || r == 0x7f
 }
 
 func publicFilesRawURL(relPath string) string {

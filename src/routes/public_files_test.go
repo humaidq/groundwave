@@ -234,6 +234,44 @@ func TestPublicFilesPreviewServesInlinePDF(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // Overrides package-level DB function variables.
+func TestPublicFilesRawRejectsDeepEncodedTraversal(t *testing.T) {
+	originalStatFn := publicFilesStatFn
+	originalFetchFn := publicFilesFetchFn
+
+	t.Cleanup(func() {
+		publicFilesStatFn = originalStatFn
+		publicFilesFetchFn = originalFetchFn
+	})
+
+	statCalled := false
+
+	publicFilesStatFn = func(context.Context, string) (db.WebDAVEntry, error) {
+		statCalled = true
+
+		return db.WebDAVEntry{Name: "secret.txt", IsDir: false}, nil
+	}
+	publicFilesFetchFn = func(context.Context, string) ([]byte, string, error) {
+		return []byte("secret"), "text/plain", nil
+	}
+
+	tpl := &publicFilesTemplateStub{}
+	data := template.Data{}
+	f := newPublicFilesTestApp(tpl, data)
+
+	req := httptest.NewRequest(http.MethodGet, "/f/raw/%2525252f..%2525252fsecret.txt", nil)
+	rec := httptest.NewRecorder()
+	f.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+
+	if statCalled {
+		t.Fatal("expected metadata lookup to be skipped for invalid path")
+	}
+}
+
 func TestSanitizePublicFilesPath(t *testing.T) {
 	t.Parallel()
 
@@ -250,6 +288,16 @@ func TestSanitizePublicFilesPath(t *testing.T) {
 		{name: "dot segment", raw: "./doc.txt", want: "", ok: false},
 		{name: "parent traversal segment", raw: "../doc.txt", want: "", ok: false},
 		{name: "encoded traversal", raw: "%2e%2e/doc.txt", want: "", ok: false},
+		{name: "double encoded absolute path", raw: "%252fetc%252fpasswd", want: "", ok: false},
+		{name: "double encoded parent traversal", raw: "%252f..%252fsecret.txt", want: "", ok: false},
+		{name: "double encoded embedded traversal", raw: "docs%252f..%252fsecret.txt", want: "", ok: false},
+		{name: "double encoded hidden segment", raw: "%252f.secret%252fdoc.txt", want: "", ok: false},
+		{name: "double encoded hidden marker", raw: "%252fprivate%252f.gw_admin", want: "", ok: false},
+		{name: "double encoded windows separator", raw: "%255cetc%255cpasswd", want: "", ok: false},
+		{name: "triple encoded parent traversal", raw: "%25252f..%25252fsecret.txt", want: "", ok: false},
+		{name: "quad encoded parent traversal", raw: "%2525252f..%2525252fsecret.txt", want: "", ok: false},
+		{name: "literal percent after decoding", raw: "profit%2525report.txt", want: "", ok: false},
+		{name: "encoded newline", raw: "docs%0Areport.txt", want: "", ok: false},
 		{name: "hidden segment", raw: ".secret/doc.txt", want: "", ok: false},
 		{name: "windows separator", raw: `docs\\doc.txt`, want: "", ok: false},
 		{name: "double slash", raw: "docs//doc.txt", want: "", ok: false},
