@@ -1,0 +1,46 @@
+{{ template "head" . }}
+
+<div class="page-header">
+  <div class="page-header-stack">
+    <h2>{{ .FileName }}</h2>
+    <div class="page-header-meta">
+      <span class="muted-text">{{ .CurrentPathDisplay }}</span>
+      {{ if or (ne .FileSize 0) (not .FileModTime.IsZero) }}
+      <span class="muted-text">{{ formatFileSize .FileSize }}{{ if not .FileModTime.IsZero }} • {{ .FileModTime.Format "Jan 2, 2006" }}{{ end }}</span>
+      {{ end }}
+    </div>
+  </div>
+  {{ if .DownloadURL }}
+  <div class="page-header-actions">
+    <a href="{{ .DownloadURL }}" class="btn" download="{{ .FileName }}">Download</a>
+  </div>
+  {{ end }}
+</div>
+
+{{ if .Error }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Unavailable</h5>
+  <p>{{ .Error }}</p>
+</div>
+{{ else }}
+
+<div class="file-viewer">
+  {{ if eq .ViewerType "pdf" }}
+  <iframe class="file-viewer-frame" src="{{ .FileURL }}" title="{{ .FileName }}" loading="lazy"></iframe>
+  {{ else if eq .ViewerType "image" }}
+  <img class="file-viewer-image" src="{{ .FileURL }}" alt="{{ .FileName }}" loading="lazy" />
+  {{ else if eq .ViewerType "video" }}
+  <video class="file-viewer-media" controls src="{{ .FileURL }}"></video>
+  {{ else if eq .ViewerType "audio" }}
+  <audio class="file-viewer-media" controls src="{{ .FileURL }}"></audio>
+  {{ else if eq .ViewerType "text" }}
+  <pre class="file-text-block">{{ .FileText }}</pre>
+  {{ else if eq .ViewerType "markdown" }}
+  <pre class="file-text-block file-markdown">{{ .FileText }}</pre>
+  {{ else }}
+  <div class="empty-state">{{ if .PreviewError }}{{ .PreviewError }}{{ else }}No preview available.{{ end }}</div>
+  {{ end }}
+</div>
+{{ end }}
+
+{{ template "foot" . }}

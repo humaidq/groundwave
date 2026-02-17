@@ -996,7 +996,7 @@ func CreateFilesDirectory(c flamego.Context, s session.Session) {
 	}
 
 	SetSuccessFlash(s, "Folder created")
-	c.Redirect(filesRedirectPath(relDir), http.StatusSeeOther)
+	c.Redirect(filesCreateDirectoryRedirectPath(relDir, c.Request().FormValue("redirect_to")), http.StatusSeeOther)
 }
 
 // RenameFilesEntry renames a file or folder within the same directory.
@@ -1545,6 +1545,50 @@ func sanitizeFilesName(raw string) (string, bool) {
 	}
 
 	return raw, true
+}
+
+func sanitizeFilesRedirectTarget(raw string) (string, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", false
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", false
+	}
+
+	if parsed.IsAbs() || parsed.Host != "" {
+		return "", false
+	}
+
+	if parsed.Path != "/files" {
+		return "", false
+	}
+
+	query := parsed.Query()
+	if len(query) == 0 {
+		return "/files", true
+	}
+
+	if len(query) != 1 {
+		return "", false
+	}
+
+	relPath, ok := sanitizeFilesPath(query.Get("path"))
+	if !ok {
+		return "", false
+	}
+
+	return filesRedirectPath(relPath), true
+}
+
+func filesCreateDirectoryRedirectPath(relDir string, rawRedirectTarget string) string {
+	if target, ok := sanitizeFilesRedirectTarget(rawRedirectTarget); ok {
+		return target
+	}
+
+	return filesRedirectPath(relDir)
 }
 
 func filesPathRestrictions(ctx context.Context, dirPath string) (bool, bool, error) {

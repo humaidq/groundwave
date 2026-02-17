@@ -736,6 +736,33 @@ func TestFilesHelperFunctions(t *testing.T) {
 		t.Fatalf("unexpected files redirect with query escape: %q", got)
 	}
 
+	if got, ok := sanitizeFilesRedirectTarget("/files"); !ok || got != "/files" {
+		t.Fatalf("sanitizeFilesRedirectTarget(/files) = %q, %v", got, ok)
+	}
+
+	if got, ok := sanitizeFilesRedirectTarget("/files?path=inventory%2FGW-00001"); !ok || got != "/files?path=inventory%2FGW-00001" {
+		t.Fatalf("sanitizeFilesRedirectTarget(valid path) = %q, %v", got, ok)
+	}
+
+	for _, raw := range []string{
+		"https://example.com/files?path=inventory/GW-00001",
+		"/inventory",
+		"/files?path=../etc",
+		"/files?path=inventory/GW-00001&extra=1",
+	} {
+		if got, ok := sanitizeFilesRedirectTarget(raw); ok || got != "" {
+			t.Fatalf("sanitizeFilesRedirectTarget(%q) should fail, got %q, %v", raw, got, ok)
+		}
+	}
+
+	if got := filesCreateDirectoryRedirectPath("inventory", "/files?path=inventory%2FGW-00001"); got != "/files?path=inventory%2FGW-00001" {
+		t.Fatalf("filesCreateDirectoryRedirectPath(valid redirect) = %q", got)
+	}
+
+	if got := filesCreateDirectoryRedirectPath("inventory", "/inventory"); got != "/files?path=inventory" {
+		t.Fatalf("filesCreateDirectoryRedirectPath(fallback) = %q", got)
+	}
+
 	breadcrumbs := buildFilesBreadcrumbs("docs/reference")
 	if len(breadcrumbs) != 3 {
 		t.Fatalf("unexpected breadcrumb count: %d", len(breadcrumbs))

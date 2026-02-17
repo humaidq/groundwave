@@ -488,6 +488,9 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	f.Get("/oqrs/{path: **}", routes.OQRSView)
 	f.Get("/qrz", routes.QRZ)
 	f.Get("/note/{id}", routes.ViewPublicNote)
+	f.Get("/f/raw/{path: **}", routes.PublicFilesRaw)
+	f.Get("/f/preview/{path: **}", routes.PublicFilesPreview)
+	f.Get("/f/{path: **}", routes.PublicFilesView)
 	f.Get("/xc/{token}", routes.ViewContactExchange)
 	f.Get("/xc/{token}/me.vcf", routes.DownloadContactExchangeMeVCF)
 	f.Get("/ext/auth", routes.RequireAuth, routes.RequireAdmin, routes.ExtensionAuth)
@@ -711,10 +714,13 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 
 	appLogger.Info("Starting web server", "port", port)
 	srv := &http.Server{
-		Addr:         "0.0.0.0:" + port,
-		Handler:      f,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 5 * time.Minute, // Extended for SSE streaming (AI summary)
+		Addr:              "0.0.0.0:" + port,
+		Handler:           f,
+		ReadTimeout:       30 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      5 * time.Minute, // Extended for SSE streaming (AI summary)
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	if err := srv.ListenAndServe(); err != nil {

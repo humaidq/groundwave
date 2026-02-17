@@ -16,15 +16,19 @@ import (
 	"github.com/flamego/template"
 )
 
-type powTemplateStub struct{}
+type powTemplateStub struct {
+	rw http.ResponseWriter
+}
 
-func (s *powTemplateStub) HTML(int, string) {}
+func (s *powTemplateStub) HTML(status int, _ string) {
+	s.rw.WriteHeader(status)
+}
 
 func newProofOfWorkTestApp(s session.Session, config ProofOfWorkConfig) *flamego.Flame {
 	f := flamego.New()
 	f.Use(func(c flamego.Context) {
 		c.MapTo(s, (*session.Session)(nil))
-		c.MapTo(&powTemplateStub{}, (*template.Template)(nil))
+		c.MapTo(&powTemplateStub{rw: c.ResponseWriter()}, (*template.Template)(nil))
 		c.Map(template.Data{})
 		c.Next()
 	})
@@ -46,13 +50,39 @@ func newProofOfWorkTestApp(s session.Session, config ProofOfWorkConfig) *flamego
 	return f
 }
 
-func TestRequireProofOfWorkRedirectsUnverifiedRequest(t *testing.T) {
+func TestRequireProofOfWorkRendersChallengeAtRequestedPath(t *testing.T) {
 	t.Parallel()
 
 	s := newTestSession()
 	f := newProofOfWorkTestApp(s, ProofOfWorkConfig{Difficulty: 8})
 
 	req := httptest.NewRequest(http.MethodGet, "/protected?x=1", nil)
+	rec := httptest.NewRecorder()
+
+	f.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	if got := rec.Header().Get("Location"); got != "" {
+		t.Fatalf("expected no redirect location, got %q", got)
+	}
+
+	if got, _ := s.Get(proofOfWorkNextSessionKey).(string); got != "/protected?x=1" {
+		t.Fatalf("expected next path to match requested path, got %q", got)
+	}
+}
+
+func TestRequireProofOfWorkRedirectsUnverifiedPostRequest(t *testing.T) {
+	t.Parallel()
+
+	s := newTestSession()
+	f := newProofOfWorkTestApp(s, ProofOfWorkConfig{Difficulty: 8})
+
+	req := httptest.NewRequest(http.MethodPost, "/protected", nil)
+	req.Header.Set("Referer", "/protected?x=1")
+
 	rec := httptest.NewRecorder()
 
 	f.ServeHTTP(rec, req)

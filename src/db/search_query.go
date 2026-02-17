@@ -83,7 +83,7 @@ func parseSearchQuery(raw string) parsedSearchQuery {
 			}
 
 			parsed.bands = appendUniqueString(parsed.bands, strings.ToLower(value))
-		case "category":
+		case "category", "type":
 			if isNegated {
 				continue
 			}

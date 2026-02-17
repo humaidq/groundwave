@@ -362,6 +362,15 @@ func TestInventorySearchQuerySyntax(t *testing.T) {
 		t.Fatalf("expected only kettle for category filter, got %#v", byCategory)
 	}
 
+	byType, err := ListInventoryItemsWithFilters(ctx, InventoryListOptions{SearchQuery: "type:appliance"})
+	if err != nil {
+		t.Fatalf("ListInventoryItemsWithFilters type query failed: %v", err)
+	}
+
+	if len(byType) != 1 || byType[0].InventoryID != kettleID {
+		t.Fatalf("expected only kettle for type filter, got %#v", byType)
+	}
+
 	byTags, err := ListInventoryItemsWithFilters(ctx, InventoryListOptions{SearchQuery: "tag:critical tag:outdoor"})
 	if err != nil {
 		t.Fatalf("ListInventoryItemsWithFilters tag query failed: %v", err)

@@ -118,8 +118,20 @@ func ViewInventoryItem(c flamego.Context, s session.Session, t template.Template
 	data["Files"] = files
 	data["AllTags"] = allTags
 
-	if filesURL, ok := inventoryFilesURL(item.InventoryID); ok {
-		data["InventoryFilesURL"] = filesURL
+	if relPath, ok := inventoryFilesRelativePath(item.InventoryID); ok {
+		data["InventoryFilesURL"] = filesRedirectPath(relPath)
+
+		if isAdmin {
+			if _, err := db.ListFilesEntries(ctx, relPath); err != nil {
+				if errors.Is(err, db.ErrWebDAVFilesEntryNotFound) {
+					data["InventoryFilesMissing"] = true
+					data["InventoryFilesParentPath"] = parentFilesPath(relPath)
+					data["InventoryFilesDirName"] = path.Base(relPath)
+				} else {
+					logger.Warn("Could not verify inventory files directory", "inventory_id", inventoryID, "path", relPath, "error", err)
+				}
+			}
+		}
 	}
 
 	data["IsInventory"] = true

@@ -102,7 +102,7 @@
         <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
         <div class="add-item-field">
           <div class="autocomplete-container">
-            <input type="text" name="tag_name" id="inventory-tag-autocomplete" placeholder="Tag name (e.g., has battery, needs calibration)" required class="form-item" pattern="[a-z0-9._:/-]+( [a-z0-9._:/-]+)*" title="Lowercase letters, numbers, spaces, and ._:/- characters only" autocomplete="off">
+            <input type="text" name="tag_name" id="inventory-tag-autocomplete" placeholder="Tag name" required class="form-item" pattern="[a-z0-9._:/-]+( [a-z0-9._:/-]+)*" title="Lowercase letters, numbers, spaces, and ._:/- characters only" autocomplete="off">
             <div class="autocomplete-dropdown" id="inventory-tag-dropdown"></div>
           </div>
           <p class="help-text">Use plain lowercase labels (e.g., critical, has battery, needs calibration).</p>
@@ -118,8 +118,16 @@
     <h3>Files</h3>
     {{ if .InventoryFilesURL }}
     <div class="section-actions">
-      <a href="{{ .InventoryFilesURL }}" class="btn">Open in Files</a>
+      <a href="{{ .InventoryFilesURL }}" class="btn"{{ if and .IsAdmin .InventoryFilesMissing }} id="inventory-open-files-btn"{{ end }}>Open in Files</a>
     </div>
+    {{ if and .IsAdmin .InventoryFilesMissing }}
+    <form id="inventory-create-files-folder-form" method="POST" action="/files/mkdir" style="display: none;">
+      <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+      <input type="hidden" name="path" value="{{ .InventoryFilesParentPath }}" />
+      <input type="hidden" name="dir_name" value="{{ .InventoryFilesDirName }}" />
+      <input type="hidden" name="redirect_to" value="{{ .InventoryFilesURL }}" />
+    </form>
+    {{ end }}
     {{ end }}
     {{ if .Files }}
     <ul class="file-list">
@@ -181,6 +189,27 @@ document.addEventListener('DOMContentLoaded', function() {
   var tagNames = [{{ range $i, $t := .AllTags }}{{ if $i }}, {{ end }}"{{ $t.Name }}"{{ end }}];
   if (tagNames.length > 0) {
     initAutocomplete('#inventory-tag-autocomplete', tagNames);
+  }
+
+  var openInFilesButton = document.getElementById('inventory-open-files-btn');
+  if (openInFilesButton) {
+    openInFilesButton.addEventListener('click', function(event) {
+      event.preventDefault();
+
+      var shouldCreate = window.confirm('This folder does not exist yet. Create it before opening in Files?');
+      if (!shouldCreate) {
+        window.location.assign(openInFilesButton.getAttribute('href'));
+        return;
+      }
+
+      var createFolderForm = document.getElementById('inventory-create-files-folder-form');
+      if (createFolderForm) {
+        createFolderForm.submit();
+        return;
+      }
+
+      window.location.assign(openInFilesButton.getAttribute('href'));
+    });
   }
 });
 </script>

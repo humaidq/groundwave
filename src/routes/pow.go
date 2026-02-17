@@ -47,14 +47,23 @@ type ProofOfWorkConfig struct {
 }
 
 // RequireProofOfWork enforces a one-time proof of work in each session.
-func RequireProofOfWork(_ ProofOfWorkConfig) flamego.Handler {
-	return func(c flamego.Context, s session.Session) {
+func RequireProofOfWork(config ProofOfWorkConfig) flamego.Handler {
+	normalized := normalizeProofOfWorkConfig(config)
+
+	return func(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 		if hasProofOfWorkAccess(s) || isProofOfWorkExemptPath(c.Request().Request) {
 			c.Next()
 			return
 		}
 
 		next := nextPathForChallenge(c.Request().Request)
+		if c.Request().Method == http.MethodGet || c.Request().Method == http.MethodHead {
+			logAccessDenied(c, s, "proof_of_work_required", http.StatusOK, c.Request().URL.Path, "next", next)
+			renderProofOfWorkChallenge(c, s, t, data, next, normalized)
+
+			return
+		}
+
 		redirectURL := "/pow?next=" + url.QueryEscape(next)
 		logAccessDenied(c, s, "proof_of_work_required", http.StatusSeeOther, "/pow", "next", next)
 		c.Redirect(redirectURL, http.StatusSeeOther)
@@ -76,27 +85,31 @@ func PowForm(config ProofOfWorkConfig) flamego.Handler {
 			return
 		}
 
-		challenge, err := generateProofOfWorkChallenge()
-		if err != nil {
-			logger.Error("Failed to generate proof-of-work challenge", "error", err)
-			c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
-
-			return
-		}
-
-		expiresAt := time.Now().Add(normalized.TTL)
-
-		s.Set(proofOfWorkChallengeSessionKey, challenge)
-		s.Set(proofOfWorkExpiresSessionKey, expiresAt.Unix())
-		s.Set(proofOfWorkNextSessionKey, next)
-
-		data["HideNav"] = true
-		data["PoWChallenge"] = challenge
-		data["PoWDifficulty"] = normalized.Difficulty
-		data["PoWExpiresAt"] = expiresAt.Unix()
-
-		t.HTML(http.StatusOK, "pow")
+		renderProofOfWorkChallenge(c, s, t, data, next, normalized)
 	}
+}
+
+func renderProofOfWorkChallenge(c flamego.Context, s session.Session, t template.Template, data template.Data, next string, config ProofOfWorkConfig) {
+	challenge, err := generateProofOfWorkChallenge()
+	if err != nil {
+		logger.Error("Failed to generate proof-of-work challenge", "error", err)
+		c.ResponseWriter().WriteHeader(http.StatusInternalServerError)
+
+		return
+	}
+
+	expiresAt := time.Now().Add(config.TTL)
+
+	s.Set(proofOfWorkChallengeSessionKey, challenge)
+	s.Set(proofOfWorkExpiresSessionKey, expiresAt.Unix())
+	s.Set(proofOfWorkNextSessionKey, next)
+
+	data["HideNav"] = true
+	data["PoWChallenge"] = challenge
+	data["PoWDifficulty"] = config.Difficulty
+	data["PoWExpiresAt"] = expiresAt.Unix()
+
+	t.HTML(http.StatusOK, "pow")
 }
 
 // PowVerify checks a browser-computed proof and unlocks the session.

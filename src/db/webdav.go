@@ -23,11 +23,12 @@ import (
 
 // WebDAVConfig holds unified WebDAV configuration
 type WebDAVConfig struct {
-	Username  string // Shared: WEBDAV_USERNAME
-	Password  string // Shared: WEBDAV_PASSWORD
-	ZKPath    string // WEBDAV_ZK_PATH (for Zettelkasten)
-	InvPath   string // WEBDAV_INV_PATH (for Inventory)
-	FilesPath string // WEBDAV_FILES_PATH (for Files)
+	Username   string // Shared: WEBDAV_USERNAME
+	Password   string // Shared: WEBDAV_PASSWORD
+	ZKPath     string // WEBDAV_ZK_PATH (for Zettelkasten)
+	InvPath    string // WEBDAV_INV_PATH (for Inventory)
+	FilesPath  string // WEBDAV_FILES_PATH (for Files)
+	PublicPath string // WEBDAV_PUBLIC_PATH (for public files)
 }
 
 // WebDAVFile represents a file in WebDAV
@@ -58,19 +59,21 @@ func GetWebDAVConfig() (*WebDAVConfig, error) {
 	zkPath := os.Getenv("WEBDAV_ZK_PATH")
 	invPath := os.Getenv("WEBDAV_INV_PATH")
 	filesPath := os.Getenv("WEBDAV_FILES_PATH")
+	publicPath := os.Getenv("WEBDAV_PUBLIC_PATH")
 
 	// Username and password are optional (no auth if not provided)
 	// At least one path must be configured for this to be useful
-	if zkPath == "" && invPath == "" && filesPath == "" {
+	if zkPath == "" && invPath == "" && filesPath == "" && publicPath == "" {
 		return nil, ErrNoWebDAVPathsConfigured
 	}
 
 	return &WebDAVConfig{
-		Username:  username,
-		Password:  password,
-		ZKPath:    zkPath,
-		InvPath:   invPath,
-		FilesPath: filesPath,
+		Username:   username,
+		Password:   password,
+		ZKPath:     zkPath,
+		InvPath:    invPath,
+		FilesPath:  filesPath,
+		PublicPath: publicPath,
 	}, nil
 }
 
@@ -297,6 +300,78 @@ func FetchFilesFile(ctx context.Context, filePath string) ([]byte, string, error
 	contentType := inferContentType(filePath)
 
 	return body, contentType, nil
+}
+
+// FetchPublicFile downloads a file from the public WebDAV directory.
+func FetchPublicFile(ctx context.Context, filePath string) ([]byte, string, error) {
+	config, err := GetWebDAVConfig()
+	if err != nil {
+		return nil, "", err
+	}
+
+	if config.PublicPath == "" {
+		return nil, "", ErrWebDAVPublicPathNotConfigured
+	}
+
+	client, err := newPublicWebDAVClient(config)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create WebDAV client: %w", err)
+	}
+
+	reader, err := client.Open(ctx, filePath)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to fetch WebDAV file: %w", err)
+	}
+
+	defer func() {
+		if err := reader.Close(); err != nil {
+			logger.Warn("Failed to close WebDAV public file reader", "error", err)
+		}
+	}()
+
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read file content: %w", err)
+	}
+
+	contentType := inferContentType(filePath)
+
+	return body, contentType, nil
+}
+
+// StatPublicFile returns metadata for a file or directory in the public WebDAV directory.
+func StatPublicFile(ctx context.Context, filePath string) (WebDAVEntry, error) {
+	config, err := GetWebDAVConfig()
+	if err != nil {
+		return WebDAVEntry{}, err
+	}
+
+	if config.PublicPath == "" {
+		return WebDAVEntry{}, ErrWebDAVPublicPathNotConfigured
+	}
+
+	client, err := newPublicWebDAVClient(config)
+	if err != nil {
+		return WebDAVEntry{}, fmt.Errorf("failed to create WebDAV client: %w", err)
+	}
+
+	info, err := client.Stat(ctx, filePath)
+	if err != nil {
+		if isWebDAVNotFound(err) {
+			return WebDAVEntry{}, ErrWebDAVFilesEntryNotFound
+		}
+
+		return WebDAVEntry{}, fmt.Errorf("failed to stat WebDAV entry: %w", err)
+	}
+
+	return WebDAVEntry{
+		Name:    extractFilename(info.Path),
+		Path:    filePath,
+		Size:    info.Size,
+		ModTime: info.ModTime,
+		ETag:    info.ETag,
+		IsDir:   info.IsDir,
+	}, nil
 }
 
 // UpdateFilesFile updates an existing file in the WebDAV files directory using optimistic locking.
@@ -747,6 +822,23 @@ func newFilesWebDAVClient(config *WebDAVConfig) (*webdav.Client, error) {
 	client, err := webdav.NewClient(httpClient, endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create files webdav client: %w", err)
+	}
+
+	return client, nil
+}
+
+func newPublicWebDAVClient(config *WebDAVConfig) (*webdav.Client, error) {
+	basePath := strings.TrimRight(config.PublicPath, "/")
+	if basePath == "" {
+		return nil, ErrWebDAVPublicPathNotConfigured
+	}
+
+	endpoint := basePath + "/"
+	httpClient := newWebDAVHTTPClient(config)
+
+	client, err := webdav.NewClient(httpClient, endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create public webdav client: %w", err)
 	}
 
 	return client, nil

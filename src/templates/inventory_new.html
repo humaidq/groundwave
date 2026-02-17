@@ -55,7 +55,7 @@
       <div class="autocomplete-container">
         <input type="text" name="item_type" id="item_type" class="form-item" autocomplete="off"
                value="{{ if .FormData }}{{ .FormData.Get "item_type" }}{{ end }}"
-               placeholder="e.g., appliance, networking, cable/adapter"
+               placeholder="Type"
                pattern="[a-z0-9._:/-]+( [a-z0-9._:/-]+)*"
                title="Lowercase letters, numbers, spaces, and ._:/- characters only">
         <div class="autocomplete-dropdown" id="item-type-dropdown"></div>
@@ -68,7 +68,7 @@
       <div class="autocomplete-container">
         <input type="text" name="tag" id="tag" class="form-item" autocomplete="off"
                value="{{ if .FormData }}{{ .FormData.Get "tag" }}{{ end }}"
-               placeholder="e.g., critical, has battery"
+               placeholder="Tag"
                pattern="[a-z0-9._:/-]+( [a-z0-9._:/-]+)*"
                title="Lowercase letters, numbers, spaces, and ._:/- characters only">
         <div class="autocomplete-dropdown" id="tag-dropdown"></div>

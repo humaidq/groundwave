@@ -93,6 +93,7 @@ var (
 	ErrNoWebDAVPathsConfigured           = errors.New("no WebDAV paths configured")
 	ErrWebDAVInventoryPathNotConfigured  = errors.New("WEBDAV_INV_PATH not configured")
 	ErrWebDAVFilesPathNotConfigured      = errors.New("WEBDAV_FILES_PATH not configured")
+	ErrWebDAVPublicPathNotConfigured     = errors.New("WEBDAV_PUBLIC_PATH not configured")
 	ErrWebDAVFilesEntryETagRequired      = errors.New("files entry etag is required")
 	ErrWebDAVFilesEntryExists            = errors.New("files entry already exists")
 	ErrWebDAVFilesEntryNotFound          = errors.New("files entry not found")
