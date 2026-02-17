@@ -193,7 +193,7 @@ func hasProofOfWorkAccess(s session.Session) bool {
 
 func isProofOfWorkExemptPath(request *http.Request) bool {
 	path := request.URL.Path
-	if path == "/pow" || path == "/pow/verify" || path == "/connectivity" {
+	if path == "/pow" || path == "/pow/verify" || path == "/connectivity" || path == "/qrz" {
 		return true
 	}
 

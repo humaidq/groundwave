@@ -29,7 +29,7 @@ const maxPublicFilesPathDecodePasses = 8
 func PublicFilesView(c flamego.Context, t template.Template, data template.Data) {
 	relPath, ok := sanitizePublicFilesPath(c.Param("path"))
 	if !ok {
-		renderPublicFileNotFound(t, data)
+		c.ResponseWriter().WriteHeader(http.StatusNotFound)
 
 		return
 	}
@@ -48,13 +48,13 @@ func PublicFilesView(c flamego.Context, t template.Template, data template.Data)
 	fileEntry, err := publicFilesStatFn(ctx, relPath)
 	if err != nil {
 		logger.Error("Error loading public file metadata", "path", relPath, "error", err)
-		renderPublicFileNotFound(t, data)
+		c.ResponseWriter().WriteHeader(http.StatusNotFound)
 
 		return
 	}
 
 	if fileEntry.IsDir {
-		renderPublicFileNotFound(t, data)
+		c.ResponseWriter().WriteHeader(http.StatusNotFound)
 
 		return
 	}
@@ -208,16 +208,6 @@ func PublicFilesRaw(c flamego.Context) {
 		logger.Error("Error writing public file response", "path", relPath, "error", err)
 	}
 }
-
-func renderPublicFileNotFound(t template.Template, data template.Data) {
-	data["HideNav"] = true
-	data["Error"] = "File not found"
-	data["FileName"] = "File"
-	data["ViewerType"] = "unknown"
-
-	t.HTML(http.StatusNotFound, "files_public_view")
-}
-
 func sanitizePublicFilesPath(raw string) (string, bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {

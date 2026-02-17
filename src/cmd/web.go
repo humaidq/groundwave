@@ -188,6 +188,7 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	}
 
 	f := flamego.New()
+	configureEmptyNotFoundHandler(f)
 	f.Use(flamego.Recovery())
 	f.Map(requestLogger)
 	f.Map(requestStdLogger)
@@ -728,6 +729,12 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 	}
 
 	return nil
+}
+
+func configureEmptyNotFoundHandler(f *flamego.Flame) {
+	f.NotFound(func(c flamego.Context) {
+		c.ResponseWriter().WriteHeader(http.StatusNotFound)
+	})
 }
 
 // handleWhatsAppMessage is called when a WhatsApp message is sent or received.

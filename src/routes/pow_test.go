@@ -46,6 +46,9 @@ func newProofOfWorkTestApp(s session.Session, config ProofOfWorkConfig) *flamego
 	f.Get("/connectivity", func(c flamego.Context) {
 		c.ResponseWriter().WriteHeader(http.StatusNoContent)
 	})
+	f.Get("/qrz", func(c flamego.Context) {
+		c.ResponseWriter().WriteHeader(http.StatusNoContent)
+	})
 
 	return f
 }
@@ -119,6 +122,22 @@ func TestRequireProofOfWorkSkipsConnectivityProbe(t *testing.T) {
 	f := newProofOfWorkTestApp(s, ProofOfWorkConfig{Difficulty: 8})
 
 	req := httptest.NewRequest(http.MethodGet, "/connectivity", nil)
+	rec := httptest.NewRecorder()
+
+	f.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected status %d, got %d", http.StatusNoContent, rec.Code)
+	}
+}
+
+func TestRequireProofOfWorkSkipsQRZPath(t *testing.T) {
+	t.Parallel()
+
+	s := newTestSession()
+	f := newProofOfWorkTestApp(s, ProofOfWorkConfig{Difficulty: 8})
+
+	req := httptest.NewRequest(http.MethodGet, "/qrz", nil)
 	rec := httptest.NewRecorder()
 
 	f.ServeHTTP(rec, req)

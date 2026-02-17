@@ -5,8 +5,12 @@ package cmd
 
 import (
 	"html/template"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/flamego/flamego"
 )
 
 func TestSafeImageURLDataImageRendersWithoutTemplateSentinel(t *testing.T) {
@@ -52,5 +56,24 @@ func TestSafeImageURLRejectsUnsupportedDataImageType(t *testing.T) {
 	photo := "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4="
 	if got := safeImageURL(&photo); got != "" {
 		t.Fatalf("expected unsupported data image URL to be rejected, got %q", got)
+	}
+}
+
+func TestConfigureEmptyNotFoundHandlerReturnsStatusOnly(t *testing.T) {
+	t.Parallel()
+
+	f := flamego.New()
+	configureEmptyNotFoundHandler(f)
+
+	req := httptest.NewRequest(http.MethodGet, "/does-not-exist", nil)
+	rec := httptest.NewRecorder()
+	f.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+
+	if rec.Body.Len() != 0 {
+		t.Fatalf("expected empty 404 body, got %q", rec.Body.String())
 	}
 }

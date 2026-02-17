@@ -151,6 +151,102 @@ func TestPublicFilesViewRendersPDFPreviewURL(t *testing.T) {
 }
 
 //nolint:paralleltest // Overrides package-level DB function variables.
+func TestPublicFilesViewReturnsNotFoundForMissingFile(t *testing.T) {
+	originalStatFn := publicFilesStatFn
+	originalFetchFn := publicFilesFetchFn
+
+	t.Cleanup(func() {
+		publicFilesStatFn = originalStatFn
+		publicFilesFetchFn = originalFetchFn
+	})
+
+	statCalled := false
+
+	publicFilesStatFn = func(context.Context, string) (db.WebDAVEntry, error) {
+		statCalled = true
+
+		return db.WebDAVEntry{}, db.ErrWebDAVFilesEntryNotFound
+	}
+	publicFilesFetchFn = func(context.Context, string) ([]byte, string, error) {
+		t.Fatal("expected file fetch to be skipped for missing file")
+
+		return nil, "", nil
+	}
+
+	tpl := &publicFilesTemplateStub{}
+	data := template.Data{}
+	f := newPublicFilesTestApp(tpl, data)
+
+	req := httptest.NewRequest(http.MethodGet, "/f/missing.txt", nil)
+	rec := httptest.NewRecorder()
+	f.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+
+	if rec.Body.Len() != 0 {
+		t.Fatalf("expected empty response body, got %q", rec.Body.String())
+	}
+
+	if tpl.called {
+		t.Fatalf("expected template render to be skipped, got %#v", tpl)
+	}
+
+	if !statCalled {
+		t.Fatal("expected metadata lookup for non-empty path")
+	}
+}
+
+//nolint:paralleltest // Overrides package-level DB function variables.
+func TestPublicFilesViewReturnsNotFoundForEmptyPath(t *testing.T) {
+	originalStatFn := publicFilesStatFn
+	originalFetchFn := publicFilesFetchFn
+
+	t.Cleanup(func() {
+		publicFilesStatFn = originalStatFn
+		publicFilesFetchFn = originalFetchFn
+	})
+
+	statCalled := false
+
+	publicFilesStatFn = func(context.Context, string) (db.WebDAVEntry, error) {
+		statCalled = true
+
+		return db.WebDAVEntry{Name: "ignored.txt", IsDir: false}, nil
+	}
+	publicFilesFetchFn = func(context.Context, string) ([]byte, string, error) {
+		t.Fatal("expected file fetch to be skipped for empty path")
+
+		return nil, "", nil
+	}
+
+	tpl := &publicFilesTemplateStub{}
+	data := template.Data{}
+	f := newPublicFilesTestApp(tpl, data)
+
+	req := httptest.NewRequest(http.MethodGet, "/f/", nil)
+	rec := httptest.NewRecorder()
+	f.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+
+	if rec.Body.Len() != 0 {
+		t.Fatalf("expected empty response body, got %q", rec.Body.String())
+	}
+
+	if tpl.called {
+		t.Fatalf("expected template render to be skipped, got %#v", tpl)
+	}
+
+	if statCalled {
+		t.Fatal("expected metadata lookup to be skipped for empty path")
+	}
+}
+
+//nolint:paralleltest // Overrides package-level DB function variables.
 func TestPublicFilesRawDownloadHeaders(t *testing.T) {
 	originalStatFn := publicFilesStatFn
 	originalFetchFn := publicFilesFetchFn
