@@ -5,10 +5,10 @@
 package routes
 
 import (
+	"io"
 	"net/http"
 	"net/url"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
@@ -21,6 +21,7 @@ import (
 var (
 	publicFilesStatFn  = db.StatPublicFile
 	publicFilesFetchFn = db.FetchPublicFile
+	publicFilesOpenFn  = db.OpenPublicFile
 )
 
 const maxPublicFilesPathDecodePasses = 8
@@ -35,6 +36,7 @@ func PublicFilesView(c flamego.Context, t template.Template, data template.Data)
 	}
 
 	data["HideNav"] = true
+	setPublicSiteTitle(data)
 	data["CurrentPath"] = relPath
 	data["CurrentPathDisplay"] = formatFilesPathDisplay(relPath)
 	data["FileName"] = path.Base(relPath)
@@ -138,7 +140,7 @@ func PublicFilesPreview(c flamego.Context) {
 		return
 	}
 
-	fileData, contentType, err := publicFilesFetchFn(ctx, relPath)
+	fileReader, contentType, err := publicFilesOpenFn(ctx, relPath)
 	if err != nil {
 		logger.Error("Error fetching public preview file", "path", relPath, "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusNotFound)
@@ -146,17 +148,22 @@ func PublicFilesPreview(c flamego.Context) {
 		return
 	}
 
+	defer func() {
+		if err := fileReader.Close(); err != nil {
+			logger.Error("Error closing public preview file stream", "path", relPath, "error", err)
+		}
+	}()
+
 	filename := sanitizeFilenameForHeader(path.Base(relPath))
 
 	headers := c.ResponseWriter().Header()
 	headers.Set("Content-Type", normalizePublicPreviewContentType(contentType, viewerType))
 	headers.Set("Content-Disposition", "inline; filename=\""+filename+"\"")
-	headers.Set("Content-Length", strconv.Itoa(len(fileData)))
 	headers.Set("X-Content-Type-Options", "nosniff")
 
 	c.ResponseWriter().WriteHeader(http.StatusOK)
 
-	if _, err := c.ResponseWriter().Write(fileData); err != nil {
+	if _, err := io.Copy(c.ResponseWriter(), fileReader); err != nil {
 		logger.Error("Error writing public preview response", "path", relPath, "error", err)
 	}
 }
@@ -186,7 +193,7 @@ func PublicFilesRaw(c flamego.Context) {
 		return
 	}
 
-	fileData, _, err := publicFilesFetchFn(ctx, relPath)
+	fileReader, _, err := publicFilesOpenFn(ctx, relPath)
 	if err != nil {
 		logger.Error("Error fetching public file", "path", relPath, "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusNotFound)
@@ -194,17 +201,22 @@ func PublicFilesRaw(c flamego.Context) {
 		return
 	}
 
+	defer func() {
+		if err := fileReader.Close(); err != nil {
+			logger.Error("Error closing public file stream", "path", relPath, "error", err)
+		}
+	}()
+
 	filename := sanitizeFilenameForHeader(path.Base(relPath))
 
 	headers := c.ResponseWriter().Header()
 	headers.Set("Content-Type", "application/octet-stream")
 	headers.Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
-	headers.Set("Content-Length", strconv.Itoa(len(fileData)))
 	headers.Set("X-Content-Type-Options", "nosniff")
 
 	c.ResponseWriter().WriteHeader(http.StatusOK)
 
-	if _, err := c.ResponseWriter().Write(fileData); err != nil {
+	if _, err := io.Copy(c.ResponseWriter(), fileReader); err != nil {
 		logger.Error("Error writing public file response", "path", relPath, "error", err)
 	}
 }

@@ -87,6 +87,7 @@ func CreateContactExchangeLink(c flamego.Context, s session.Session) {
 func ViewContactExchange(c flamego.Context, t template.Template, data template.Data) {
 	token := strings.TrimSpace(c.Param("token"))
 	data["HideNav"] = true
+	setPublicSiteTitle(data)
 
 	link, contact, meContact, err := loadContactExchangeContext(c.Request().Context(), token)
 	if err != nil {
@@ -111,6 +112,7 @@ func ViewContactExchange(c flamego.Context, t template.Template, data template.D
 func SubmitContactExchange(c flamego.Context, t template.Template, data template.Data) {
 	token := strings.TrimSpace(c.Param("token"))
 	data["HideNav"] = true
+	setPublicSiteTitle(data)
 
 	link, contact, meContact, err := loadContactExchangeContext(c.Request().Context(), token)
 	if err != nil {
@@ -291,6 +293,7 @@ func DownloadContactExchangeMeVCF(c flamego.Context) {
 
 func renderInvalidContactExchange(t template.Template, data template.Data) {
 	data["HideNav"] = true
+	setPublicSiteTitle(data)
 	data["Error"] = "This secure link is invalid or expired."
 
 	t.HTML(http.StatusNotFound, "contact_exchange_public")

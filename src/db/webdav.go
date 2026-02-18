@@ -79,21 +79,34 @@ func GetWebDAVConfig() (*WebDAVConfig, error) {
 
 // newWebDAVHTTPClient creates an HTTP client for WebDAV operations
 func newWebDAVHTTPClient(config *WebDAVConfig) *http.Client {
-	transport := http.DefaultTransport
+	transport := webDAVBaseTransport()
 
 	// Add basic auth if credentials are provided
 	if config.Username != "" && config.Password != "" {
 		transport = &basicAuthTransport{
 			Username: config.Username,
 			Password: config.Password,
-			Base:     http.DefaultTransport,
+			Base:     transport,
 		}
 	}
 
 	return &http.Client{
-		Timeout:   3 * time.Second, // Fast timeout for local/same-network WebDAV
+		// Do not set http.Client.Timeout here: it caps the full request lifetime,
+		// including body reads, and can abort large file transfers mid-stream.
 		Transport: transport,
 	}
+}
+
+func webDAVBaseTransport() http.RoundTripper {
+	base, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return http.DefaultTransport
+	}
+
+	transport := base.Clone()
+	transport.ResponseHeaderTimeout = 30 * time.Second
+
+	return transport
 }
 
 // ListInventoryFiles lists files in the WebDAV inventory directory for a specific item
@@ -152,6 +165,27 @@ func ListInventoryFiles(ctx context.Context, inventoryID string) ([]WebDAVFile, 
 
 // FetchInventoryFile downloads a file from WebDAV inventory directory
 func FetchInventoryFile(ctx context.Context, inventoryID string, filename string) ([]byte, string, error) {
+	reader, contentType, err := OpenInventoryFile(ctx, inventoryID, filename)
+	if err != nil {
+		return nil, "", err
+	}
+
+	defer func() {
+		if err := reader.Close(); err != nil {
+			logger.Warn("Failed to close WebDAV inventory response body", "error", err)
+		}
+	}()
+
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read file content: %w", err)
+	}
+
+	return body, contentType, nil
+}
+
+// OpenInventoryFile opens a file stream from the WebDAV inventory directory.
+func OpenInventoryFile(ctx context.Context, inventoryID string, filename string) (io.ReadCloser, string, error) {
 	config, err := GetWebDAVConfig()
 	if err != nil {
 		return nil, "", err
@@ -176,24 +210,17 @@ func FetchInventoryFile(ctx context.Context, inventoryID string, filename string
 		return nil, "", fmt.Errorf("failed to fetch file: %w", err)
 	}
 
-	defer func() {
+	if resp.StatusCode != http.StatusOK {
 		if err := resp.Body.Close(); err != nil {
 			logger.Warn("Failed to close WebDAV inventory response body", "error", err)
 		}
-	}()
 
-	if resp.StatusCode != http.StatusOK {
 		return nil, "", fmt.Errorf("%w: HTTP %d", ErrFetchFileFailed, resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to read file content: %w", err)
 	}
 
 	contentType := inferContentType(filename)
 
-	return body, contentType, nil
+	return resp.Body, contentType, nil
 }
 
 // ListFilesEntries lists files and directories in the WebDAV files directory.
@@ -267,6 +294,27 @@ func ListFilesEntries(ctx context.Context, dirPath string) ([]WebDAVEntry, error
 
 // FetchFilesFile downloads a file from WebDAV files directory.
 func FetchFilesFile(ctx context.Context, filePath string) ([]byte, string, error) {
+	reader, contentType, err := OpenFilesFile(ctx, filePath)
+	if err != nil {
+		return nil, "", err
+	}
+
+	defer func() {
+		if err := reader.Close(); err != nil {
+			logger.Warn("Failed to close WebDAV file reader", "error", err)
+		}
+	}()
+
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read file content: %w", err)
+	}
+
+	return body, contentType, nil
+}
+
+// OpenFilesFile opens a file stream from the WebDAV files directory.
+func OpenFilesFile(ctx context.Context, filePath string) (io.ReadCloser, string, error) {
 	config, err := GetWebDAVConfig()
 	if err != nil {
 		return nil, "", err
@@ -286,9 +334,21 @@ func FetchFilesFile(ctx context.Context, filePath string) ([]byte, string, error
 		return nil, "", fmt.Errorf("failed to fetch WebDAV file: %w", err)
 	}
 
+	contentType := inferContentType(filePath)
+
+	return reader, contentType, nil
+}
+
+// FetchPublicFile downloads a file from the public WebDAV directory.
+func FetchPublicFile(ctx context.Context, filePath string) ([]byte, string, error) {
+	reader, contentType, err := OpenPublicFile(ctx, filePath)
+	if err != nil {
+		return nil, "", err
+	}
+
 	defer func() {
 		if err := reader.Close(); err != nil {
-			logger.Warn("Failed to close WebDAV file reader", "error", err)
+			logger.Warn("Failed to close WebDAV public file reader", "error", err)
 		}
 	}()
 
@@ -297,13 +357,11 @@ func FetchFilesFile(ctx context.Context, filePath string) ([]byte, string, error
 		return nil, "", fmt.Errorf("failed to read file content: %w", err)
 	}
 
-	contentType := inferContentType(filePath)
-
 	return body, contentType, nil
 }
 
-// FetchPublicFile downloads a file from the public WebDAV directory.
-func FetchPublicFile(ctx context.Context, filePath string) ([]byte, string, error) {
+// OpenPublicFile opens a file stream from the public WebDAV directory.
+func OpenPublicFile(ctx context.Context, filePath string) (io.ReadCloser, string, error) {
 	config, err := GetWebDAVConfig()
 	if err != nil {
 		return nil, "", err
@@ -323,20 +381,9 @@ func FetchPublicFile(ctx context.Context, filePath string) ([]byte, string, erro
 		return nil, "", fmt.Errorf("failed to fetch WebDAV file: %w", err)
 	}
 
-	defer func() {
-		if err := reader.Close(); err != nil {
-			logger.Warn("Failed to close WebDAV public file reader", "error", err)
-		}
-	}()
-
-	body, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to read file content: %w", err)
-	}
-
 	contentType := inferContentType(filePath)
 
-	return body, contentType, nil
+	return reader, contentType, nil
 }
 
 // StatPublicFile returns metadata for a file or directory in the public WebDAV directory.

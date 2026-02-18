@@ -4,7 +4,9 @@
 package routes
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -49,8 +51,9 @@ func newPublicFilesTestApp(tmpl template.Template, data template.Data) *flamego.
 	return f
 }
 
-//nolint:paralleltest // Overrides package-level DB function variables.
 func TestPublicFilesViewRendersTextPreview(t *testing.T) {
+	t.Setenv(publicSiteTitleEnvVar, "Shared Files")
+
 	originalStatFn := publicFilesStatFn
 	originalFetchFn := publicFilesFetchFn
 
@@ -89,6 +92,10 @@ func TestPublicFilesViewRendersTextPreview(t *testing.T) {
 	hideNav, _ := data["HideNav"].(bool)
 	if !hideNav {
 		t.Fatal("expected HideNav to be true")
+	}
+
+	if got, _ := data["PageTitle"].(string); got != "Shared Files" {
+		t.Fatalf("expected page title %q, got %q", "Shared Files", got)
 	}
 
 	if got, _ := data["ViewerType"].(string); got != "text" {
@@ -250,17 +257,24 @@ func TestPublicFilesViewReturnsNotFoundForEmptyPath(t *testing.T) {
 func TestPublicFilesRawDownloadHeaders(t *testing.T) {
 	originalStatFn := publicFilesStatFn
 	originalFetchFn := publicFilesFetchFn
+	originalOpenFn := publicFilesOpenFn
 
 	t.Cleanup(func() {
 		publicFilesStatFn = originalStatFn
 		publicFilesFetchFn = originalFetchFn
+		publicFilesOpenFn = originalOpenFn
 	})
 
 	publicFilesStatFn = func(context.Context, string) (db.WebDAVEntry, error) {
-		return db.WebDAVEntry{Name: "document.txt", IsDir: false}, nil
+		return db.WebDAVEntry{Name: "document.txt", Size: 3, IsDir: false}, nil
 	}
 	publicFilesFetchFn = func(context.Context, string) ([]byte, string, error) {
-		return []byte("abc"), "text/plain", nil
+		t.Fatal("expected raw download to use streaming open helper")
+
+		return nil, "", nil
+	}
+	publicFilesOpenFn = func(context.Context, string) (io.ReadCloser, string, error) {
+		return io.NopCloser(bytes.NewReader([]byte("abc"))), "text/plain", nil
 	}
 
 	tpl := &publicFilesTemplateStub{}
@@ -286,23 +300,34 @@ func TestPublicFilesRawDownloadHeaders(t *testing.T) {
 	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
 		t.Fatalf("expected nosniff header, got %q", got)
 	}
+
+	if got := rec.Body.String(); got != "abc" {
+		t.Fatalf("unexpected response body: %q", got)
+	}
 }
 
 //nolint:paralleltest // Overrides package-level DB function variables.
 func TestPublicFilesPreviewServesInlinePDF(t *testing.T) {
 	originalStatFn := publicFilesStatFn
 	originalFetchFn := publicFilesFetchFn
+	originalOpenFn := publicFilesOpenFn
 
 	t.Cleanup(func() {
 		publicFilesStatFn = originalStatFn
 		publicFilesFetchFn = originalFetchFn
+		publicFilesOpenFn = originalOpenFn
 	})
 
 	publicFilesStatFn = func(context.Context, string) (db.WebDAVEntry, error) {
-		return db.WebDAVEntry{Name: "manual.pdf", IsDir: false}, nil
+		return db.WebDAVEntry{Name: "manual.pdf", Size: int64(len("%PDF-1.4")), IsDir: false}, nil
 	}
 	publicFilesFetchFn = func(context.Context, string) ([]byte, string, error) {
-		return []byte("%PDF-1.4"), "application/pdf", nil
+		t.Fatal("expected preview to use streaming open helper")
+
+		return nil, "", nil
+	}
+	publicFilesOpenFn = func(context.Context, string) (io.ReadCloser, string, error) {
+		return io.NopCloser(bytes.NewReader([]byte("%PDF-1.4"))), "application/pdf", nil
 	}
 
 	tpl := &publicFilesTemplateStub{}
@@ -327,6 +352,10 @@ func TestPublicFilesPreviewServesInlinePDF(t *testing.T) {
 
 	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
 		t.Fatalf("expected nosniff header, got %q", got)
+	}
+
+	if got := rec.Body.String(); got != "%PDF-1.4" {
+		t.Fatalf("unexpected response body: %q", got)
 	}
 }
 

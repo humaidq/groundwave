@@ -105,6 +105,7 @@ func renderProofOfWorkChallenge(c flamego.Context, s session.Session, t template
 	s.Set(proofOfWorkNextSessionKey, next)
 
 	data["HideNav"] = true
+	setProofOfWorkPageTitle(data)
 	data["PoWChallenge"] = challenge
 	data["PoWDifficulty"] = config.Difficulty
 	data["PoWExpiresAt"] = expiresAt.Unix()

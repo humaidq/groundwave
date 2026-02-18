@@ -6,7 +6,11 @@ package db
 import (
 	"bytes"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestWebDAVFilesAndInventory(t *testing.T) {
@@ -93,6 +97,68 @@ func TestWebDAVFilesAndInventory(t *testing.T) {
 
 	if inferContentType("test.pdf") == "" {
 		t.Fatalf("expected inferred content type")
+	}
+}
+
+func TestOpenFilesFileStreamsSlowTransfer(t *testing.T) {
+	resetDatabase(t)
+
+	const (
+		firstChunk  = "hello "
+		secondChunk = "world"
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/files/slow.bin" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.WriteHeader(http.StatusOK)
+
+		if _, err := io.WriteString(w, firstChunk); err != nil {
+			return
+		}
+
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+
+		time.Sleep(4 * time.Second)
+
+		_, _ = io.WriteString(w, secondChunk)
+	}))
+	defer server.Close()
+
+	t.Setenv("WEBDAV_USERNAME", "")
+	t.Setenv("WEBDAV_PASSWORD", "")
+	t.Setenv("WEBDAV_INV_PATH", server.URL+"/inv")
+	t.Setenv("WEBDAV_FILES_PATH", server.URL+"/files")
+	t.Setenv("WEBDAV_ZK_PATH", server.URL+"/zk/index.org")
+
+	reader, contentType, err := OpenFilesFile(testContext(), "slow.bin")
+	if err != nil {
+		t.Fatalf("OpenFilesFile failed: %v", err)
+	}
+
+	defer func() {
+		if err := reader.Close(); err != nil {
+			t.Errorf("failed to close slow file reader: %v", err)
+		}
+	}()
+
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("failed to stream slow file: %v", err)
+	}
+
+	if string(body) != firstChunk+secondChunk {
+		t.Fatalf("unexpected body %q", string(body))
+	}
+
+	if contentType != "application/octet-stream" {
+		t.Fatalf("unexpected content type %q", contentType)
 	}
 }
 

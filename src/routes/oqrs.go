@@ -32,6 +32,7 @@ const (
 func OQRSIndex(c flamego.Context, t template.Template, data template.Data) {
 	populateOQRSData(c.Request().Context(), data)
 	data["HideNav"] = true
+	setPublicSiteTitle(data)
 	data["OQRSDateOnly"] = true
 
 	t.HTML(http.StatusOK, "oqrs")
@@ -39,7 +40,10 @@ func OQRSIndex(c flamego.Context, t template.Template, data template.Data) {
 
 // OQRSFind handles public OQRS search submissions.
 func OQRSFind(c flamego.Context, t template.Template, data template.Data) {
+	setPublicSiteTitle(data)
+
 	ctx := c.Request().Context()
+
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Failed to parse OQRS form", "error", err)
 
@@ -187,6 +191,7 @@ func OQRSView(c flamego.Context, t template.Template, data template.Data, w http
 	data["OQRSPath"] = path
 	data["HasOpenCardRequest"] = hasOpenCardRequest
 	data["HideNav"] = true
+	setPublicSiteTitle(data)
 
 	t.HTML(http.StatusOK, "oqrs_result")
 }
@@ -300,6 +305,7 @@ func QRZ(c flamego.Context, t template.Template, data template.Data) {
 	}
 
 	data["HideNav"] = true
+	setPublicSiteTitle(data)
 
 	t.HTML(http.StatusOK, "qrz")
 }

@@ -8,10 +8,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
@@ -711,7 +711,7 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 		return
 	}
 
-	fileData, contentType, err := db.FetchFilesFile(ctx, relPath)
+	fileReader, contentType, err := db.OpenFilesFile(ctx, relPath)
 	if err != nil {
 		logger.Error("Error fetching WebDAV file", "path", relPath, "error", err)
 		SetErrorFlash(s, "File not found")
@@ -719,6 +719,12 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 
 		return
 	}
+
+	defer func() {
+		if err := fileReader.Close(); err != nil {
+			logger.Error("Error closing WebDAV file stream", "path", relPath, "error", err)
+		}
+	}()
 
 	filename := sanitizeFilenameForHeader(path.Base(relPath))
 
@@ -734,7 +740,6 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 	headers := c.ResponseWriter().Header()
 	headers.Set("Content-Type", responseContentType)
 	headers.Set("Content-Disposition", contentDisposition+"; filename=\""+filename+"\"")
-	headers.Set("Content-Length", strconv.Itoa(len(fileData)))
 
 	if downloadRequested {
 		headers.Set("X-Content-Type-Options", "nosniff")
@@ -742,7 +747,7 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 
 	c.ResponseWriter().WriteHeader(http.StatusOK)
 
-	if _, err := c.ResponseWriter().Write(fileData); err != nil {
+	if _, err := io.Copy(c.ResponseWriter(), fileReader); err != nil {
 		logger.Error("Error writing file response", "path", relPath, "error", err)
 	}
 }

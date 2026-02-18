@@ -6,10 +6,10 @@ package routes
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
@@ -558,8 +558,8 @@ func DownloadInventoryFile(c flamego.Context, s session.Session, _ template.Temp
 
 	ctx := c.Request().Context()
 
-	// Fetch file from WebDAV
-	fileData, contentType, err := db.FetchInventoryFile(ctx, inventoryID, filename)
+	// Fetch file stream from WebDAV
+	fileReader, contentType, err := db.OpenInventoryFile(ctx, inventoryID, filename)
 	if err != nil {
 		logger.Error("Error fetching file", "error", err)
 		SetErrorFlash(s, "File not found")
@@ -567,6 +567,12 @@ func DownloadInventoryFile(c flamego.Context, s session.Session, _ template.Temp
 
 		return
 	}
+
+	defer func() {
+		if err := fileReader.Close(); err != nil {
+			logger.Error("Error closing inventory file stream", "inventory_id", inventoryID, "filename", filename, "error", err)
+		}
+	}()
 
 	downloadRequested := isDownloadRequested(c.Query("download"))
 
@@ -581,7 +587,6 @@ func DownloadInventoryFile(c flamego.Context, s session.Session, _ template.Temp
 	headers := c.ResponseWriter().Header()
 	headers.Set("Content-Type", responseContentType)
 	headers.Set("Content-Disposition", contentDisposition+"; filename=\""+sanitizeFilenameForHeader(filename)+"\"")
-	headers.Set("Content-Length", strconv.Itoa(len(fileData)))
 
 	if downloadRequested {
 		headers.Set("X-Content-Type-Options", "nosniff")
@@ -589,7 +594,7 @@ func DownloadInventoryFile(c flamego.Context, s session.Session, _ template.Temp
 
 	c.ResponseWriter().WriteHeader(http.StatusOK)
 
-	if _, err := c.ResponseWriter().Write(fileData); err != nil {
+	if _, err := io.Copy(c.ResponseWriter(), fileReader); err != nil {
 		logger.Error("Error writing inventory file", "error", err)
 	}
 }

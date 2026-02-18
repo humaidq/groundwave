@@ -292,6 +292,7 @@ func ViewZKNote(c flamego.Context, s session.Session, t template.Template, data 
 func renderPrivateNote(t template.Template, data template.Data) {
 	data["IsZettelkasten"] = true
 	data["HideNav"] = true
+	setPublicSiteTitle(data)
 
 	t.HTML(http.StatusNotFound, "note_private")
 }
@@ -336,6 +337,7 @@ func ViewPublicNote(c flamego.Context, s session.Session, t template.Template, d
 	data["IsZettelkasten"] = true
 	data["ZKHistory"] = history
 	data["HideNav"] = true
+	setPublicSiteTitle(data)
 
 	t.HTML(http.StatusOK, "note_public")
 }
