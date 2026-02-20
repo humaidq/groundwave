@@ -64,8 +64,8 @@ func TestRequireProofOfWorkRendersChallengeAtRequestedPath(t *testing.T) {
 
 	f.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
 	}
 
 	if got := rec.Header().Get("Location"); got != "" {
@@ -158,8 +158,8 @@ func TestProofOfWorkVerifyUnlocksSession(t *testing.T) {
 	formRec := httptest.NewRecorder()
 	f.ServeHTTP(formRec, formReq)
 
-	if formRec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, formRec.Code)
+	if formRec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, formRec.Code)
 	}
 
 	challenge, _ := s.Get(proofOfWorkChallengeSessionKey).(string)
@@ -201,8 +201,8 @@ func TestProofOfWorkVerifyConsumesChallengeAfterInvalidProof(t *testing.T) {
 	formRec := httptest.NewRecorder()
 	f.ServeHTTP(formRec, formReq)
 
-	if formRec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, formRec.Code)
+	if formRec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, formRec.Code)
 	}
 
 	challenge, _ := s.Get(proofOfWorkChallengeSessionKey).(string)
@@ -252,8 +252,8 @@ func TestProofOfWorkVerifyRejectsOversizedPayload(t *testing.T) {
 	formRec := httptest.NewRecorder()
 	f.ServeHTTP(formRec, formReq)
 
-	if formRec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, formRec.Code)
+	if formRec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, formRec.Code)
 	}
 
 	overSizedPayload := `{"nonce":1,"padding":"` + strings.Repeat("a", int(proofOfWorkVerifyMaxBodyBytes)) + `"}`

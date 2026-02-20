@@ -174,12 +174,32 @@ func TestNoCacheHeaders(t *testing.T) {
 		t.Fatalf("unexpected Expires for GET: %q", got)
 	}
 
+	if got := getRec.Header().Get("X-Robots-Tag"); got != "noindex, nofollow, noarchive, nosnippet" {
+		t.Fatalf("unexpected X-Robots-Tag for GET: %q", got)
+	}
+
+	headReq := httptest.NewRequest(http.MethodHead, "/", nil)
+	headRec := httptest.NewRecorder()
+	f.ServeHTTP(headRec, headReq)
+
+	if got := headRec.Header().Get("Cache-Control"); got != "no-store, max-age=0" {
+		t.Fatalf("unexpected Cache-Control for HEAD: %q", got)
+	}
+
+	if got := headRec.Header().Get("X-Robots-Tag"); got != "noindex, nofollow, noarchive, nosnippet" {
+		t.Fatalf("unexpected X-Robots-Tag for HEAD: %q", got)
+	}
+
 	postReq := httptest.NewRequest(http.MethodPost, "/", nil)
 	postRec := httptest.NewRecorder()
 	f.ServeHTTP(postRec, postReq)
 
 	if got := postRec.Header().Get("Cache-Control"); got != "" {
 		t.Fatalf("expected no Cache-Control for POST, got %q", got)
+	}
+
+	if got := postRec.Header().Get("X-Robots-Tag"); got != "noindex, nofollow, noarchive, nosnippet" {
+		t.Fatalf("unexpected X-Robots-Tag for POST: %q", got)
 	}
 }
 

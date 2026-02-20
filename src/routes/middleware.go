@@ -19,11 +19,13 @@ func CSRFInjector() flamego.Handler {
 	}
 }
 
-// NoCacheHeaders disables caching for all GET responses.
+// NoCacheHeaders disables caching for all page responses and blocks indexing.
 func NoCacheHeaders() flamego.Handler {
 	return func(c flamego.Context) {
-		if c.Request().Method == http.MethodGet {
-			header := c.ResponseWriter().Header()
+		header := c.ResponseWriter().Header()
+		header.Set("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet")
+
+		if c.Request().Method == http.MethodGet || c.Request().Method == http.MethodHead {
 			header.Set("Cache-Control", "no-store, max-age=0")
 			header.Set("Pragma", "no-cache")
 			header.Set("Expires", "0")

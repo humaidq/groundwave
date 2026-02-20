@@ -58,7 +58,7 @@ func RequireProofOfWork(config ProofOfWorkConfig) flamego.Handler {
 
 		next := nextPathForChallenge(c.Request().Request)
 		if c.Request().Method == http.MethodGet || c.Request().Method == http.MethodHead {
-			logAccessDenied(c, s, "proof_of_work_required", http.StatusOK, c.Request().URL.Path, "next", next)
+			logAccessDenied(c, s, "proof_of_work_required", http.StatusForbidden, c.Request().URL.Path, "next", next)
 			renderProofOfWorkChallenge(c, s, t, data, next, normalized)
 
 			return
@@ -110,7 +110,7 @@ func renderProofOfWorkChallenge(c flamego.Context, s session.Session, t template
 	data["PoWDifficulty"] = config.Difficulty
 	data["PoWExpiresAt"] = expiresAt.Unix()
 
-	t.HTML(http.StatusOK, "pow")
+	t.HTML(http.StatusForbidden, "pow")
 }
 
 // PowVerify checks a browser-computed proof and unlocks the session.
