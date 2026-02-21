@@ -61,6 +61,7 @@ func HomeWikiIndex(c flamego.Context, s session.Session, t template.Template, da
 	data["Backlinks"] = backlinks
 	data["LastCacheUpdate"] = lastCacheUpdate
 	data["IsHomeWiki"] = true
+	data["EnableTimestampCountdown"] = true
 	data["ZKHistory"] = history
 
 	t.HTML(http.StatusOK, "home_wiki")
@@ -107,6 +108,7 @@ func ViewHomeWikiNote(c flamego.Context, s session.Session, t template.Template,
 	data["Backlinks"] = backlinks
 	data["LastCacheUpdate"] = lastCacheUpdate
 	data["IsHomeWiki"] = true
+	data["EnableTimestampCountdown"] = true
 	data["ZKHistory"] = history
 
 	t.HTML(http.StatusOK, "home_wiki")

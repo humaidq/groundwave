@@ -18,6 +18,7 @@
         });
     </script>
     {{ end }}
+    {{ if .EnableTimestampCountdown }}
     <script>
       document.addEventListener("DOMContentLoaded", function() {
         const timestamps = document.querySelectorAll("span.timestamp");
@@ -102,11 +103,13 @@
         }, 60000);
       });
     </script>
+    {{ end }}
     <script>
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js');
       }
     </script>
+    {{ if .EnableAutocomplete }}
     <script>
       // Reusable Autocomplete Component
       function initAutocomplete(inputSelector, items) {
@@ -228,5 +231,6 @@
         });
       }
     </script>
+    {{ end }}
   </body>
 </html>

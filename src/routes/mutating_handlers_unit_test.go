@@ -48,6 +48,9 @@ func newMutatingHandlersTestApp(s session.Session) *flamego.Flame {
 	f.Post("/zk/{id}/comment/{comment_id}/edit", func(c flamego.Context, sess session.Session) {
 		UpdateZettelComment(c, sess, nil, nil)
 	})
+	f.Post("/rebuild-cache", func(c flamego.Context, sess session.Session) {
+		RebuildCache(c, sess)
+	})
 
 	return f
 }
@@ -836,4 +839,51 @@ func TestUpdateZettelCommentSuccessInboxRedirect(t *testing.T) {
 
 	assertRedirect(t, rec, "/zettel-inbox")
 	assertFlash(t, s, FlashSuccess, "Comment updated successfully")
+}
+
+func TestRebuildCacheStartsBackgroundRebuildWithDetachedContext(t *testing.T) {
+	releaseRebuild := make(chan struct{})
+	rebuildResult := make(chan error, 1)
+
+	originalRebuildZettelkastenCachesFn := rebuildZettelkastenCachesFn
+	rebuildZettelkastenCachesFn = func(ctx context.Context) error {
+		<-releaseRebuild
+
+		select {
+		case <-ctx.Done():
+			rebuildResult <- ctx.Err()
+		default:
+			rebuildResult <- nil
+		}
+
+		return nil
+	}
+
+	t.Cleanup(func() {
+		rebuildZettelkastenCachesFn = originalRebuildZettelkastenCachesFn
+	})
+
+	s := newTestSession()
+	f := newMutatingHandlersTestApp(s)
+	rec := performFormPOST(
+		t,
+		f,
+		"/rebuild-cache",
+		url.Values{},
+		nil,
+	)
+
+	assertRedirect(t, rec, "/zk")
+	assertFlash(t, s, FlashInfo, "Cache rebuild started in background")
+
+	close(releaseRebuild)
+
+	select {
+	case err := <-rebuildResult:
+		if err != nil {
+			t.Fatalf("expected detached rebuild context, got %v", err)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for rebuild goroutine")
+	}
 }

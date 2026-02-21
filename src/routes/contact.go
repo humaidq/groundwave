@@ -119,6 +119,7 @@ func buildActivityGrid(weekCounts map[string]int, currentYear int, yearCount int
 // NewContactForm renders the add contact form
 func NewContactForm(c flamego.Context, t template.Template, data template.Data) {
 	data["IsContacts"] = true
+	data["EnableAutocomplete"] = true
 	isService := c.Query("is_service") == "true"
 
 	data["IsService"] = isService
@@ -148,6 +149,8 @@ func NewContactForm(c flamego.Context, t template.Template, data template.Data) 
 
 // CreateContact handles the contact creation form submission
 func CreateContact(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+	data["EnableAutocomplete"] = true
+
 	// Parse form data
 	if err := c.Request().ParseForm(); err != nil {
 		logger.Error("Error parsing form", "error", err)
@@ -319,6 +322,7 @@ func ViewContact(c flamego.Context, s session.Session, t template.Template, data
 	data["Contact"] = contact
 	data["ContactName"] = contact.NameDisplay
 	data["IsContacts"] = true
+	data["EnableAutocomplete"] = true
 	data["TierLower"] = strings.ToLower(string(contact.Tier))
 	data["CardDAVContact"] = contact.CardDAVContact
 

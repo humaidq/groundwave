@@ -117,6 +117,7 @@ func ViewInventoryItem(c flamego.Context, s session.Session, t template.Template
 	data["Comments"] = comments
 	data["Files"] = files
 	data["AllTags"] = allTags
+	data["EnableAutocomplete"] = true
 
 	if relPath, ok := inventoryFilesRelativePath(item.InventoryID); ok {
 		data["InventoryFilesURL"] = filesRedirectPath(relPath)
@@ -193,6 +194,7 @@ func NewInventoryItemForm(c flamego.Context, t template.Template, data template.
 	data["AllTags"] = allTags
 	data["StatusOptions"] = getInventoryStatusOptions()
 	data["IsInventory"] = true
+	data["EnableAutocomplete"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "Inventory", URL: "/inventory", IsCurrent: false},
 		{Name: "New Item", URL: "", IsCurrent: true},
@@ -317,6 +319,7 @@ func EditInventoryItemForm(c flamego.Context, s session.Session, t template.Temp
 	data["ItemTypes"] = itemTypes
 	data["StatusOptions"] = getInventoryStatusOptions()
 	data["IsInventory"] = true
+	data["EnableAutocomplete"] = true
 	data["Breadcrumbs"] = []BreadcrumbItem{
 		{Name: "Inventory", URL: "/inventory", IsCurrent: false},
 		{Name: item.Name, URL: "/inventory/" + inventoryID, IsCurrent: false},

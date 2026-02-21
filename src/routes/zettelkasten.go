@@ -48,7 +48,10 @@ const zkHistoryKey = "zk_history"
 const zkPublicHistoryKey = "zk_public_history"
 const zkHistoryMaxItems = 4
 
-var updateZettelCommentDBFn = db.UpdateZettelComment
+var (
+	updateZettelCommentDBFn     = db.UpdateZettelComment
+	rebuildZettelkastenCachesFn = db.RebuildZettelkastenCaches
+)
 
 func init() {
 	// Register ZKHistoryItem slice for session serialization
@@ -222,6 +225,7 @@ func ZettelkastenIndex(c flamego.Context, s session.Session, t template.Template
 	data["Backlinks"] = backlinks
 	data["LastCacheUpdate"] = lastCacheUpdate
 	data["IsZettelkasten"] = true
+	data["EnableTimestampCountdown"] = true
 
 	data["ZKHistory"] = history
 	if note.ID != "" {
@@ -283,6 +287,7 @@ func ViewZKNote(c flamego.Context, s session.Session, t template.Template, data 
 	data["Backlinks"] = backlinks
 	data["LastCacheUpdate"] = lastCacheUpdate
 	data["IsZettelkasten"] = true
+	data["EnableTimestampCountdown"] = true
 	data["ZKHistory"] = history
 	data["PublishPath"] = "/note/" + noteID
 
@@ -335,6 +340,7 @@ func ViewPublicNote(c flamego.Context, s session.Session, t template.Template, d
 	data["NoteID"] = noteID
 	data["Backlinks"] = backlinks
 	data["IsZettelkasten"] = true
+	data["EnableTimestampCountdown"] = true
 	data["ZKHistory"] = history
 	data["HideNav"] = true
 	setPublicSiteTitle(data)
@@ -750,9 +756,11 @@ func DeleteAllZettelComments(c flamego.Context, s session.Session, _ template.Te
 
 // RebuildCache manually triggers a full cache rebuild.
 func RebuildCache(c flamego.Context, s session.Session) {
+	ctx := context.WithoutCancel(c.Request().Context())
+
 	// Trigger cache rebuild asynchronously to avoid blocking the HTTP request
 	go func() {
-		if err := db.RebuildZettelkastenCaches(c.Request().Context()); err != nil {
+		if err := rebuildZettelkastenCachesFn(ctx); err != nil {
 			logger.Error("Manual cache rebuild failed", "error", err)
 		} else {
 			logger.Info("Manual cache rebuild completed successfully")

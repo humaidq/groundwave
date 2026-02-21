@@ -27,6 +27,7 @@ func Todo(c flamego.Context, t template.Template, data template.Data) {
 	}
 
 	data["IsTodo"] = true
+	data["EnableTimestampCountdown"] = true
 	data["PageTitle"] = "Todo"
 
 	t.HTML(http.StatusOK, "todo")
