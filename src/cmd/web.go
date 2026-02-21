@@ -130,18 +130,68 @@ func start(ctx context.Context, cmd *cli.Command) (err error) {
 		return fmt.Errorf("failed to set DATABASE_URL: %w", err)
 	}
 
-	powDifficulty := routes.DefaultProofOfWorkDifficulty
+	powEasyDifficulty := routes.DefaultProofOfWorkEasyDifficulty
 
-	if rawDifficulty := strings.TrimSpace(os.Getenv("POW_DIFFICULTY")); rawDifficulty != "" {
+	if rawDifficulty := strings.TrimSpace(os.Getenv("POW_DIFFICULTY_EASY")); rawDifficulty != "" {
 		parsedDifficulty, parseErr := strconv.Atoi(rawDifficulty)
 		if parseErr != nil {
-			return fmt.Errorf("invalid POW_DIFFICULTY %q: %w", rawDifficulty, parseErr)
+			return fmt.Errorf("invalid POW_DIFFICULTY_EASY %q: %w", rawDifficulty, parseErr)
 		}
 
-		powDifficulty = parsedDifficulty
+		powEasyDifficulty = parsedDifficulty
 	}
 
-	powConfig := routes.ProofOfWorkConfig{Difficulty: powDifficulty}
+	powMediumDifficulty := routes.DefaultProofOfWorkMediumDifficulty
+
+	if rawDifficulty := strings.TrimSpace(os.Getenv("POW_DIFFICULTY_MEDIUM")); rawDifficulty != "" {
+		parsedDifficulty, parseErr := strconv.Atoi(rawDifficulty)
+		if parseErr != nil {
+			return fmt.Errorf("invalid POW_DIFFICULTY_MEDIUM %q: %w", rawDifficulty, parseErr)
+		}
+
+		powMediumDifficulty = parsedDifficulty
+	}
+
+	powHardDifficulty := routes.DefaultProofOfWorkHardDifficulty
+
+	if rawDifficulty := strings.TrimSpace(os.Getenv("POW_DIFFICULTY_HARD")); rawDifficulty != "" {
+		parsedDifficulty, parseErr := strconv.Atoi(rawDifficulty)
+		if parseErr != nil {
+			return fmt.Errorf("invalid POW_DIFFICULTY_HARD %q: %w", rawDifficulty, parseErr)
+		}
+
+		powHardDifficulty = parsedDifficulty
+	}
+
+	lowRiskASNs, err := routes.ParseASNSet(os.Getenv("POW_LOW_RISK_ASNS"))
+	if err != nil {
+		return fmt.Errorf("invalid POW_LOW_RISK_ASNS: %w", err)
+	}
+
+	highRiskASNs, err := routes.ParseASNSet(os.Getenv("POW_HIGH_RISK_ASNS"))
+	if err != nil {
+		return fmt.Errorf("invalid POW_HIGH_RISK_ASNS: %w", err)
+	}
+
+	highRiskCountries, err := routes.ParseCountryCodeSet(os.Getenv("POW_HIGH_RISK_COUNTRIES"))
+	if err != nil {
+		return fmt.Errorf("invalid POW_HIGH_RISK_COUNTRIES: %w", err)
+	}
+
+	resolveClientASN, err := routes.NewEmbeddedIPASNResolver()
+	if err != nil {
+		return fmt.Errorf("failed to initialize embedded IP2ASN resolver: %w", err)
+	}
+
+	powConfig := routes.ProofOfWorkConfig{
+		EasyDifficulty:    powEasyDifficulty,
+		MediumDifficulty:  powMediumDifficulty,
+		HardDifficulty:    powHardDifficulty,
+		LowRiskASNs:       lowRiskASNs,
+		HighRiskASNs:      highRiskASNs,
+		HighRiskCountries: highRiskCountries,
+		ResolveClientASN:  resolveClientASN,
+	}
 
 	// Initialize database connection
 	appLogger.Info("Connecting to database")

@@ -24,13 +24,21 @@ import (
 )
 
 const (
-	proofOfWorkVerifiedSessionKey  = "pow_verified"
-	proofOfWorkChallengeSessionKey = "pow_challenge"
-	proofOfWorkExpiresSessionKey   = "pow_expires_at"
-	proofOfWorkNextSessionKey      = "pow_next"
+	proofOfWorkVerifiedSessionKey   = "pow_verified"
+	proofOfWorkChallengeSessionKey  = "pow_challenge"
+	proofOfWorkExpiresSessionKey    = "pow_expires_at"
+	proofOfWorkNextSessionKey       = "pow_next"
+	proofOfWorkDifficultySessionKey = "pow_difficulty"
 
-	// DefaultProofOfWorkDifficulty is the default number of leading zero bits.
-	DefaultProofOfWorkDifficulty = 20
+	proofOfWorkDifficultyTTLRelaxThreshold = 22
+
+	// DefaultProofOfWorkMediumDifficulty is the default number of leading zero bits.
+	DefaultProofOfWorkMediumDifficulty = 20
+	DefaultProofOfWorkEasyDifficulty   = 12
+	DefaultProofOfWorkHardDifficulty   = 24
+
+	// DefaultProofOfWorkDifficulty is kept for backward compatibility.
+	DefaultProofOfWorkDifficulty = DefaultProofOfWorkMediumDifficulty
 
 	proofOfWorkVerifyMaxBodyBytes int64 = 1024
 
@@ -40,10 +48,34 @@ const (
 
 var proofOfWorkChallengeTTL = 3 * time.Minute
 
+type proofOfWorkRiskLevel int
+
+const (
+	proofOfWorkRiskMedium proofOfWorkRiskLevel = iota
+	proofOfWorkRiskLow
+	proofOfWorkRiskHigh
+)
+
+type proofOfWorkRequestRisk struct {
+	asn      uint32
+	asnKnown bool
+	level    proofOfWorkRiskLevel
+}
+
+// ClientASNResolver resolves the request ASN from request metadata.
+type ClientASNResolver func(request *http.Request) (uint32, string, bool)
+
 // ProofOfWorkConfig controls challenge hardness and expiry.
 type ProofOfWorkConfig struct {
-	Difficulty int
-	TTL        time.Duration
+	Difficulty        int
+	EasyDifficulty    int
+	MediumDifficulty  int
+	HardDifficulty    int
+	TTL               time.Duration
+	LowRiskASNs       map[uint32]struct{}
+	HighRiskASNs      map[uint32]struct{}
+	HighRiskCountries map[string]struct{}
+	ResolveClientASN  ClientASNResolver
 }
 
 // RequireProofOfWork enforces a one-time proof of work in each session.
@@ -51,15 +83,26 @@ func RequireProofOfWork(config ProofOfWorkConfig) flamego.Handler {
 	normalized := normalizeProofOfWorkConfig(config)
 
 	return func(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+		risk := resolveRequestRisk(c.Request().Request, normalized)
+
+		if isExtensionPath(c.Request().URL.Path) && risk.level != proofOfWorkRiskLow {
+			logAccessDenied(c, s, "extension_asn_not_allowed", http.StatusNotFound, "")
+			c.ResponseWriter().WriteHeader(http.StatusNotFound)
+
+			return
+		}
+
 		if hasProofOfWorkAccess(s) || isProofOfWorkExemptPath(c.Request().Request) {
 			c.Next()
 			return
 		}
 
 		next := nextPathForChallenge(c.Request().Request)
+		difficulty := normalized.difficultyForRisk(risk.level)
+
 		if c.Request().Method == http.MethodGet || c.Request().Method == http.MethodHead {
 			logAccessDenied(c, s, "proof_of_work_required", http.StatusForbidden, c.Request().URL.Path, "next", next)
-			renderProofOfWorkChallenge(c, s, t, data, next, normalized)
+			renderProofOfWorkChallenge(c, s, t, data, next, normalized.TTL, difficulty)
 
 			return
 		}
@@ -75,6 +118,9 @@ func PowForm(config ProofOfWorkConfig) flamego.Handler {
 	normalized := normalizeProofOfWorkConfig(config)
 
 	return func(c flamego.Context, s session.Session, t template.Template, data template.Data) {
+		risk := resolveRequestRisk(c.Request().Request, normalized)
+		difficulty := normalized.difficultyForRisk(risk.level)
+
 		next := sanitizeNextPath(c.Query("next"))
 		if raw := strings.TrimSpace(c.Query("next")); raw == "" {
 			next = "/"
@@ -85,11 +131,11 @@ func PowForm(config ProofOfWorkConfig) flamego.Handler {
 			return
 		}
 
-		renderProofOfWorkChallenge(c, s, t, data, next, normalized)
+		renderProofOfWorkChallenge(c, s, t, data, next, normalized.TTL, difficulty)
 	}
 }
 
-func renderProofOfWorkChallenge(c flamego.Context, s session.Session, t template.Template, data template.Data, next string, config ProofOfWorkConfig) {
+func renderProofOfWorkChallenge(c flamego.Context, s session.Session, t template.Template, data template.Data, next string, ttl time.Duration, difficulty int) {
 	challenge, err := generateProofOfWorkChallenge()
 	if err != nil {
 		logger.Error("Failed to generate proof-of-work challenge", "error", err)
@@ -98,19 +144,39 @@ func renderProofOfWorkChallenge(c flamego.Context, s session.Session, t template
 		return
 	}
 
-	expiresAt := time.Now().Add(config.TTL)
+	expiresAt := time.Now().Add(challengeTTLForDifficulty(ttl, difficulty))
 
 	s.Set(proofOfWorkChallengeSessionKey, challenge)
 	s.Set(proofOfWorkExpiresSessionKey, expiresAt.Unix())
 	s.Set(proofOfWorkNextSessionKey, next)
+	s.Set(proofOfWorkDifficultySessionKey, difficulty)
 
 	data["HideNav"] = true
 	setProofOfWorkPageTitle(data)
 	data["PoWChallenge"] = challenge
-	data["PoWDifficulty"] = config.Difficulty
+	data["PoWDifficulty"] = difficulty
 	data["PoWExpiresAt"] = expiresAt.Unix()
 
 	t.HTML(http.StatusForbidden, "pow")
+}
+
+func challengeTTLForDifficulty(ttl time.Duration, difficulty int) time.Duration {
+	if difficulty <= proofOfWorkDifficultyTTLRelaxThreshold {
+		return ttl
+	}
+
+	extraBits := difficulty - proofOfWorkDifficultyTTLRelaxThreshold
+	maxDuration := time.Duration(1<<63 - 1)
+
+	for range extraBits {
+		if ttl > maxDuration/2 {
+			return maxDuration
+		}
+
+		ttl *= 2
+	}
+
+	return ttl
 }
 
 // PowVerify checks a browser-computed proof and unlocks the session.
@@ -118,6 +184,11 @@ func PowVerify(config ProofOfWorkConfig) flamego.Handler {
 	normalized := normalizeProofOfWorkConfig(config)
 
 	return func(c flamego.Context, s session.Session) {
+		verifyDifficulty := normalized.MediumDifficulty
+		if sessionDifficulty, ok := sessionIntValue(s.Get(proofOfWorkDifficultySessionKey)); ok {
+			verifyDifficulty = clampProofOfWorkDifficulty(sessionDifficulty)
+		}
+
 		challenge, ok := s.Get(proofOfWorkChallengeSessionKey).(string)
 		if !ok || challenge == "" {
 			writeJSONError(c, http.StatusBadRequest, "challenge missing")
@@ -169,7 +240,7 @@ func PowVerify(config ProofOfWorkConfig) flamego.Handler {
 			return
 		}
 
-		if !verifyProofOfWork(challenge, req.Nonce, normalized.Difficulty) {
+		if !verifyProofOfWork(challenge, req.Nonce, verifyDifficulty) {
 			writeJSONError(c, http.StatusUnauthorized, "invalid proof")
 			return
 		}
@@ -198,6 +269,10 @@ func isProofOfWorkExemptPath(request *http.Request) bool {
 		return true
 	}
 
+	return isExtensionPath(path)
+}
+
+func isExtensionPath(path string) bool {
 	return path == "/ext" || strings.HasPrefix(path, "/ext/")
 }
 
@@ -213,20 +288,40 @@ func clearProofOfWorkChallenge(s session.Session) {
 	s.Delete(proofOfWorkChallengeSessionKey)
 	s.Delete(proofOfWorkExpiresSessionKey)
 	s.Delete(proofOfWorkNextSessionKey)
+	s.Delete(proofOfWorkDifficultySessionKey)
 }
 
 func normalizeProofOfWorkConfig(config ProofOfWorkConfig) ProofOfWorkConfig {
 	normalized := config
-	if normalized.Difficulty == 0 {
-		normalized.Difficulty = DefaultProofOfWorkDifficulty
+
+	if normalized.MediumDifficulty == 0 {
+		normalized.MediumDifficulty = normalized.Difficulty
 	}
 
-	if normalized.Difficulty < proofOfWorkMinDifficulty {
-		normalized.Difficulty = proofOfWorkMinDifficulty
+	if normalized.MediumDifficulty == 0 {
+		normalized.MediumDifficulty = DefaultProofOfWorkMediumDifficulty
 	}
 
-	if normalized.Difficulty > proofOfWorkMaxDifficulty {
-		normalized.Difficulty = proofOfWorkMaxDifficulty
+	normalized.MediumDifficulty = clampProofOfWorkDifficulty(normalized.MediumDifficulty)
+
+	if normalized.EasyDifficulty == 0 {
+		normalized.EasyDifficulty = DefaultProofOfWorkEasyDifficulty
+	}
+
+	normalized.EasyDifficulty = clampProofOfWorkDifficulty(normalized.EasyDifficulty)
+
+	if normalized.HardDifficulty == 0 {
+		normalized.HardDifficulty = DefaultProofOfWorkHardDifficulty
+	}
+
+	normalized.HardDifficulty = clampProofOfWorkDifficulty(normalized.HardDifficulty)
+
+	normalized.Difficulty = normalized.MediumDifficulty
+
+	if normalized.ResolveClientASN == nil {
+		normalized.ResolveClientASN = func(*http.Request) (uint32, string, bool) {
+			return 0, "", false
+		}
 	}
 
 	if normalized.TTL <= 0 {
@@ -234,6 +329,58 @@ func normalizeProofOfWorkConfig(config ProofOfWorkConfig) ProofOfWorkConfig {
 	}
 
 	return normalized
+}
+
+func clampProofOfWorkDifficulty(difficulty int) int {
+	if difficulty < proofOfWorkMinDifficulty {
+		return proofOfWorkMinDifficulty
+	}
+
+	if difficulty > proofOfWorkMaxDifficulty {
+		return proofOfWorkMaxDifficulty
+	}
+
+	return difficulty
+}
+
+func (config ProofOfWorkConfig) difficultyForRisk(level proofOfWorkRiskLevel) int {
+	switch level {
+	case proofOfWorkRiskLow:
+		return config.EasyDifficulty
+	case proofOfWorkRiskMedium:
+		return config.MediumDifficulty
+	case proofOfWorkRiskHigh:
+		return config.HardDifficulty
+	default:
+		return config.MediumDifficulty
+	}
+}
+
+func resolveRequestRisk(request *http.Request, config ProofOfWorkConfig) proofOfWorkRequestRisk {
+	if request == nil || config.ResolveClientASN == nil {
+		return proofOfWorkRequestRisk{level: proofOfWorkRiskMedium}
+	}
+
+	asn, country, ok := config.ResolveClientASN(request)
+	if !ok {
+		return proofOfWorkRequestRisk{level: proofOfWorkRiskMedium}
+	}
+
+	country = strings.ToUpper(strings.TrimSpace(country))
+
+	if _, exists := config.HighRiskCountries[country]; exists {
+		return proofOfWorkRequestRisk{asn: asn, asnKnown: true, level: proofOfWorkRiskHigh}
+	}
+
+	if _, exists := config.HighRiskASNs[asn]; exists {
+		return proofOfWorkRequestRisk{asn: asn, asnKnown: true, level: proofOfWorkRiskHigh}
+	}
+
+	if _, exists := config.LowRiskASNs[asn]; exists {
+		return proofOfWorkRequestRisk{asn: asn, asnKnown: true, level: proofOfWorkRiskLow}
+	}
+
+	return proofOfWorkRequestRisk{asn: asn, asnKnown: true, level: proofOfWorkRiskMedium}
 }
 
 func generateProofOfWorkChallenge() (string, error) {
@@ -286,6 +433,19 @@ func sessionInt64Value(raw interface{}) (int64, bool) {
 		return int64(value), true
 	case float64:
 		return int64(value), true
+	default:
+		return 0, false
+	}
+}
+
+func sessionIntValue(raw interface{}) (int, bool) {
+	switch value := raw.(type) {
+	case int:
+		return value, true
+	case int64:
+		return int(value), true
+	case float64:
+		return int(value), true
 	default:
 		return 0, false
 	}

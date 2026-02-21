@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/flamego/flamego"
 	"github.com/flamego/session"
@@ -51,6 +52,16 @@ func newProofOfWorkTestApp(s session.Session, config ProofOfWorkConfig) *flamego
 	})
 
 	return f
+}
+
+func fixedASNResolver(asn uint32, country string, known bool) ClientASNResolver {
+	return func(*http.Request) (uint32, string, bool) {
+		if !known {
+			return 0, "", false
+		}
+
+		return asn, country, true
+	}
 }
 
 func TestRequireProofOfWorkRendersChallengeAtRequestedPath(t *testing.T) {
@@ -99,11 +110,15 @@ func TestRequireProofOfWorkRedirectsUnverifiedPostRequest(t *testing.T) {
 	}
 }
 
-func TestRequireProofOfWorkSkipsExtensionEndpoints(t *testing.T) {
+func TestRequireProofOfWorkSkipsExtensionEndpointsForAllowedASN(t *testing.T) {
 	t.Parallel()
 
 	s := newTestSession()
-	f := newProofOfWorkTestApp(s, ProofOfWorkConfig{Difficulty: 8})
+	f := newProofOfWorkTestApp(s, ProofOfWorkConfig{
+		Difficulty:       8,
+		LowRiskASNs:      map[uint32]struct{}{64512: {}},
+		ResolveClientASN: fixedASNResolver(64512, "US", true),
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/ext/validate", nil)
 	rec := httptest.NewRecorder()
@@ -112,6 +127,47 @@ func TestRequireProofOfWorkSkipsExtensionEndpoints(t *testing.T) {
 
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("expected status %d, got %d", http.StatusNoContent, rec.Code)
+	}
+}
+
+func TestRequireProofOfWorkBlocksExtensionEndpointsForDisallowedASN(t *testing.T) {
+	t.Parallel()
+
+	s := newTestSession()
+	f := newProofOfWorkTestApp(s, ProofOfWorkConfig{
+		Difficulty:       8,
+		LowRiskASNs:      map[uint32]struct{}{64512: {}},
+		ResolveClientASN: fixedASNResolver(64513, "US", true),
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/ext/validate", nil)
+	rec := httptest.NewRecorder()
+
+	f.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+}
+
+func TestRequireProofOfWorkBlocksExtensionEndpointsForHighRiskCountry(t *testing.T) {
+	t.Parallel()
+
+	s := newTestSession()
+	f := newProofOfWorkTestApp(s, ProofOfWorkConfig{
+		Difficulty:        8,
+		LowRiskASNs:       map[uint32]struct{}{64512: {}},
+		HighRiskCountries: map[string]struct{}{"CN": {}},
+		ResolveClientASN:  fixedASNResolver(64512, "CN", true),
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/ext/validate", nil)
+	rec := httptest.NewRecorder()
+
+	f.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
 	}
 }
 
@@ -267,5 +323,165 @@ func TestProofOfWorkVerifyRejectsOversizedPayload(t *testing.T) {
 
 	if got := s.Get(proofOfWorkChallengeSessionKey); got != nil {
 		t.Fatalf("expected challenge to be cleared after oversized request, got %#v", got)
+	}
+}
+
+func TestRequireProofOfWorkUsesRiskSpecificDifficulty(t *testing.T) {
+	t.Parallel()
+
+	const (
+		easyDifficulty   = 9
+		mediumDifficulty = 13
+		hardDifficulty   = 17
+	)
+
+	tests := []struct {
+		name        string
+		resolverASN uint32
+		country     string
+		resolverOK  bool
+		config      ProofOfWorkConfig
+		want        int
+	}{
+		{
+			name:        "low risk ASN uses easy difficulty",
+			resolverASN: 64496,
+			country:     "US",
+			resolverOK:  true,
+			config: ProofOfWorkConfig{
+				EasyDifficulty:   easyDifficulty,
+				MediumDifficulty: mediumDifficulty,
+				HardDifficulty:   hardDifficulty,
+				LowRiskASNs:      map[uint32]struct{}{64496: {}},
+			},
+			want: easyDifficulty,
+		},
+		{
+			name:        "high risk ASN uses hard difficulty",
+			resolverASN: 64497,
+			country:     "US",
+			resolverOK:  true,
+			config: ProofOfWorkConfig{
+				EasyDifficulty:   easyDifficulty,
+				MediumDifficulty: mediumDifficulty,
+				HardDifficulty:   hardDifficulty,
+				HighRiskASNs:     map[uint32]struct{}{64497: {}},
+			},
+			want: hardDifficulty,
+		},
+		{
+			name:        "high risk country uses hard difficulty",
+			resolverASN: 64498,
+			country:     "CN",
+			resolverOK:  true,
+			config: ProofOfWorkConfig{
+				EasyDifficulty:    easyDifficulty,
+				MediumDifficulty:  mediumDifficulty,
+				HardDifficulty:    hardDifficulty,
+				HighRiskCountries: map[string]struct{}{"CN": {}},
+			},
+			want: hardDifficulty,
+		},
+		{
+			name:       "unknown ASN uses medium difficulty",
+			resolverOK: false,
+			config: ProofOfWorkConfig{
+				EasyDifficulty:   easyDifficulty,
+				MediumDifficulty: mediumDifficulty,
+				HardDifficulty:   hardDifficulty,
+			},
+			want: mediumDifficulty,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			s := newTestSession()
+
+			config := tc.config
+			config.ResolveClientASN = fixedASNResolver(tc.resolverASN, tc.country, tc.resolverOK)
+
+			f := newProofOfWorkTestApp(s, config)
+
+			req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+			rec := httptest.NewRecorder()
+
+			f.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+			}
+
+			got, ok := sessionIntValue(s.Get(proofOfWorkDifficultySessionKey))
+			if !ok {
+				t.Fatal("expected proof-of-work difficulty in session")
+			}
+
+			if got != tc.want {
+				t.Fatalf("unexpected difficulty: got %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestChallengeTTLForDifficulty(t *testing.T) {
+	t.Parallel()
+
+	baseTTL := time.Minute
+
+	tests := []struct {
+		name       string
+		difficulty int
+		want       time.Duration
+	}{
+		{name: "difficulty at threshold keeps base ttl", difficulty: proofOfWorkDifficultyTTLRelaxThreshold, want: baseTTL},
+		{name: "difficulty above threshold doubles ttl", difficulty: proofOfWorkDifficultyTTLRelaxThreshold + 1, want: 2 * baseTTL},
+		{name: "difficulty two above threshold quadruples ttl", difficulty: proofOfWorkDifficultyTTLRelaxThreshold + 2, want: 4 * baseTTL},
+		{name: "difficulty six above threshold scales exponentially", difficulty: proofOfWorkDifficultyTTLRelaxThreshold + 6, want: 64 * baseTTL},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := challengeTTLForDifficulty(baseTTL, tc.difficulty)
+			if got != tc.want {
+				t.Fatalf("unexpected ttl: got %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRequireProofOfWorkExtendsTTLForHighDifficulty(t *testing.T) {
+	t.Parallel()
+
+	config := ProofOfWorkConfig{Difficulty: proofOfWorkDifficultyTTLRelaxThreshold + 1, TTL: time.Minute}
+	s := newTestSession()
+	f := newProofOfWorkTestApp(s, config)
+
+	before := time.Now().Unix()
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	rec := httptest.NewRecorder()
+
+	f.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	}
+
+	expiresAt, ok := sessionInt64Value(s.Get(proofOfWorkExpiresSessionKey))
+	if !ok {
+		t.Fatal("expected challenge expiry in session")
+	}
+
+	after := time.Now().Unix()
+	expectedTTLSeconds := int64((2 * time.Minute).Seconds())
+	lowerBound := before + expectedTTLSeconds - 1
+	upperBound := after + expectedTTLSeconds + 1
+
+	if expiresAt < lowerBound || expiresAt > upperBound {
+		t.Fatalf("unexpected challenge expiry: got %d, expected between %d and %d", expiresAt, lowerBound, upperBound)
 	}
 }
