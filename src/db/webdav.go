@@ -52,6 +52,18 @@ type WebDAVEntry struct {
 	IsAdminOnly bool
 }
 
+// WebDAVFileStream carries a streamed file body and HTTP metadata.
+type WebDAVFileStream struct {
+	Reader        io.ReadCloser
+	ContentType   string
+	StatusCode    int
+	AcceptRanges  string
+	ContentRange  string
+	ContentLength string
+	ETag          string
+	LastModified  string
+}
+
 // GetWebDAVConfig loads WebDAV configuration from environment
 func GetWebDAVConfig() (*WebDAVConfig, error) {
 	username := os.Getenv("WEBDAV_USERNAME")
@@ -223,6 +235,36 @@ func OpenInventoryFile(ctx context.Context, inventoryID string, filename string)
 	return resp.Body, contentType, nil
 }
 
+// OpenInventoryFileStream opens an inventory file stream with optional Range request passthrough.
+func OpenInventoryFileStream(
+	ctx context.Context,
+	inventoryID string,
+	filename string,
+	rangeHeader string,
+	ifRangeHeader string,
+) (WebDAVFileStream, error) {
+	config, err := GetWebDAVConfig()
+	if err != nil {
+		return WebDAVFileStream{}, err
+	}
+
+	if config.InvPath == "" {
+		return WebDAVFileStream{}, ErrWebDAVInventoryPathNotConfigured
+	}
+
+	entryURL, err := inventoryEntryURL(config, inventoryID, filename)
+	if err != nil {
+		return WebDAVFileStream{}, fmt.Errorf("failed to build inventory file URL: %w", err)
+	}
+
+	stream, err := openWebDAVFileStream(ctx, config, entryURL, filename, rangeHeader, ifRangeHeader)
+	if err != nil {
+		return WebDAVFileStream{}, fmt.Errorf("failed to fetch file: %w", err)
+	}
+
+	return stream, nil
+}
+
 // ListFilesEntries lists files and directories in the WebDAV files directory.
 func ListFilesEntries(ctx context.Context, dirPath string) ([]WebDAVEntry, error) {
 	config, err := GetWebDAVConfig()
@@ -339,6 +381,35 @@ func OpenFilesFile(ctx context.Context, filePath string) (io.ReadCloser, string,
 	return reader, contentType, nil
 }
 
+// OpenFilesFileStream opens a files directory stream with optional Range request passthrough.
+func OpenFilesFileStream(
+	ctx context.Context,
+	filePath string,
+	rangeHeader string,
+	ifRangeHeader string,
+) (WebDAVFileStream, error) {
+	config, err := GetWebDAVConfig()
+	if err != nil {
+		return WebDAVFileStream{}, err
+	}
+
+	if config.FilesPath == "" {
+		return WebDAVFileStream{}, ErrWebDAVFilesPathNotConfigured
+	}
+
+	entryURL, err := filesEntryURL(config, filePath)
+	if err != nil {
+		return WebDAVFileStream{}, fmt.Errorf("failed to build files entry URL: %w", err)
+	}
+
+	stream, err := openWebDAVFileStream(ctx, config, entryURL, filePath, rangeHeader, ifRangeHeader)
+	if err != nil {
+		return WebDAVFileStream{}, fmt.Errorf("failed to fetch WebDAV file: %w", err)
+	}
+
+	return stream, nil
+}
+
 // FetchPublicFile downloads a file from the public WebDAV directory.
 func FetchPublicFile(ctx context.Context, filePath string) ([]byte, string, error) {
 	reader, contentType, err := OpenPublicFile(ctx, filePath)
@@ -384,6 +455,35 @@ func OpenPublicFile(ctx context.Context, filePath string) (io.ReadCloser, string
 	contentType := inferContentType(filePath)
 
 	return reader, contentType, nil
+}
+
+// OpenPublicFileStream opens a public directory stream with optional Range request passthrough.
+func OpenPublicFileStream(
+	ctx context.Context,
+	filePath string,
+	rangeHeader string,
+	ifRangeHeader string,
+) (WebDAVFileStream, error) {
+	config, err := GetWebDAVConfig()
+	if err != nil {
+		return WebDAVFileStream{}, err
+	}
+
+	if config.PublicPath == "" {
+		return WebDAVFileStream{}, ErrWebDAVPublicPathNotConfigured
+	}
+
+	entryURL, err := publicEntryURL(config, filePath)
+	if err != nil {
+		return WebDAVFileStream{}, fmt.Errorf("failed to build public entry URL: %w", err)
+	}
+
+	stream, err := openWebDAVFileStream(ctx, config, entryURL, filePath, rangeHeader, ifRangeHeader)
+	if err != nil {
+		return WebDAVFileStream{}, fmt.Errorf("failed to fetch WebDAV file: %w", err)
+	}
+
+	return stream, nil
 }
 
 // StatPublicFile returns metadata for a file or directory in the public WebDAV directory.
@@ -1070,12 +1170,100 @@ func putFilesEntryIfMatch(
 	}
 }
 
-func filesEntryURL(config *WebDAVConfig, entryPath string) (string, error) {
-	basePath := strings.TrimRight(config.FilesPath, "/") + "/"
+func openWebDAVFileStream(
+	ctx context.Context,
+	config *WebDAVConfig,
+	entryURL string,
+	filename string,
+	rangeHeader string,
+	ifRangeHeader string,
+) (WebDAVFileStream, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, entryURL, nil)
+	if err != nil {
+		return WebDAVFileStream{}, fmt.Errorf("failed to create request: %w", err)
+	}
 
-	parsed, err := url.Parse(basePath)
+	rangeHeader = strings.TrimSpace(rangeHeader)
+	if rangeHeader != "" {
+		req.Header.Set("Range", rangeHeader)
+
+		ifRangeHeader = strings.TrimSpace(ifRangeHeader)
+		if ifRangeHeader != "" {
+			req.Header.Set("If-Range", ifRangeHeader)
+		}
+	}
+
+	httpClient := newWebDAVHTTPClient(config)
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return WebDAVFileStream{}, fmt.Errorf("failed to fetch file: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK &&
+		resp.StatusCode != http.StatusPartialContent &&
+		resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				logger.Warn("Failed to close WebDAV file response body", "error", err)
+			}
+		}()
+
+		return WebDAVFileStream{}, fmt.Errorf("%w: HTTP %d", ErrFetchFileFailed, resp.StatusCode)
+	}
+
+	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
+	if contentType == "" {
+		contentType = inferContentType(filename)
+	}
+
+	return WebDAVFileStream{
+		Reader:        resp.Body,
+		ContentType:   contentType,
+		StatusCode:    resp.StatusCode,
+		AcceptRanges:  strings.TrimSpace(resp.Header.Get("Accept-Ranges")),
+		ContentRange:  strings.TrimSpace(resp.Header.Get("Content-Range")),
+		ContentLength: strings.TrimSpace(resp.Header.Get("Content-Length")),
+		ETag:          strings.TrimSpace(resp.Header.Get("ETag")),
+		LastModified:  strings.TrimSpace(resp.Header.Get("Last-Modified")),
+	}, nil
+}
+
+func filesEntryURL(config *WebDAVConfig, entryPath string) (string, error) {
+	urlValue, err := webDAVEntryURL(config.FilesPath, entryPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse files base path: %w", err)
+	}
+
+	return urlValue, nil
+}
+
+func publicEntryURL(config *WebDAVConfig, entryPath string) (string, error) {
+	urlValue, err := webDAVEntryURL(config.PublicPath, entryPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse public base path: %w", err)
+	}
+
+	return urlValue, nil
+}
+
+func inventoryEntryURL(config *WebDAVConfig, inventoryID string, filename string) (string, error) {
+	entryPath := path.Join(inventoryID, filename)
+
+	urlValue, err := webDAVEntryURL(config.InvPath, entryPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse inventory base path: %w", err)
+	}
+
+	return urlValue, nil
+}
+
+func webDAVEntryURL(basePath string, entryPath string) (string, error) {
+	base := strings.TrimRight(basePath, "/") + "/"
+
+	parsed, err := url.Parse(base)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse webdav base path: %w", err)
 	}
 
 	if entryPath == "" {

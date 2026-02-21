@@ -286,6 +286,117 @@ func TestGetSessionUserID(t *testing.T) {
 	}
 }
 
+func TestShouldRememberLogin(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]bool{
+		"":      true,
+		"1":     true,
+		"true":  true,
+		"yes":   true,
+		"on":    true,
+		"0":     false,
+		"false": false,
+		"off":   false,
+		"no":    false,
+	}
+
+	for raw, want := range tests {
+		if got := shouldRememberLogin(raw); got != want {
+			t.Fatalf("shouldRememberLogin(%q) = %v, want %v", raw, got, want)
+		}
+	}
+}
+
+func TestIsSessionAuthenticated(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.February, 11, 10, 0, 0, 0, time.UTC)
+
+	t.Run("missing authenticated flag", func(t *testing.T) {
+		t.Parallel()
+
+		s := newTestSession()
+		if isSessionAuthenticated(s, now) {
+			t.Fatal("expected missing auth flag to be unauthenticated")
+		}
+	})
+
+	t.Run("authenticated with no expiry remains valid", func(t *testing.T) {
+		t.Parallel()
+
+		s := newTestSession()
+		s.Set("authenticated", true)
+		s.Set("user_id", "user-123")
+
+		if !isSessionAuthenticated(s, now) {
+			t.Fatal("expected authenticated session without expiry to remain valid")
+		}
+	})
+
+	t.Run("authenticated with future expiry remains valid", func(t *testing.T) {
+		t.Parallel()
+
+		s := newTestSession()
+		s.Set("authenticated", true)
+		s.Set(authenticatedExpiresAtSessionKey, now.Add(time.Minute).Unix())
+
+		if !isSessionAuthenticated(s, now) {
+			t.Fatal("expected session with future auth expiry to remain authenticated")
+		}
+	})
+
+	t.Run("authenticated with expired timestamp is cleared", func(t *testing.T) {
+		t.Parallel()
+
+		s := newTestSession()
+		s.Set("authenticated", true)
+		s.Set("user_id", "user-123")
+		s.Set("user_display_name", "User")
+		s.Set("user_is_admin", true)
+		s.Set("userID", "user-123")
+		s.Set("private_mode", true)
+		s.Set(sensitiveAccessSessionKey, now.Unix())
+		s.Set(authenticatedExpiresAtSessionKey, now.Add(-time.Second).Unix())
+
+		if isSessionAuthenticated(s, now) {
+			t.Fatal("expected session with expired auth timestamp to be unauthenticated")
+		}
+
+		for _, key := range []string{
+			"authenticated",
+			"user_id",
+			"user_display_name",
+			"user_is_admin",
+			"userID",
+			"private_mode",
+			sensitiveAccessSessionKey,
+			authenticatedExpiresAtSessionKey,
+		} {
+			if got := s.Get(key); got != nil {
+				t.Fatalf("expected %q to be cleared, got %#v", key, got)
+			}
+		}
+	})
+
+	t.Run("authenticated with invalid expiry is cleared", func(t *testing.T) {
+		t.Parallel()
+
+		s := newTestSession()
+		s.Set("authenticated", true)
+		s.Set("user_id", "user-123")
+		s.Set(authenticatedExpiresAtSessionKey, "invalid")
+
+		if isSessionAuthenticated(s, now) {
+			t.Fatal("expected session with invalid auth expiry to be unauthenticated")
+		}
+
+		if s.Get("authenticated") != nil {
+			t.Fatal("expected authenticated flag to be cleared")
+		}
+	})
+}
+
 func TestSplitEnvList(t *testing.T) {
 	t.Parallel()
 

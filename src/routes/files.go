@@ -35,6 +35,7 @@ var (
 	filesIsPathAdminOnlyFn  = db.IsFilesPathAdminOnly
 	filesIsPathRestrictedFn = db.IsFilesPathRestricted
 	filesListEntriesFn      = db.ListFilesEntries
+	filesOpenFileStreamFn   = db.OpenFilesFileStream
 )
 
 // FilesList renders the WebDAV files listing page.
@@ -711,7 +712,10 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 		return
 	}
 
-	fileReader, contentType, err := db.OpenFilesFile(ctx, relPath)
+	rangeHeader := strings.TrimSpace(c.Request().Header.Get("Range"))
+	ifRangeHeader := strings.TrimSpace(c.Request().Header.Get("If-Range"))
+
+	fileStream, err := filesOpenFileStreamFn(ctx, relPath, rangeHeader, ifRangeHeader)
 	if err != nil {
 		logger.Error("Error fetching WebDAV file", "path", relPath, "error", err)
 		SetErrorFlash(s, "File not found")
@@ -721,7 +725,7 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 	}
 
 	defer func() {
-		if err := fileReader.Close(); err != nil {
+		if err := fileStream.Reader.Close(); err != nil {
 			logger.Error("Error closing WebDAV file stream", "path", relPath, "error", err)
 		}
 	}()
@@ -735,19 +739,25 @@ func DownloadFilesFile(c flamego.Context, s session.Session) {
 		contentDisposition = "attachment"
 	}
 
-	responseContentType := fileResponseContentType(contentType, downloadRequested)
+	responseContentType := fileResponseContentType(fileStream.ContentType, downloadRequested)
 
 	headers := c.ResponseWriter().Header()
 	headers.Set("Content-Type", responseContentType)
 	headers.Set("Content-Disposition", contentDisposition+"; filename=\""+filename+"\"")
+	applyWebDAVStreamHeaders(headers, fileStream)
 
 	if downloadRequested {
 		headers.Set("X-Content-Type-Options", "nosniff")
 	}
 
-	c.ResponseWriter().WriteHeader(http.StatusOK)
+	statusCode := fileStream.StatusCode
+	if statusCode == 0 {
+		statusCode = http.StatusOK
+	}
 
-	if _, err := io.Copy(c.ResponseWriter(), fileReader); err != nil {
+	c.ResponseWriter().WriteHeader(statusCode)
+
+	if _, err := io.Copy(c.ResponseWriter(), fileStream.Reader); err != nil {
 		logger.Error("Error writing file response", "path", relPath, "error", err)
 	}
 }
@@ -1748,4 +1758,26 @@ func fileResponseContentType(contentType string, downloadRequested bool) string 
 	}
 
 	return contentType
+}
+
+func applyWebDAVStreamHeaders(headers http.Header, stream db.WebDAVFileStream) {
+	if stream.AcceptRanges != "" {
+		headers.Set("Accept-Ranges", stream.AcceptRanges)
+	}
+
+	if stream.ContentRange != "" {
+		headers.Set("Content-Range", stream.ContentRange)
+	}
+
+	if stream.ContentLength != "" {
+		headers.Set("Content-Length", stream.ContentLength)
+	}
+
+	if stream.ETag != "" {
+		headers.Set("ETag", stream.ETag)
+	}
+
+	if stream.LastModified != "" {
+		headers.Set("Last-Modified", stream.LastModified)
+	}
 }

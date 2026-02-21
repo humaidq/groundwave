@@ -256,9 +256,20 @@
         var finishUrl = button.getAttribute("data-finish-url");
         var redirectUrl = button.getAttribute("data-redirect-url");
         var nextPath = button.getAttribute("data-next-path") || "";
+        var rememberInput = button.getAttribute("data-remember-input");
         var finishWithNext = finishUrl;
+        var queryParams = [];
         if (nextPath) {
-          finishWithNext += "?next=" + encodeURIComponent(nextPath);
+          queryParams.push("next=" + encodeURIComponent(nextPath));
+        }
+        if (rememberInput) {
+          var rememberField = document.querySelector(rememberInput);
+          if (rememberField) {
+            queryParams.push("remember=" + (rememberField.checked ? "1" : "0"));
+          }
+        }
+        if (queryParams.length > 0) {
+          finishWithNext += (finishWithNext.indexOf("?") === -1 ? "?" : "&") + queryParams.join("&");
         }
         return postJSON(startUrl, {}).then(function(options) {
           decodeRequestOptions(options);

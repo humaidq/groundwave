@@ -257,12 +257,12 @@ func TestPublicFilesViewReturnsNotFoundForEmptyPath(t *testing.T) {
 func TestPublicFilesRawDownloadHeaders(t *testing.T) {
 	originalStatFn := publicFilesStatFn
 	originalFetchFn := publicFilesFetchFn
-	originalOpenFn := publicFilesOpenFn
+	originalOpenStreamFn := publicFilesOpenStreamFn
 
 	t.Cleanup(func() {
 		publicFilesStatFn = originalStatFn
 		publicFilesFetchFn = originalFetchFn
-		publicFilesOpenFn = originalOpenFn
+		publicFilesOpenStreamFn = originalOpenStreamFn
 	})
 
 	publicFilesStatFn = func(context.Context, string) (db.WebDAVEntry, error) {
@@ -273,8 +273,12 @@ func TestPublicFilesRawDownloadHeaders(t *testing.T) {
 
 		return nil, "", nil
 	}
-	publicFilesOpenFn = func(context.Context, string) (io.ReadCloser, string, error) {
-		return io.NopCloser(bytes.NewReader([]byte("abc"))), "text/plain", nil
+	publicFilesOpenStreamFn = func(context.Context, string, string, string) (db.WebDAVFileStream, error) {
+		return db.WebDAVFileStream{
+			Reader:      io.NopCloser(bytes.NewReader([]byte("abc"))),
+			ContentType: "text/plain",
+			StatusCode:  http.StatusOK,
+		}, nil
 	}
 
 	tpl := &publicFilesTemplateStub{}
@@ -310,12 +314,12 @@ func TestPublicFilesRawDownloadHeaders(t *testing.T) {
 func TestPublicFilesPreviewServesInlinePDF(t *testing.T) {
 	originalStatFn := publicFilesStatFn
 	originalFetchFn := publicFilesFetchFn
-	originalOpenFn := publicFilesOpenFn
+	originalOpenStreamFn := publicFilesOpenStreamFn
 
 	t.Cleanup(func() {
 		publicFilesStatFn = originalStatFn
 		publicFilesFetchFn = originalFetchFn
-		publicFilesOpenFn = originalOpenFn
+		publicFilesOpenStreamFn = originalOpenStreamFn
 	})
 
 	publicFilesStatFn = func(context.Context, string) (db.WebDAVEntry, error) {
@@ -326,8 +330,12 @@ func TestPublicFilesPreviewServesInlinePDF(t *testing.T) {
 
 		return nil, "", nil
 	}
-	publicFilesOpenFn = func(context.Context, string) (io.ReadCloser, string, error) {
-		return io.NopCloser(bytes.NewReader([]byte("%PDF-1.4"))), "application/pdf", nil
+	publicFilesOpenStreamFn = func(context.Context, string, string, string) (db.WebDAVFileStream, error) {
+		return db.WebDAVFileStream{
+			Reader:      io.NopCloser(bytes.NewReader([]byte("%PDF-1.4"))),
+			ContentType: "application/pdf",
+			StatusCode:  http.StatusOK,
+		}, nil
 	}
 
 	tpl := &publicFilesTemplateStub{}
@@ -355,6 +363,81 @@ func TestPublicFilesPreviewServesInlinePDF(t *testing.T) {
 	}
 
 	if got := rec.Body.String(); got != "%PDF-1.4" {
+		t.Fatalf("unexpected response body: %q", got)
+	}
+}
+
+//nolint:paralleltest // Overrides package-level DB function variables.
+func TestPublicFilesPreviewPassesThroughRangeResponse(t *testing.T) {
+	originalStatFn := publicFilesStatFn
+	originalOpenStreamFn := publicFilesOpenStreamFn
+
+	t.Cleanup(func() {
+		publicFilesStatFn = originalStatFn
+		publicFilesOpenStreamFn = originalOpenStreamFn
+	})
+
+	publicFilesStatFn = func(context.Context, string) (db.WebDAVEntry, error) {
+		return db.WebDAVEntry{Name: "clip.mp4", IsDir: false}, nil
+	}
+
+	publicFilesOpenStreamFn = func(_ context.Context, _ string, rangeHeader string, ifRangeHeader string) (db.WebDAVFileStream, error) {
+		if rangeHeader != "bytes=5-8" {
+			t.Fatalf("expected range header %q, got %q", "bytes=5-8", rangeHeader)
+		}
+
+		if ifRangeHeader != "\"etag-123\"" {
+			t.Fatalf("expected if-range header %q, got %q", "\"etag-123\"", ifRangeHeader)
+		}
+
+		return db.WebDAVFileStream{
+			Reader:        io.NopCloser(bytes.NewReader([]byte("data"))),
+			ContentType:   "video/mp4",
+			StatusCode:    http.StatusPartialContent,
+			AcceptRanges:  "bytes",
+			ContentRange:  "bytes 5-8/100",
+			ContentLength: "4",
+			ETag:          "\"etag-123\"",
+			LastModified:  "Wed, 21 Oct 2015 07:28:00 GMT",
+		}, nil
+	}
+
+	tpl := &publicFilesTemplateStub{}
+	data := template.Data{}
+	f := newPublicFilesTestApp(tpl, data)
+
+	req := httptest.NewRequest(http.MethodGet, "/f/preview/clip.mp4", nil)
+	req.Header.Set("Range", "bytes=5-8")
+	req.Header.Set("If-Range", "\"etag-123\"")
+
+	rec := httptest.NewRecorder()
+	f.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusPartialContent {
+		t.Fatalf("expected status %d, got %d", http.StatusPartialContent, rec.Code)
+	}
+
+	if got := rec.Header().Get("Accept-Ranges"); got != "bytes" {
+		t.Fatalf("unexpected accept-ranges: %q", got)
+	}
+
+	if got := rec.Header().Get("Content-Range"); got != "bytes 5-8/100" {
+		t.Fatalf("unexpected content-range: %q", got)
+	}
+
+	if got := rec.Header().Get("Content-Length"); got != "4" {
+		t.Fatalf("unexpected content-length: %q", got)
+	}
+
+	if got := rec.Header().Get("ETag"); got != "\"etag-123\"" {
+		t.Fatalf("unexpected etag: %q", got)
+	}
+
+	if got := rec.Header().Get("Last-Modified"); got != "Wed, 21 Oct 2015 07:28:00 GMT" {
+		t.Fatalf("unexpected last-modified: %q", got)
+	}
+
+	if got := rec.Body.String(); got != "data" {
 		t.Fatalf("unexpected response body: %q", got)
 	}
 }

@@ -19,9 +19,9 @@ import (
 )
 
 var (
-	publicFilesStatFn  = db.StatPublicFile
-	publicFilesFetchFn = db.FetchPublicFile
-	publicFilesOpenFn  = db.OpenPublicFile
+	publicFilesStatFn       = db.StatPublicFile
+	publicFilesFetchFn      = db.FetchPublicFile
+	publicFilesOpenStreamFn = db.OpenPublicFileStream
 )
 
 const maxPublicFilesPathDecodePasses = 8
@@ -140,7 +140,10 @@ func PublicFilesPreview(c flamego.Context) {
 		return
 	}
 
-	fileReader, contentType, err := publicFilesOpenFn(ctx, relPath)
+	rangeHeader := strings.TrimSpace(c.Request().Header.Get("Range"))
+	ifRangeHeader := strings.TrimSpace(c.Request().Header.Get("If-Range"))
+
+	fileStream, err := publicFilesOpenStreamFn(ctx, relPath, rangeHeader, ifRangeHeader)
 	if err != nil {
 		logger.Error("Error fetching public preview file", "path", relPath, "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusNotFound)
@@ -149,7 +152,7 @@ func PublicFilesPreview(c flamego.Context) {
 	}
 
 	defer func() {
-		if err := fileReader.Close(); err != nil {
+		if err := fileStream.Reader.Close(); err != nil {
 			logger.Error("Error closing public preview file stream", "path", relPath, "error", err)
 		}
 	}()
@@ -157,13 +160,19 @@ func PublicFilesPreview(c flamego.Context) {
 	filename := sanitizeFilenameForHeader(path.Base(relPath))
 
 	headers := c.ResponseWriter().Header()
-	headers.Set("Content-Type", normalizePublicPreviewContentType(contentType, viewerType))
+	headers.Set("Content-Type", normalizePublicPreviewContentType(fileStream.ContentType, viewerType))
 	headers.Set("Content-Disposition", "inline; filename=\""+filename+"\"")
 	headers.Set("X-Content-Type-Options", "nosniff")
+	applyWebDAVStreamHeaders(headers, fileStream)
 
-	c.ResponseWriter().WriteHeader(http.StatusOK)
+	statusCode := fileStream.StatusCode
+	if statusCode == 0 {
+		statusCode = http.StatusOK
+	}
 
-	if _, err := io.Copy(c.ResponseWriter(), fileReader); err != nil {
+	c.ResponseWriter().WriteHeader(statusCode)
+
+	if _, err := io.Copy(c.ResponseWriter(), fileStream.Reader); err != nil {
 		logger.Error("Error writing public preview response", "path", relPath, "error", err)
 	}
 }
@@ -193,7 +202,10 @@ func PublicFilesRaw(c flamego.Context) {
 		return
 	}
 
-	fileReader, _, err := publicFilesOpenFn(ctx, relPath)
+	rangeHeader := strings.TrimSpace(c.Request().Header.Get("Range"))
+	ifRangeHeader := strings.TrimSpace(c.Request().Header.Get("If-Range"))
+
+	fileStream, err := publicFilesOpenStreamFn(ctx, relPath, rangeHeader, ifRangeHeader)
 	if err != nil {
 		logger.Error("Error fetching public file", "path", relPath, "error", err)
 		c.ResponseWriter().WriteHeader(http.StatusNotFound)
@@ -202,7 +214,7 @@ func PublicFilesRaw(c flamego.Context) {
 	}
 
 	defer func() {
-		if err := fileReader.Close(); err != nil {
+		if err := fileStream.Reader.Close(); err != nil {
 			logger.Error("Error closing public file stream", "path", relPath, "error", err)
 		}
 	}()
@@ -213,10 +225,16 @@ func PublicFilesRaw(c flamego.Context) {
 	headers.Set("Content-Type", "application/octet-stream")
 	headers.Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
 	headers.Set("X-Content-Type-Options", "nosniff")
+	applyWebDAVStreamHeaders(headers, fileStream)
 
-	c.ResponseWriter().WriteHeader(http.StatusOK)
+	statusCode := fileStream.StatusCode
+	if statusCode == 0 {
+		statusCode = http.StatusOK
+	}
 
-	if _, err := io.Copy(c.ResponseWriter(), fileReader); err != nil {
+	c.ResponseWriter().WriteHeader(statusCode)
+
+	if _, err := io.Copy(c.ResponseWriter(), fileStream.Reader); err != nil {
 		logger.Error("Error writing public file response", "path", relPath, "error", err)
 	}
 }

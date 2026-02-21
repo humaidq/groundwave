@@ -21,7 +21,7 @@ import (
 // UserContextInjector loads session user metadata into templates.
 func UserContextInjector() flamego.Handler {
 	return func(c flamego.Context, s session.Session, data template.Data) {
-		authenticated, _ := s.Get("authenticated").(bool)
+		authenticated := isSessionAuthenticated(s, time.Now())
 
 		data["IsAuthenticated"] = authenticated
 		if !authenticated {

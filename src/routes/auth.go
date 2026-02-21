@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/flamego/flamego"
 	"github.com/flamego/session"
@@ -21,8 +22,7 @@ func LoginForm(c flamego.Context, s session.Session, t template.Template, data t
 		next = "/"
 	}
 
-	authenticated, ok := s.Get("authenticated").(bool)
-	if ok && authenticated {
+	if isSessionAuthenticated(s, time.Now()) {
 		c.Redirect(next, http.StatusSeeOther)
 		return
 	}
@@ -35,20 +35,13 @@ func LoginForm(c flamego.Context, s session.Session, t template.Template, data t
 
 // Logout handles logout request
 func Logout(s session.Session, c flamego.Context) {
-	s.Delete("authenticated")
-	s.Delete("user_id")
-	s.Delete("user_display_name")
-	s.Delete("user_is_admin")
-	s.Delete("userID")
-	s.Delete(sensitiveAccessSessionKey)
-	s.Delete("private_mode")
+	clearAuthenticatedSession(s)
 	c.Redirect("/login")
 }
 
 // RequireAuth is a middleware that checks if user is authenticated
 func RequireAuth(s session.Session, c flamego.Context) {
-	authenticated, ok := s.Get("authenticated").(bool)
-	if !ok || !authenticated {
+	if !isSessionAuthenticated(s, time.Now()) {
 		next := sanitizeNextPath(c.Request().Header.Get("Referer"))
 		if c.Request().Method == http.MethodGet || c.Request().Method == http.MethodHead {
 			next = sanitizeNextPath(c.Request().URL.RequestURI())

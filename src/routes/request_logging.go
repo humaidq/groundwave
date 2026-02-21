@@ -85,8 +85,7 @@ func baseRequestFields(c flamego.Context, s session.Session) []interface{} {
 }
 
 func sessionAuthInfo(s session.Session) (bool, string) {
-	authenticated, ok := s.Get("authenticated").(bool)
-	if !ok || !authenticated {
+	if !isSessionAuthenticated(s, time.Now()) {
 		return false, ""
 	}
 

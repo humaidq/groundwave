@@ -31,6 +31,10 @@ const (
 	webauthnSetupSessionKey      = "webauthn_setup"
 	webauthnBreakGlassSessionKey = "webauthn_break_glass"
 
+	authenticatedExpiresAtSessionKey = "authenticated_expires_at"
+	authenticatedRememberDuration    = 14 * 24 * time.Hour
+	authenticatedShortDuration       = time.Hour
+
 	webauthnSetupUserIDKey      = "webauthn_setup_user_id"
 	webauthnSetupDisplayNameKey = "webauthn_setup_display_name"
 	webauthnSetupLabelKey       = "webauthn_setup_label"
@@ -94,8 +98,7 @@ func NewWebAuthnFromEnv() (*webauthn.WebAuthn, error) {
 
 // SetupForm renders the admin bootstrap screen.
 func SetupForm(c flamego.Context, s session.Session, t template.Template, data template.Data) {
-	authenticated, ok := s.Get("authenticated").(bool)
-	if ok && authenticated {
+	if isSessionAuthenticated(s, time.Now()) {
 		c.Redirect("/", http.StatusSeeOther)
 		return
 	}
@@ -198,8 +201,7 @@ func SetupForm(c flamego.Context, s session.Session, t template.Template, data t
 func SetupStart(c flamego.Context, s session.Session, web *webauthn.WebAuthn) {
 	ctx := c.Request().Context()
 
-	authenticated, ok := s.Get("authenticated").(bool)
-	if ok && authenticated {
+	if isSessionAuthenticated(s, time.Now()) {
 		writeJSONError(c, http.StatusForbidden, "setup not permitted")
 		return
 	}
@@ -303,8 +305,7 @@ func SetupStart(c flamego.Context, s session.Session, web *webauthn.WebAuthn) {
 func SetupFinish(c flamego.Context, s session.Session, store session.Store, web *webauthn.WebAuthn) {
 	ctx := c.Request().Context()
 
-	authenticated, ok := s.Get("authenticated").(bool)
-	if ok && authenticated {
+	if isSessionAuthenticated(s, time.Now()) {
 		writeJSONError(c, http.StatusForbidden, "setup not permitted")
 		return
 	}
@@ -389,7 +390,7 @@ func SetupFinish(c flamego.Context, s session.Session, store session.Store, web 
 		return
 	}
 
-	setAuthenticatedSession(s, createdUser)
+	setAuthenticatedSession(s, createdUser, time.Now(), true)
 	clearSetupSession(s)
 	writeJSON(c, map[string]string{"redirect": "/"})
 }
@@ -443,7 +444,8 @@ func PasskeyLoginFinish(c flamego.Context, s session.Session, store session.Stor
 		return
 	}
 
-	setAuthenticatedSession(s, waUser.user)
+	rememberLogin := shouldRememberLogin(c.Query("remember"))
+	setAuthenticatedSession(s, waUser.user, time.Now(), rememberLogin)
 	s.Delete(webauthnLoginSessionKey)
 
 	next := sanitizeNextPath(c.Query("next"))
@@ -621,12 +623,93 @@ func rotateAuthenticatedSessionID(c flamego.Context, s session.Session, store se
 	return nil
 }
 
-func setAuthenticatedSession(s session.Session, user *db.User) {
+func setAuthenticatedSession(s session.Session, user *db.User, now time.Time, remember bool) {
+	expiresAt := now.Add(authenticatedShortDuration)
+	if remember {
+		expiresAt = now.Add(authenticatedRememberDuration)
+	}
+
 	s.Set("authenticated", true)
 	s.Set("user_id", user.ID.String())
 	s.Set("user_display_name", user.DisplayName)
 	s.Set("user_is_admin", user.IsAdmin)
 	s.Set("userID", user.ID.String())
+	s.Set(authenticatedExpiresAtSessionKey, expiresAt.Unix())
+}
+
+func clearAuthenticatedSession(s session.Session) {
+	s.Delete("authenticated")
+	s.Delete("user_id")
+	s.Delete("user_display_name")
+	s.Delete("user_is_admin")
+	s.Delete("userID")
+	s.Delete(sensitiveAccessSessionKey)
+	s.Delete("private_mode")
+	s.Delete(authenticatedExpiresAtSessionKey)
+}
+
+func isSessionAuthenticated(s session.Session, now time.Time) bool {
+	authenticated, ok := s.Get("authenticated").(bool)
+	if !ok || !authenticated {
+		return false
+	}
+
+	expiresAt, hasExpiry := getAuthenticatedSessionExpiry(s)
+	if !hasExpiry {
+		authenticated, ok = s.Get("authenticated").(bool)
+		return ok && authenticated
+	}
+
+	if !expiresAt.After(now) {
+		clearAuthenticatedSession(s)
+		return false
+	}
+
+	return true
+}
+
+func getAuthenticatedSessionExpiry(s session.Session) (time.Time, bool) {
+	val := s.Get(authenticatedExpiresAtSessionKey)
+	if val == nil {
+		return time.Time{}, false
+	}
+
+	switch v := val.(type) {
+	case int64:
+		return time.Unix(v, 0), true
+	case int:
+		return time.Unix(int64(v), 0), true
+	case float64:
+		return time.Unix(int64(v), 0), true
+	case time.Time:
+		return v, true
+	case *time.Time:
+		if v == nil {
+			s.Delete(authenticatedExpiresAtSessionKey)
+			return time.Time{}, false
+		}
+
+		return *v, true
+	default:
+		s.Delete(authenticatedExpiresAtSessionKey)
+		clearAuthenticatedSession(s)
+
+		return time.Time{}, false
+	}
+}
+
+func shouldRememberLogin(raw string) bool {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	if raw == "" {
+		return true
+	}
+
+	switch raw {
+	case "0", "false", "off", "no":
+		return false
+	default:
+		return true
+	}
 }
 
 func getSessionUserID(s session.Session) (string, bool) {

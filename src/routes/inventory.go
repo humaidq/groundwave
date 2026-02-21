@@ -21,6 +21,8 @@ import (
 	"github.com/humaidq/groundwave/db"
 )
 
+var inventoryOpenFileStreamFn = db.OpenInventoryFileStream
+
 // InventoryList renders the inventory list page
 func InventoryList(c flamego.Context, s session.Session, t template.Template, data template.Data) {
 	ctx := c.Request().Context()
@@ -561,8 +563,10 @@ func DownloadInventoryFile(c flamego.Context, s session.Session, _ template.Temp
 
 	ctx := c.Request().Context()
 
-	// Fetch file stream from WebDAV
-	fileReader, contentType, err := db.OpenInventoryFile(ctx, inventoryID, filename)
+	rangeHeader := strings.TrimSpace(c.Request().Header.Get("Range"))
+	ifRangeHeader := strings.TrimSpace(c.Request().Header.Get("If-Range"))
+
+	fileStream, err := inventoryOpenFileStreamFn(ctx, inventoryID, filename, rangeHeader, ifRangeHeader)
 	if err != nil {
 		logger.Error("Error fetching file", "error", err)
 		SetErrorFlash(s, "File not found")
@@ -572,7 +576,7 @@ func DownloadInventoryFile(c flamego.Context, s session.Session, _ template.Temp
 	}
 
 	defer func() {
-		if err := fileReader.Close(); err != nil {
+		if err := fileStream.Reader.Close(); err != nil {
 			logger.Error("Error closing inventory file stream", "inventory_id", inventoryID, "filename", filename, "error", err)
 		}
 	}()
@@ -584,20 +588,26 @@ func DownloadInventoryFile(c flamego.Context, s session.Session, _ template.Temp
 		contentDisposition = "attachment"
 	}
 
-	responseContentType := fileResponseContentType(contentType, downloadRequested)
+	responseContentType := fileResponseContentType(fileStream.ContentType, downloadRequested)
 
 	// Set headers and serve file
 	headers := c.ResponseWriter().Header()
 	headers.Set("Content-Type", responseContentType)
 	headers.Set("Content-Disposition", contentDisposition+"; filename=\""+sanitizeFilenameForHeader(filename)+"\"")
+	applyWebDAVStreamHeaders(headers, fileStream)
 
 	if downloadRequested {
 		headers.Set("X-Content-Type-Options", "nosniff")
 	}
 
-	c.ResponseWriter().WriteHeader(http.StatusOK)
+	statusCode := fileStream.StatusCode
+	if statusCode == 0 {
+		statusCode = http.StatusOK
+	}
 
-	if _, err := io.Copy(c.ResponseWriter(), fileReader); err != nil {
+	c.ResponseWriter().WriteHeader(statusCode)
+
+	if _, err := io.Copy(c.ResponseWriter(), fileStream.Reader); err != nil {
 		logger.Error("Error writing inventory file", "error", err)
 	}
 }
