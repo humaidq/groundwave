@@ -7,3 +7,4 @@ package routes
 import "github.com/humaidq/groundwave/logging"
 
 var logger = logging.Logger(logging.SourceWeb)
+var stdLogger = logging.StdLogger(logging.SourceWeb)

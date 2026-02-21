@@ -90,6 +90,8 @@ var (
 
 	ErrWebDAVTodoPathNotConfigured       = errors.New("WEBDAV_TODO_PATH not configured")
 	ErrWebDAVTodoPathMustBeOrgFile       = errors.New("WEBDAV_TODO_PATH must point to a .org file")
+	ErrWebDAVContactPageNotConfigured    = errors.New("WEBDAV_CONTACT_PAGE not configured")
+	ErrWebDAVContactPageMustBeOrgFile    = errors.New("WEBDAV_CONTACT_PAGE must point to a .org file")
 	ErrNoWebDAVPathsConfigured           = errors.New("no WebDAV paths configured")
 	ErrWebDAVInventoryPathNotConfigured  = errors.New("WEBDAV_INV_PATH not configured")
 	ErrWebDAVFilesPathNotConfigured      = errors.New("WEBDAV_FILES_PATH not configured")
@@ -116,6 +118,7 @@ var (
 	ErrWebDAVHomePathMustBeOrgFile       = errors.New("WEBDAV_HOME_PATH must point to a .org file")
 	ErrWebDAVHomePathMustShareParentDir  = errors.New("WEBDAV_HOME_PATH must share the same parent directory as WEBDAV_ZK_PATH")
 	ErrFetchTodoFileFailed               = errors.New("failed to fetch todo file")
+	ErrFetchContactPageFileFailed        = errors.New("failed to fetch contact page file")
 	ErrFetchFileFailed                   = errors.New("failed to fetch file")
 	ErrZKNoteNotFound                    = errors.New("note with ID not found")
 

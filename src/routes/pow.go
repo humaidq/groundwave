@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -25,6 +26,7 @@ import (
 
 const (
 	proofOfWorkVerifiedSessionKey   = "pow_verified"
+	proofOfWorkVerifiedAtSessionKey = "pow_verified_at"
 	proofOfWorkChallengeSessionKey  = "pow_challenge"
 	proofOfWorkExpiresSessionKey    = "pow_expires_at"
 	proofOfWorkNextSessionKey       = "pow_next"
@@ -44,6 +46,9 @@ const (
 
 	proofOfWorkMinDifficulty = 8
 	proofOfWorkMaxDifficulty = 28
+
+	proofOfWorkVerifiedShortTTL = 15 * time.Minute
+	proofOfWorkVerifiedLongTTL  = 14 * 24 * time.Hour
 )
 
 var proofOfWorkChallengeTTL = 3 * time.Minute
@@ -92,7 +97,7 @@ func RequireProofOfWork(config ProofOfWorkConfig) flamego.Handler {
 			return
 		}
 
-		if hasProofOfWorkAccess(s) || isProofOfWorkExemptPath(c.Request().Request) {
+		if hasProofOfWorkAccess(s, time.Now(), risk) || isProofOfWorkExemptPath(c.Request().Request) {
 			c.Next()
 			return
 		}
@@ -126,7 +131,7 @@ func PowForm(config ProofOfWorkConfig) flamego.Handler {
 			next = "/"
 		}
 
-		if hasProofOfWorkAccess(s) {
+		if hasProofOfWorkAccess(s, time.Now(), risk) {
 			c.Redirect(next, http.StatusSeeOther)
 			return
 		}
@@ -253,14 +258,39 @@ func PowVerify(config ProofOfWorkConfig) flamego.Handler {
 		}
 
 		s.Set(proofOfWorkVerifiedSessionKey, true)
+		s.Set(proofOfWorkVerifiedAtSessionKey, time.Now().Unix())
 
 		writeJSON(c, map[string]string{"redirect": next})
 	}
 }
 
-func hasProofOfWorkAccess(s session.Session) bool {
+func hasProofOfWorkAccess(s session.Session, now time.Time, risk proofOfWorkRequestRisk) bool {
 	allowed, ok := s.Get(proofOfWorkVerifiedSessionKey).(bool)
-	return ok && allowed
+	if !ok || !allowed {
+		return false
+	}
+
+	verifiedAtUnix, ok := sessionInt64Value(s.Get(proofOfWorkVerifiedAtSessionKey))
+	if !ok {
+		clearProofOfWorkAccess(s)
+		return false
+	}
+
+	verifiedAt := time.Unix(verifiedAtUnix, 0)
+	if !verifiedAt.After(now.Add(-proofOfWorkVerifiedTTL(s, now, risk))) {
+		clearProofOfWorkAccess(s)
+		return false
+	}
+
+	return true
+}
+
+func proofOfWorkVerifiedTTL(s session.Session, now time.Time, risk proofOfWorkRequestRisk) time.Duration {
+	if isSessionAuthenticated(s, now) || risk.level == proofOfWorkRiskLow {
+		return proofOfWorkVerifiedLongTTL
+	}
+
+	return proofOfWorkVerifiedShortTTL
 }
 
 func isProofOfWorkExemptPath(request *http.Request) bool {
@@ -289,6 +319,11 @@ func clearProofOfWorkChallenge(s session.Session) {
 	s.Delete(proofOfWorkExpiresSessionKey)
 	s.Delete(proofOfWorkNextSessionKey)
 	s.Delete(proofOfWorkDifficultySessionKey)
+}
+
+func clearProofOfWorkAccess(s session.Session) {
+	s.Delete(proofOfWorkVerifiedSessionKey)
+	s.Delete(proofOfWorkVerifiedAtSessionKey)
 }
 
 func normalizeProofOfWorkConfig(config ProofOfWorkConfig) ProofOfWorkConfig {
@@ -357,7 +392,15 @@ func (config ProofOfWorkConfig) difficultyForRisk(level proofOfWorkRiskLevel) in
 }
 
 func resolveRequestRisk(request *http.Request, config ProofOfWorkConfig) proofOfWorkRequestRisk {
-	if request == nil || config.ResolveClientASN == nil {
+	if request == nil {
+		return proofOfWorkRequestRisk{level: proofOfWorkRiskMedium}
+	}
+
+	if addr, ok := clientIPAddr(request); ok && isLocalClientAddr(addr) {
+		return proofOfWorkRequestRisk{level: proofOfWorkRiskLow}
+	}
+
+	if config.ResolveClientASN == nil {
 		return proofOfWorkRequestRisk{level: proofOfWorkRiskMedium}
 	}
 
@@ -381,6 +424,16 @@ func resolveRequestRisk(request *http.Request, config ProofOfWorkConfig) proofOf
 	}
 
 	return proofOfWorkRequestRisk{asn: asn, asnKnown: true, level: proofOfWorkRiskMedium}
+}
+
+func isLocalClientAddr(addr netip.Addr) bool {
+	if !addr.IsValid() {
+		return false
+	}
+
+	addr = addr.Unmap()
+
+	return addr.IsPrivate() || addr.IsLoopback() || addr.IsLinkLocalUnicast()
 }
 
 func generateProofOfWorkChallenge() (string, error) {

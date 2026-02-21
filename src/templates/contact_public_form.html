@@ -1,0 +1,29 @@
+{{ template "head" . }}
+
+<h1>Contact</h1>
+<h2>Who are you?</h2>
+
+{{ if .Error }}
+<div class="alert alert-red">
+  <h5 class="alert-title">Error</h5>
+  <p>{{ .Error }}</p>
+</div>
+{{ end }}
+
+<form method="POST" action="/contact">
+  <input type="hidden" name="_csrf" value="{{ .csrf_token }}" />
+
+  <div class="form-group">
+    <label for="full_name"><strong>Your full name:</strong></label>
+    <input type="text" id="full_name" name="full_name" class="form-item" value="{{ .FormFullName }}" autocomplete="name" required />
+  </div>
+
+  <div class="form-group">
+    <label for="email"><strong>Your email address:</strong></label>
+    <input type="email" id="email" name="email" class="form-item" value="{{ .FormEmail }}" autocomplete="email" required />
+  </div>
+
+  <button type="submit" class="btn">Continue -&gt;</button>
+</form>
+
+{{ template "foot" . }}

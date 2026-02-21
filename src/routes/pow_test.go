@@ -64,6 +64,41 @@ func fixedASNResolver(asn uint32, country string, known bool) ClientASNResolver 
 	}
 }
 
+func solveProofOfWork(t *testing.T, f *flamego.Flame, s session.Session, difficulty int) {
+	t.Helper()
+
+	formReq := httptest.NewRequest(http.MethodGet, "/pow?next=%2Fprotected", nil)
+	formRec := httptest.NewRecorder()
+	f.ServeHTTP(formRec, formReq)
+
+	if formRec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, formRec.Code)
+	}
+
+	challenge, _ := s.Get(proofOfWorkChallengeSessionKey).(string)
+	if challenge == "" {
+		t.Fatal("expected proof-of-work challenge in session")
+	}
+
+	nonce := uint64(0)
+	for !verifyProofOfWork(challenge, nonce, difficulty) {
+		nonce++
+	}
+
+	body, err := json.Marshal(map[string]uint64{"nonce": nonce})
+	if err != nil {
+		t.Fatalf("marshal nonce payload: %v", err)
+	}
+
+	verifyReq := httptest.NewRequest(http.MethodPost, "/pow/verify", bytes.NewReader(body))
+	verifyRec := httptest.NewRecorder()
+	f.ServeHTTP(verifyRec, verifyReq)
+
+	if verifyRec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, verifyRec.Code)
+	}
+}
+
 func TestRequireProofOfWorkRendersChallengeAtRequestedPath(t *testing.T) {
 	t.Parallel()
 
@@ -130,6 +165,43 @@ func TestRequireProofOfWorkSkipsExtensionEndpointsForAllowedASN(t *testing.T) {
 	}
 }
 
+func TestRequireProofOfWorkSkipsExtensionEndpointsForLocalClientIP(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		ip   string
+	}{
+		{name: "RFC1918 10/8", ip: "10.10.1.2"},
+		{name: "RFC1918 172.16/12", ip: "172.16.2.3"},
+		{name: "RFC1918 192.168/16", ip: "192.168.4.5"},
+		{name: "IPv4 loopback", ip: "127.0.0.1"},
+		{name: "IPv6 loopback", ip: "::1"},
+		{name: "IPv6 unique local", ip: "fc00::1"},
+		{name: "IPv6 link-local", ip: "fe80::1"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			s := newTestSession()
+			f := newProofOfWorkTestApp(s, ProofOfWorkConfig{Difficulty: 8})
+
+			req := httptest.NewRequest(http.MethodGet, "/ext/validate", nil)
+			req.Header.Set("X-Forwarded-For", tc.ip)
+
+			rec := httptest.NewRecorder()
+
+			f.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusNoContent {
+				t.Fatalf("expected status %d, got %d", http.StatusNoContent, rec.Code)
+			}
+		})
+	}
+}
+
 func TestRequireProofOfWorkBlocksExtensionEndpointsForDisallowedASN(t *testing.T) {
 	t.Parallel()
 
@@ -141,6 +213,24 @@ func TestRequireProofOfWorkBlocksExtensionEndpointsForDisallowedASN(t *testing.T
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/ext/validate", nil)
+	rec := httptest.NewRecorder()
+
+	f.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+}
+
+func TestRequireProofOfWorkBlocksExtensionEndpointsForUnknownPublicIP(t *testing.T) {
+	t.Parallel()
+
+	s := newTestSession()
+	f := newProofOfWorkTestApp(s, ProofOfWorkConfig{Difficulty: 8})
+
+	req := httptest.NewRequest(http.MethodGet, "/ext/validate", nil)
+	req.Header.Set("X-Forwarded-For", "8.8.8.8")
+
 	rec := httptest.NewRecorder()
 
 	f.ServeHTTP(rec, req)
@@ -243,6 +333,114 @@ func TestProofOfWorkVerifyUnlocksSession(t *testing.T) {
 
 	if allowed, ok := s.Get(proofOfWorkVerifiedSessionKey).(bool); !ok || !allowed {
 		t.Fatal("expected proof-of-work session flag to be set")
+	}
+
+	if _, ok := sessionInt64Value(s.Get(proofOfWorkVerifiedAtSessionKey)); !ok {
+		t.Fatal("expected proof-of-work verification timestamp to be set")
+	}
+}
+
+func TestRequireProofOfWorkExpiresSolvedChallengeForNonLowRisk(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		config ProofOfWorkConfig
+	}{
+		{
+			name: "unknown ASN expires after 15 minutes",
+			config: ProofOfWorkConfig{
+				MediumDifficulty: 8,
+			},
+		},
+		{
+			name: "high risk ASN expires after 15 minutes",
+			config: ProofOfWorkConfig{
+				EasyDifficulty:   8,
+				MediumDifficulty: 8,
+				HardDifficulty:   8,
+				HighRiskASNs:     map[uint32]struct{}{64513: {}},
+				ResolveClientASN: fixedASNResolver(64513, "US", true),
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			s := newTestSession()
+			f := newProofOfWorkTestApp(s, tc.config)
+
+			solveProofOfWork(t, f, s, 8)
+			s.Set(proofOfWorkVerifiedAtSessionKey, time.Now().Add(-16*time.Minute).Unix())
+
+			req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+			rec := httptest.NewRecorder()
+			f.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+			}
+
+			if got := s.Get(proofOfWorkVerifiedSessionKey); got != nil {
+				t.Fatalf("expected proof-of-work access to be cleared, got %#v", got)
+			}
+
+			if got := s.Get(proofOfWorkVerifiedAtSessionKey); got != nil {
+				t.Fatalf("expected proof-of-work verification time to be cleared, got %#v", got)
+			}
+		})
+	}
+}
+
+func TestRequireProofOfWorkKeepsSolvedChallengeForLowRiskASN(t *testing.T) {
+	t.Parallel()
+
+	s := newTestSession()
+	f := newProofOfWorkTestApp(s, ProofOfWorkConfig{
+		EasyDifficulty:   8,
+		MediumDifficulty: 8,
+		HardDifficulty:   8,
+		LowRiskASNs:      map[uint32]struct{}{64512: {}},
+		ResolveClientASN: fixedASNResolver(64512, "US", true),
+	})
+
+	solveProofOfWork(t, f, s, 8)
+	s.Set(proofOfWorkVerifiedAtSessionKey, time.Now().Add(-(14*24*time.Hour)+time.Minute).Unix())
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	rec := httptest.NewRecorder()
+	f.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected status %d, got %d", http.StatusNoContent, rec.Code)
+	}
+}
+
+func TestRequireProofOfWorkKeepsSolvedChallengeForAuthenticatedSession(t *testing.T) {
+	t.Parallel()
+
+	s := newTestSession()
+	f := newProofOfWorkTestApp(s, ProofOfWorkConfig{
+		EasyDifficulty:   8,
+		MediumDifficulty: 8,
+		HardDifficulty:   8,
+		HighRiskASNs:     map[uint32]struct{}{64513: {}},
+		ResolveClientASN: fixedASNResolver(64513, "US", true),
+	})
+
+	solveProofOfWork(t, f, s, 8)
+	s.Set(proofOfWorkVerifiedAtSessionKey, time.Now().Add(-2*time.Hour).Unix())
+	s.Set("authenticated", true)
+	s.Set(authenticatedExpiresAtSessionKey, time.Now().Add(time.Hour).Unix())
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	rec := httptest.NewRecorder()
+	f.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected status %d, got %d", http.StatusNoContent, rec.Code)
 	}
 }
 
